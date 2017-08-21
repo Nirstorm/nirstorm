@@ -2,6 +2,14 @@
 Brainstorm plugin for fNIRS data analysis. 
 
 Current features include classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
+## Authors
+
+ * ''Thomas Vincent, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
+ * ''Zhengchen Cai, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
+ * ''Alexis Machado, Multimodal Functional Imaging Lab., Biomedical Engineering Dpt, McGill University, Montreal, Canada''
+ * ''Louis Bherer, Centre de recherche, Institut de Cardiologie de Montréal, Montréal, Canada''
+ * ''Jean-Marc Lina, Electrical Engineering Dpt, Ecole de Technologie Supérieure, Montréal, Canada''
+ * ''Christophe Grova, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
 
 ## Installation
 
