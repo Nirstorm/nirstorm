@@ -1,2 +1,43 @@
 # nirstorm
-Brainstorm plugin for fNIRS data analysis
+Brainstorm plugin for fNIRS data analysis. 
+
+Current features include classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
+
+## Installation
+
+[Brainstorm](http://neuroimage.usc.edu/brainstorm/) must be installed prior to installing nirstorm. It can also help to have brainstorm running while installing nirstorm.
+
+The script `nst_install.m` takes care of copying or linking processes and functions into the brainstorm user folder.
+
+Parts of the nirstorm plugin may already shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu. Namely: modified bear lambert law and bad channel tagging.
+The current installation will override them.
+
+### Copy installation (windows, linux)
+
+To copy all processes and functions into the brainstorm user folder, run under matlab:
+```matlab
+>> nst_install('copy');
+```
+When updates are downloaded, this installation command must be run again for changes to take effect.
+
+### Linked installation (linux only)
+
+To create symbolic links of all processes and functions into the brainstorm user folder, run under matlab:
+```matlab
+>> nst_install('link');
+```
+When updates are downloaded, this installation command has to be run again only if there are new files.
+
+## Usage
+
+The main documentation is in the form Brainstorm tutorials.
+See http://neuroimage.usc.edu/brainstorm/Tutorials for a complete list.
+
+See http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping for a turorial on basic fNIRS data processing comprising:
+- data import & visualization
+- bad channel tagging
+- movement correction
+- MBLL 
+- detrending and filtering
+- block averaging
+
