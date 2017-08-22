@@ -1,21 +1,21 @@
-function install_package(package_name, source_dir, target_dir, mode, extras, dry)
+function install_package(package_name, source_dir, target_dir, mode, extras, dry, root_dir)
 % Install a package and manage version. From given package_name and a version 
-% tag that must be defined in <source_dir>/VERSION, the function ensures 
+% tag that must be defined in pwd/VERSION, the function ensures 
 % that only one package version is installed in the target directory.
 % The set of files/folders to install are declared in the MANIFEST file that must
-% be available in the source_dir (see below "MANIFEST file format").
+% be available in the current directory (see below "MANIFEST file format").
 % Installation can copy files (windows/linux) or make symbolic links (linux only) 
 % depending on the value of mode: 'copy' or 'link'. respectively.
-% A version tag must be specified in <source_dir>/VERSION (see below 
+% A version tag must be specified in pwd/VERSION (see below 
 % "VERSION file format")
-% A uninstall script named <source_dir>/<package_name>_<version_tag>_uninstall.m 
-% is created. It is used to clean a previous installation.
+% A uninstall script named uninstall_<package_name>.m is created. 
+% It is used to clean a previous installation.
 % If items to be installed already exist in target_dir disregarding
-% uninstall script, the user is warned and they are backuped by suffixing
-% "_backuped_by_<package_name>_<version_tag>". The uninstallation script 
+% uninstall script, the user is warned and they are backuped by prefixing
+% "_backuped_by_<package_name>_<version_tag>_". The uninstallation script 
 % will restore them.
 %
-% MANIFEST file format:
+% ## MANIFEST file format ##
 % one path per line. Each path is relative to given source_dir.
 % Path can be a filename or a folder. If it's a folder then the whole 
 % directory is copied or linked.
@@ -24,7 +24,7 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 %   script/my_script.m
 %   data
 %   
-% VERSION file format:
+% ## VERSION file format ##
 % contains only one string on the first line. Only alphanumerical
 % characters and "." are allowed.
 % IMPORTANT: version tag is case insentive, eg the version tage "stable_v1.2" 
@@ -34,8 +34,7 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 %     - package_name (str):
 %         package name. Must be a valid matlab identifier. See function isvarname
 %     - source_dir (str):
-%         path of source directory which must contain MANIFEST and VERSION
-%         files.
+%         source directory which contains files to install.
 %     - target_dir (str):
 %         target installation folder.
 %    [- mode (str):]
@@ -50,6 +49,10 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 %    [- dry (boolean):]
 %         If 1 then no file operations are displayed, not executed.
 %         If 0 (default) then file operations are performed.
+%    [- root_dir (str):]
+%         Root directory of the package, where MANIFEST and VERSION files
+%         are located.
+%         Default is current working directory
 if nargin < 4
     mode = 'copy';
 end
@@ -59,14 +62,18 @@ end
 if nargin < 6
     dry = 0;
 end
-check_inputs(package_name, source_dir, target_dir, mode, extras, dry);
+if nargin < 7
+    root_dir = pwd;
+end
+
+check_inputs(package_name, source_dir, target_dir, mode, extras, dry, root_dir);
 
 uninstall_package(package_name, target_dir);
-[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras);
+[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, root_dir);
 execute_file_operations(install_operations, dry);
 uninstall_script = fullfile(target_dir, ['uninstall_' package_name '.m']);
 uninstall_header = sprintf('disp(''Uninstalling %s--%s from %s...'');', ...
-                           package_name, get_version_tag(source_dir), target_dir);
+                           package_name, get_version_tag(root_dir), target_dir);
 make_file_operations_script(uninstall_operations, uninstall_script, uninstall_header, dry);
 end
 
@@ -145,16 +152,17 @@ code = {'if ~isempty(strfind(computer, ''WIN''))', ...
 code = strjoin(code, '\n');
 end
 
-function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras)
-manifest_fns = [{fullfile(source_dir, 'MANIFEST')} ...
-                cellfun(@(extra_tag) fullfile(source_dir, ['MANIFEST.' extra_tag]), extras, 'UniformOutput', false)];
-backup_prefix = ['_backuped_by_' package_name '_' get_version_tag(source_dir) '_'];
+function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, root_dir)
+manifest_fns = [{fullfile(root_dir, 'MANIFEST')} ...
+                cellfun(@(extra_tag) fullfile(root_dir, ['MANIFEST.' extra_tag]), ...
+                        extras, 'UniformOutput', false)];
+backup_prefix = ['_backuped_by_' package_name '_' get_version_tag(root_dir) '_'];
 iop = 1;
 uop = 1;
 for im=1:length(manifest_fns)
     manifest_fn = manifest_fns{im};
     if ~exist(manifest_fn, 'file')
-       throw(MException('DistPackage:FileNotFound', [manifest_fn ' does not exist in source dir']));
+       throw(MException('DistPackage:FileNotFound', [manifest_fn ' does not exist in root dir']));
     end
     source_rfns = read_manifest(manifest_fn);
     for ifn=1:length(source_rfns)
@@ -269,19 +277,19 @@ end
 
 end
 
-function version_tag = get_version_tag(source_dir)
+function version_tag = get_version_tag(root_dir)
 
-version_fn = fullfile(source_dir, 'VERSION');
+version_fn = fullfile(root_dir, 'VERSION');
 if ~exist(version_fn, 'file')
-   throw(MException('DistPackage:FileNotFound', 'VERSION file does not exist in source dir'));
+   throw(MException('DistPackage:FileNotFound', 'VERSION file does not exist in root dir'));
 end
 
 content = fileread(version_fn);
 if ~isempty(content) && strcmp(sprintf('\n'), content(end))
     content = content(1:(end-1));
 end
-version_tag = strtrim(content);
-if isempty(regexp(version_tag, '^[a-zA-Z0-9_.]+$', 'once'))
+version_tag = lower(strtrim(content));
+if isempty(regexp(version_tag, '^[a-z0-9_.]+$', 'once'))
     throw(MException('DistPackage:BadVersionTag', ...
                     ['Bad version tag in VERSION "' version_tag '".Must only contain '...
                      'alphanumerical characters, dot or underscore']));
@@ -289,11 +297,16 @@ end
 
 end
 
-function check_inputs(package_name, source_dir, target_dir, mode, extras, dry)
+function check_inputs(package_name, source_dir, target_dir, mode, extras, dry, root_dir)
 if~isvarname(package_name)
     throw(MException('DistPackage:BadPackageName', ...
                      'Package name must be a valid matlab identifier'));
 end
+
+if ~exist(root_dir, 'dir')
+   throw(MException('DistPackage:DirNotFound', 'root_dir does not exist'));
+end
+
 if ~exist(source_dir, 'dir')
    throw(MException('DistPackage:DirNotFound', 'source_dir does not exist'));
 end
