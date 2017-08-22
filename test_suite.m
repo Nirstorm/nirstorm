@@ -39,7 +39,7 @@ mkdir(target_dir);
 % Test installation and uninstallation, copy mode
 package_name = 'my_package';
 uninstall_script_fn = fullfile(target_dir, ['uninstall_' package_name '.m']);
-install_package(package_name, root_src_dir, target_dir, 'copy');
+install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0, root_src_dir);
 assert(all(files_exist(root_src_dir, package_rel_files)));
 assert(all(files_exist(target_dir, base_rel_fns)));
 assert(all(~files_are_symlinks(target_dir, base_rel_fns)));
@@ -53,7 +53,7 @@ assert(all(~files_exist(target_dir, base_rel_fns)));
 assert(~exist(uninstall_script_fn, 'file')>0);
 
 % Test installation and uninstallation, link mode
-install_package(package_name, root_src_dir, target_dir, 'link');
+install_package(package_name, root_src_dir, target_dir, 'link', {}, 0, root_src_dir);
 assert(all(files_exist(root_src_dir, package_rel_files)));
 assert(all(files_exist(target_dir, base_rel_fns)));
 assert(all(files_are_symlinks(target_dir, base_rel_fns)));
@@ -73,7 +73,7 @@ existing_target_backup_fn = add_fn_prefix(existing_target_fn, ...
                                           ['_backuped_by_' package_name '_' version_tag '_']);
 fout = fopen(existing_target_fn, 'w');
 fclose(fout);
-install_package(package_name, root_src_dir, target_dir, 'link');
+install_package(package_name, root_src_dir, target_dir, 'link', {}, 0, root_src_dir);
 assert(exist(existing_target_backup_fn, 'file')>0);
 assert(all(files_exist(root_src_dir, package_rel_files)));
 assert(all(files_exist(target_dir, base_rel_fns)));
@@ -121,7 +121,7 @@ uninstall_script_fn = fullfile(target_dir, ['uninstall_' package_name '.m']);
 
 exception_caught = 0;
 try
-    install_package(package_name, root_src_dir, target_dir, 'copy', {'bad'});
+    install_package(package_name, root_src_dir, target_dir, 'copy', {'bad'}, 0, root_src_dir);
 catch ME
     assert(strcmp(ME.identifier, 'DistPackage:FileNotFound'))
     assert(~isempty(strfind(ME.message, 'func_crowe.m')));
