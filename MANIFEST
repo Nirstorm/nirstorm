@@ -1,0 +1,5 @@
+nst_get_local_user_dir.m
+process_nst_detect_bad.m
+process_nst_export_nirs.m
+process_nst_mbll.m
+process_nst_motion_correction.m
