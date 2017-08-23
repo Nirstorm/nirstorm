@@ -35,5 +35,5 @@ result = runner.run(source_suite);
 runner = TestRunner.withTextOutput;
 runner.addPlugin(StopOnFailuresPlugin('IncludingAssumptionFailures', true));
 runner.addPlugin(CodeCoveragePlugin.forFolder(fullfile(bst_get('BrainstormUserDir'), 'process')));
-result = runner.run(package_suite);
+% result = runner.run(package_suite);
 end
