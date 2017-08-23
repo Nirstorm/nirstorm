@@ -1,12 +1,12 @@
-function install_package(package_name, source_dir, target_dir, mode, extras, dry, root_dir)
+function install_package(package_name, source_dir, target_dir, mode, extras, dry)
 % Install a package and manage version. From given package_name and a version 
-% tag that must be defined in pwd/VERSION, the function ensures 
+% tag that must be defined in source_dir/VERSION, the function ensures 
 % that only one package version is installed in the target directory.
 % The set of files/folders to install are declared in the MANIFEST file that must
 % be available in the current directory (see below "MANIFEST file format").
 % Installation can copy files (windows/linux) or make symbolic links (linux only) 
 % depending on the value of mode: 'copy' or 'link'. respectively.
-% A version tag must be specified in pwd/VERSION (see below 
+% A version tag must be specified in source_dir/VERSION (see below 
 % "VERSION file format")
 % A uninstall script named uninstall_<package_name>.m is created. 
 % It is used to clean a previous installation.
@@ -16,7 +16,7 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 % will restore them.
 %
 % ## MANIFEST file format ##
-% one path per line. Each path is relative to given source_dir.
+% one path per line. Each path is relative to the folder of the MANIFEST file .
 % Path can be a filename or a folder. If it's a folder then the whole 
 % directory is copied or linked.
 % Example:
@@ -49,10 +49,7 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 %    [- dry (boolean):]
 %         If 1 then no file operations are displayed, not executed.
 %         If 0 (default) then file operations are performed.
-%    [- root_dir (str):]
-%         Root directory of the package, where MANIFEST and VERSION files
-%         are located.
-%         Default is current working directory
+
 if nargin < 4
     mode = 'copy';
 end
@@ -62,18 +59,17 @@ end
 if nargin < 6
     dry = 0;
 end
-if nargin < 7
-    root_dir = pwd;
-end
 
-check_inputs(package_name, source_dir, target_dir, mode, extras, dry, root_dir);
+check_inputs(package_name, source_dir, target_dir, mode, extras, dry);
 
 uninstall_package(package_name, target_dir);
-[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, root_dir);
+version_tag = get_version_tag(source_dir);
+[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras);
+disp(['Installing ' package_name '--' version_tag ' to ' target_dir '...']);
 execute_file_operations(install_operations, dry);
 uninstall_script = fullfile(target_dir, ['uninstall_' package_name '.m']);
 uninstall_header = sprintf('disp(''Uninstalling %s--%s from %s...'');', ...
-                           package_name, get_version_tag(root_dir), target_dir);
+                           package_name, version_tag, target_dir);
 make_file_operations_script(uninstall_operations, uninstall_script, uninstall_header, dry);
 end
 
@@ -152,11 +148,11 @@ code = {'if ~isempty(strfind(computer, ''WIN''))', ...
 code = strjoin(code, '\n');
 end
 
-function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, root_dir)
-manifest_fns = [{fullfile(root_dir, 'MANIFEST')} ...
-                cellfun(@(extra_tag) fullfile(root_dir, ['MANIFEST.' extra_tag]), ...
+function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras)
+manifest_fns = [{fullfile(source_dir, 'MANIFEST')} ...
+                cellfun(@(extra_tag) fullfile(source_dir, ['MANIFEST.' extra_tag]), ...
                         extras, 'UniformOutput', false)];
-backup_prefix = ['_backuped_by_' package_name '_' get_version_tag(root_dir) '_'];
+backup_prefix = ['_backuped_by_' package_name '_' get_version_tag(source_dir) '_'];
 iop = 1;
 uop = 1;
 for im=1:length(manifest_fns)
@@ -173,14 +169,21 @@ for im=1:length(manifest_fns)
         target_fn = fullfile(target_dir, source_rfns{ifn});
         if exist(target_fn, 'file')
             backup_rfn = add_fn_prefix(source_rfns{ifn}, backup_prefix);
-            warning(['"' source_rfns{ifn} '" already exists in target directory. ' ...
+            warning('DistPackage:ExistingTarget', ...
+                    ['"' source_rfns{ifn} '" already exists in target directory. ' ...
                      'It will be backuped to "' backup_rfn '"']);
             install_operations(iop).file1 = target_fn;
             install_operations(iop).action = 'move';
             install_operations(iop).file2 = fullfile(target_dir, backup_rfn);
             iop = iop + 1;
         end
-        install_operations(iop).file1 = source_fn;
+        % Safer to use absolute path when mode is link
+        if java.io.File(source_fn).isAbsolute()
+            abs_source_fn = source_fn;
+        else
+            abs_source_fn = fullfile(pwd, source_fn);
+        end
+        install_operations(iop).file1 = abs_source_fn;
         install_operations(iop).action = mode;
         install_operations(iop).file2 = target_fn;
         iop = iop + 1;
@@ -222,10 +225,13 @@ for iop=1:length(operations)
     operation = operations(iop);
     if isdir(operation.file2) && exist(operation.file2, 'dir') || exist(operation.file2, 'file')
         throw(MException('DistPackage:TargetExists', ... 
-                         ['Target ' operation.file2 ' already exists']));
+                         ['Target ' operation.file2 ' already exists. ' ...
+                          'Installation aborted, consider manually cleaning target directory.']));
     end
     if ~isfield(operation, 'dont_check_file1') && (isdir(operation.file1) && ~exist(operation.file1, 'dir') || ~exist(operation.file1, 'file'))
-        throw(MException('DistPackage:FileNotFound', [operation.file1 ' does not exist']));
+        throw(MException('DistPackage:FileNotFound', ...
+                         [operation.file1 ' does not exist. ' ...
+                          'Installation aborted, consider manually cleaning target directory.']));
     end
     if ~dry
         switch operation.action
@@ -288,23 +294,19 @@ content = fileread(version_fn);
 if ~isempty(content) && strcmp(sprintf('\n'), content(end))
     content = content(1:(end-1));
 end
-version_tag = lower(strtrim(content));
+version_tag = strtrim(content);
 if isempty(regexp(version_tag, '^[a-z0-9_.]+$', 'once'))
     throw(MException('DistPackage:BadVersionTag', ...
-                    ['Bad version tag in VERSION "' version_tag '".Must only contain '...
+                    ['Bad version tag in VERSION "' version_tag '". Must not be empty and only contain '...
                      'alphanumerical characters, dot or underscore']));
 end
-
+version_tag = lower(version_tag);
 end
 
-function check_inputs(package_name, source_dir, target_dir, mode, extras, dry, root_dir)
+function check_inputs(package_name, source_dir, target_dir, mode, extras, dry)
 if~isvarname(package_name)
     throw(MException('DistPackage:BadPackageName', ...
                      'Package name must be a valid matlab identifier'));
-end
-
-if ~exist(root_dir, 'dir')
-   throw(MException('DistPackage:DirNotFound', 'root_dir does not exist'));
 end
 
 if ~exist(source_dir, 'dir')
