@@ -73,7 +73,7 @@ movement_events.label = movement_label;
 movement_events.times = [577.3 662.2 689.3; ...
                          580.4 663.6 691.6];
 movement_events.epochs = ones(1, size(movement_events.times, 2));
-%TODO: Use more generic process?
+
 process_nst_import_csv_events('import_events', [], sFilesRun1, movement_events);
 
 sFileMoco = bst_process('CallProcess', 'process_nst_motion_correction', sFilesRun1, [], ...
