@@ -6,7 +6,17 @@ function run_tests(to_run)
 %    - scripts: execute tutorial script (download data if not available).
 %               WARNING: script tests take time!!
 % 
-
+install_error_msg = sprintf(['To run unit tests, nirstorm debug functions must be installed.\n'...
+                            ' Use nst_install(''copy'', ''debug'') or ' ...
+                            'nst_install(''copy'', ''debug'') (linux only).\n'...
+                            'WARNING: these functions override brainstorm behavior.']);
+try
+    if ~exist(fullfile(bst_get('BrainstormUserDir'), 'process', 'bst_error'), 'file');
+        error(install_error_msg);
+    end
+catch
+xà    error(install_error_msg);
+end
 %TODO: check for matlab version > R2013b
 %TODO: check that nirstorm is actually installed
 
