@@ -15,7 +15,7 @@ try
         error(install_error_msg);
     end
 catch
-xà    error(install_error_msg);
+    error(install_error_msg);
 end
 %TODO: check for matlab version > R2013b
 %TODO: check that nirstorm is actually installed
