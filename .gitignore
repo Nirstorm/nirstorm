@@ -1,0 +1,58 @@
+*.py[cod]
+
+# Compiled MEX binaries (all platforms)
+*.mex*
+
+# Simulink Code Generation
+slprj/
+
+# Windows default autosave extension
+*.asv
+
+# Session info
+octave-workspace
+
+# C extensions
+*.so
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+var
+sdist
+develop-eggs
+.installed.cfg
+lib
+lib64
+__pycache__
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+nosetests.xml
+.coveralls.yml
+
+# Translations
+*.mo
+
+# Mr Developer
+.mr.developer.cfg
+.project
+.pydevproject
+
+# Temporary file and backup of editors
+*~
+*.bak
+*.swp
+\#*
+.\#*
+
+# configuration files
+.ackrc
