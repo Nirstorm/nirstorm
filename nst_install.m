@@ -62,5 +62,5 @@ if ~exist(bst_process_folder, 'dir')
              bst_process_folder '". Check brainstorm installation']);
     return;
 end
-addpath('dist_tools');
+addpath(fullfile(pwd, 'dist_tools'));
 install_package('nirstorm', 'bst_plugin', bst_process_folder, mode, extra, dry);

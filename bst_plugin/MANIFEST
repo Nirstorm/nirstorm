@@ -1,3 +1,4 @@
+process_nst_import_csv_events.m
 process_nst_detect_bad.m
 process_nst_export_nirs.m
 process_nst_mbll.m
@@ -6,3 +7,4 @@ nst_download.m
 nst_split_ftp.m
 nst_get_local_user_dir.m
 nst_request_files.m
+nst_get_repository_url.m
