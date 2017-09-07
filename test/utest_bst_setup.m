@@ -11,5 +11,7 @@ if ~brainstorm('status')
 end
 GlobalData.Program.isServer = 1;
 GlobalData.Program.HandleExceptionWithBst = 0;
+GlobalData.lastestFullErrMsg = '';
+GlobalData.lastestConsoleMsg = '';
 panel_process_select('ParseProcessFolder', 1);
 end

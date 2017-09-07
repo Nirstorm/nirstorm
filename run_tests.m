@@ -1,4 +1,4 @@
-function run_tests(to_run, stop_on_error)
+function run_tests(to_run, stop_on_error, do_coverage, re_match_filter)
 % Run unit test suites from files located in './test'
 % Test scenarios to run are specificied by given to_run:
 %    - package: tests related to functions in bst_plugin
@@ -43,7 +43,15 @@ if nargin < 2
     stop_on_error = 0;
 end
 
-%% Sort out tests in different test suites:
+if nargin < 3
+    do_coverage = 0;
+end
+
+if nargin < 4
+    re_match_filter = '.*';
+end
+
+%% Dispatch tests in different test suites:
 %   - tests for source tools (eg installation)
 %   - tests for installed package (eg brainstorm processes)
 test_scripts = dir(fullfile('test', '*.m'));
@@ -52,7 +60,7 @@ ips = 1;
 ics = 1;
 for iscript=1:length(test_scripts)
     test_fn = fullfile('test', test_scripts(iscript).name);
-    if ~isempty(strfind(test_fn, 'Test.m'))
+    if ~isempty(strfind(test_fn, 'Test.m')) && ~isempty(regexp(test_fn, re_match_filter, 'match'));
         tests = TestSuite.fromFile(test_fn);
         if ~isempty(strfind(test_fn, 'SourceTest'))
             source_suite(iss:(iss+length(tests)-1)) = tests;
@@ -73,7 +81,9 @@ if ismember('package', to_run) && ~isempty(package_suite)
     if stop_on_error
         runner.addPlugin(StopOnFailuresPlugin('IncludingAssumptionFailures', true));
     end
-    runner.addPlugin(CodeCoveragePlugin.forFolder(fullfile(bst_get('BrainstormUserDir'), 'process')));
+    if do_coverage
+        runner.addPlugin(CodeCoveragePlugin.forFolder(fullfile(bst_get('BrainstormUserDir'), 'process')));
+    end
     result = runner.run(package_suite);
 end
 
@@ -83,8 +93,10 @@ if ismember('source', to_run)
     if stop_on_error
         runner.addPlugin(StopOnFailuresPlugin('IncludingAssumptionFailures', true));
     end
-    addpath('dist_tools');
-    runner.addPlugin(CodeCoveragePlugin.forFolder('dist_tools'));
+    addpath(fullfile(pwd, 'dist_tools'));
+    if do_coverage
+        runner.addPlugin(CodeCoveragePlugin.forFolder('dist_tools'));
+    end
     result = runner.run(source_suite);
 end
 
