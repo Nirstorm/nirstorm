@@ -1,3 +1,7 @@
+process_nst_compute_voronoi.m
+dg_voronoi.m
+dg_voronoi.mexa64
+dg_voronoi.mexglx
 process_nst_import_csv_events.m
 process_nst_detect_bad.m
 process_nst_export_nirs.m
