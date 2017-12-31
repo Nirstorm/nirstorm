@@ -89,6 +89,7 @@ for ifn=1:length(relative_fns)
         % Check if remote file exist:
         jurl = java.net.URL(url);
         conn = openConnection(jurl);
+        conn.setConnectTimeout(5000);
         if ~isempty(strfind(url, 'http:'))
             status = getResponseCode(conn);
             if status == 404
