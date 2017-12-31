@@ -1,3 +1,7 @@
+process_nst_cpt_fluences_from_cortex.m
+process_nst_cpt_fluences_from_head.m
+nst_add_scout_sel_options.m
+nst_get_option_selected_scout.m
 process_nst_import_head_model.m
 process_nst_compute_voronoi.m
 dg_voronoi.m
