@@ -3,6 +3,13 @@ function sFile = utest_import_nirs_in_bst(nirs_fn)
 ProtocolName = 'nst_utest';
 % Delete existing protocol
 gui_brainstorm('DeleteProtocol', ProtocolName);
+
+db_dir = bst_get('BrainstormDbDir');
+nst_protocol_dir = fullfile(db_dir, ProtocolName);
+if exist(nst_protocol_dir, 'dir')
+    rmdir(nst_protocol_dir, 's');
+end
+
 % Create new protocol
 gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
 

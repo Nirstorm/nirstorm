@@ -11,7 +11,7 @@ install_error_msg = sprintf(['To run unit tests, nirstorm debug functions must b
                             'nst_install(''copy'', ''debug'') (linux only).\n'...
                             'WARNING: these functions override brainstorm behavior.']);
 try
-    if ~exist(fullfile(bst_get('BrainstormUserDir'), 'process', 'bst_error'), 'file');
+    if ~exist(fullfile(bst_get('BrainstormUserDir'), 'process', 'bst_error'), 'file')
         error(install_error_msg);
     end
 catch
@@ -75,16 +75,20 @@ for iscript=1:length(test_scripts)
     end
 end
 
-if ismember('package', to_run) && ~isempty(package_suite)
-    %% Configure & run test runner for installed package tools
-    runner = TestRunner.withTextOutput;
-    if stop_on_error
-        runner.addPlugin(StopOnFailuresPlugin('IncludingAssumptionFailures', true));
+if ismember('package', to_run)
+    if exist('package_suite', 'var') && ~isempty(package_suite)
+        %% Configure & run test runner for installed package tools
+        runner = TestRunner.withTextOutput;
+        if stop_on_error
+            runner.addPlugin(StopOnFailuresPlugin('IncludingAssumptionFailures', true));
+        end
+        if do_coverage
+            runner.addPlugin(CodeCoveragePlugin.forFolder(fullfile(bst_get('BrainstormUserDir'), 'process')));
+        end
+        result = runner.run(package_suite);
+    else
+        warning('Package test suite is empty');
     end
-    if do_coverage
-        runner.addPlugin(CodeCoveragePlugin.forFolder(fullfile(bst_get('BrainstormUserDir'), 'process')));
-    end
-    result = runner.run(package_suite);
 end
 
 if ismember('source', to_run)
