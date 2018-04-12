@@ -7,13 +7,14 @@ end
 
 bst_interactive = ~isempty(GlobalData) && isfield(GlobalData, 'Program') && ...
                   ~isempty(GlobalData.Program) && ...
-                  isfield(GlobalData.Program, 'isServer') && ...
-                  ~GlobalData.Program.isServer;
+                  (~isfield(GlobalData.Program, 'isServer') || ...
+                   ~GlobalData.Program.isServer);
 
 success = 1;
+tstart = tic();
 if ~isempty(strfind(source_fn, 'https:')) || ~isempty(strfind(source_fn, 'ftp:')) || ~bst_interactive
     tmp_download = tempname;
-    fprintf(download_msg);
+    fprintf([download_msg ' ....\n']);
     if ~isempty(strfind(source_fn, 'ftp:'))
         [ftp_site, source_ftp_rfn] = nst_split_ftp(source_fn);
         hftp = ftp(ftp_site);
@@ -54,5 +55,5 @@ else
     success = 0;
     return
 end
-
+fprintf('%s -- done in %1.1f sec.\n', download_msg, toc(tstart));
 end

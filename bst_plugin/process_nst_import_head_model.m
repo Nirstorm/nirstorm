@@ -411,7 +411,7 @@ if ~isempty(strfind(data_source, 'http'))
     to_download_urls = {};
     to_download_spec = {};
     dest_fns = {};
-    default_fluence_file_size = 5000000; %bytes
+    default_fluence_file_size = 1500000; %bytes
     try
         fluence_file_sizes = webread([data_source 'fluence_file_sizes.csv']);
     catch
@@ -423,7 +423,9 @@ if ~isempty(strfind(data_source, 'http'))
     end
     idownload = 1;
     total_download_size = 0;
-    bst_progress('start', 'Retrieve server info','Evaluate data to download from server...', 1, length(head_vertices)*length(wavelengths));
+    nb_files_to_check = length(head_vertices)*length(wavelengths);
+    bst_progress('start', 'Retrieving server info', sprintf('Checking required downloads from server (%d files)...', nb_files_to_check), 1, nb_files_to_check);
+    check_url_existence = 1;
     for ivertex=1:length(head_vertices)
         vertex_id = head_vertices(ivertex);
         for iwl=1:length(wavelengths)
@@ -435,18 +437,26 @@ if ~isempty(strfind(data_source, 'http'))
             if ~file_exist(fluence_fn)
                 url = [data_source fluence_bfn];
                 to_download_urls{idownload} = url;
-                jurl = java.net.URL(url);
-                conn = openConnection(jurl);
-                status = getResponseCode(conn);
-                if status == 404
-                    bst_error(['Fluence file not available at ' url]);
-                    return;
+                if check_url_existence
+                    tstart = tic();
+                    jurl = java.net.URL(url);
+                    conn = openConnection(jurl);
+                    status = getResponseCode(conn);
+                    if status == 404
+                        bst_error(['Fluence file not available at ' url]);
+                        return;
+                    end
+                    query_duration = toc(tstart);
+                    if query_duration > 0.1
+                        fprintf('Quit checking fluence file existence (too much time: %1.2f s / file).\n', query_duration);
+                        check_url_existence = 0;
+                    end
                 end
                 to_download_spec{idownload} = [vertex_id, wl];
                 dest_fns{idownload} = fluence_fn;
                 idownload = idownload + 1;
                 
-                download_size = fluence_file_sizes.size(fluence_file_sizes.vertex_id == vertex_id & fluence_file_sizes.wavelength == wl);
+                download_size = fluence_file_sizes.size(strcmp(fluence_file_sizes.file_name, fluence_bfn));
                 if isempty(download_size)
                     download_size = default_fluence_file_size;
                 end
@@ -460,19 +470,25 @@ if ~isempty(strfind(data_source, 'http'))
         % Ask user confirmation
         if ~java_dialog('confirm', ['Warning: ' format_file_size(total_download_size) ...
                 ' of fluence data will be downloaded to ' local_cache_dir '.' 10 10 ...
-                'Confirm download?' 10 10], 'Download warning');
+                'Confirm download?' 10 10], 'Download warning')
             return;
         end
         % Process downloads
+        bst_progress('start', 'Downloading fluences', sprintf('Downloading %d fluence files (%s)...', ...
+                                                              length(to_download_urls), ...
+                                                              format_file_size(total_download_size)), ...
+                     1, length(to_download_urls));
         for idownload=1:length(to_download_urls)
             vertex_id = to_download_spec{idownload}(1);
             wl = to_download_spec{idownload}(2);
             download_msg = ['Download fluence for v' num2str(vertex_id) ...
-                ', ' num2str(wl) 'nm'];
+                            ', ' num2str(wl) 'nm'];
             if ~nst_download(to_download_urls{idownload}, dest_fns{idownload}, download_msg)
                 return;
             end
+            bst_progress('inc',1);
         end
+        bst_progress('stop');
     end
 else
     for ivertex=1:length(head_vertices)
