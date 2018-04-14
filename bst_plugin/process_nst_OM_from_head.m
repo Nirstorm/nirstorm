@@ -25,7 +25,7 @@ function varargout = process_nst_OM_from_head( varargin )
 %      another)
 % TODO: test limitation of model size -> check with 32x32 or 16x16.
 % TODO: document computation time
-% TODO: doc params: 
+% TODO: doc params:
 %   - nb sources/det is the nb of optodes placed by algo then post proc to
 %     remove positions
 %   - nb adjacent is MIN (can be higher). Has to be associated to dist MAX
@@ -49,7 +49,7 @@ sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
 sProcess.options = nst_add_scout_sel_options(struct(), 'head', 'Head scout (search space):', ...
-                                             'scalp', {'User scouts'}, 0); 
+    'scalp', {'User scouts'}, 0);
 sProcess.options = add_OM_options(sProcess.options);
 end
 
@@ -57,7 +57,7 @@ function options = add_OM_options(options)
 
 % Add selector of cortical scout for target VOI
 options = nst_add_scout_sel_options(options, 'roi', 'Cortical scout (target ROI):', ...
-                                    'cortex', {'User scouts'}, 1);
+    'cortex', {'User scouts'}, 1);
 
 options.condition_name.Comment = 'Output condition name:';
 options.condition_name.Type = 'text';
@@ -69,7 +69,7 @@ options.wavelengths.Value = '';
 
 options.data_source.Comment = 'Fluence Data Source (URL or path)';
 options.data_source.Type    = 'text';
-options.data_source.Value = '';
+options.data_source.Value = 'http://thomasvincent.xyz/nst_data/fluence/MRI__Colin27_4NIRS/';
 
 options.nb_sources.Comment = 'Number of sources:';
 options.nb_sources.Type = 'value';
@@ -185,8 +185,8 @@ options.outputdir = sProcess.options.outputdir.Value{1};
 options.exist_weight = sProcess.options.exist_weight.Value;
 
 
-% TODO: enable selection of multiple ROIs
-% TODO: assert that selected subjecct is the same as for the head scout
+% TODO: disable selection of multiple ROIs
+% TODO: assert that selected subject is the same as for the head scout
 roi_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
 sCortex = in_tess_bst(roi_scout_selection.sSubject.Surface(roi_scout_selection.isurface).FileName);
 sScoutsFinal = {roi_scout_selection.sScout};
@@ -223,25 +223,25 @@ for iroi=1:length(sScoutsFinal)
         %TODO: make sure segmentation has proper indexing from 0 to 5
         %      Sometimes goes between 0 and 255 because of encoding issues
         voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal{iroi}.Vertices);
-%         gm_mask = (seg.Cube == 4);
-%         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
+        %         gm_mask = (seg.Cube == 4);
+        %         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
         
         % Save MRI to nifti:
-%         sVol = sMri;
-%         sVol.Cube(:) = gm_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-% 
-%         sVol = sMri;
-%         sVol.Cube = seg.Cube;
-%         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-%         
-%         
-%         sVol = sMri;
-%         sVol.Cube(:) = voi_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
+        %         sVol = sMri;
+        %         sVol.Cube(:) = gm_mask(:) * 1.0;
+        %         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
+        %         out_mri_nii(sVol, out_fn, 'float32');
+        %
+        %         sVol = sMri;
+        %         sVol.Cube = seg.Cube;
+        %         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
+        %         out_mri_nii(sVol, out_fn, 'float32');
+        %
+        %
+        %         sVol = sMri;
+        %         sVol.Cube(:) = voi_mask(:) * 1.0;
+        %         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
+        %         out_mri_nii(sVol, out_fn, 'float32');
         
         voi(voronoi_mask) = 1;
     end
@@ -328,7 +328,7 @@ db_set_channel(iStudy, ChannelMat, 1, 0);
 end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, ...
-                                                                  wavelengths, vois, options, all_reference_voxels_index)
+    wavelengths, vois, options, all_reference_voxels_index)
 
 % TODO: filter holders by distance to VOI
 % TODO: subsample holder mesh if head mesh edge are too small
@@ -358,37 +358,70 @@ nHolders = size(head_vertices_coords, 1);
 nVois = length(vois);
 iwl = 1;
 weight_tables = cell(nVois, 1);
-mri_zeros = zeros(options.cubeSize);
 if ~options.exist_weight
-    bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nVois * nHolders^2);
+    weights_tstart = tic();
     for ivoi=1:nVois
-        weight_tables{ivoi} = sparse(nHolders, nHolders);
-        for isrc=1:nHolders
-            for idet=1:nHolders
-                if holder_distances(isrc, idet) > options.sep_optode_min && holder_distances(isrc, idet)< options.sep_optode_max
+        % Resolve all holder pairs fulfilling distance criteria
+        % -> avoid a double loop nHolder X nHolder
+        [valid_isrc, valid_idet] = find(holder_distances > options.sep_optode_min & holder_distances < options.sep_optode_max);
+        
+        bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities of holder pairs for VOI %d...', ivoi),...
+            1, length(valid_isrc));
+        block_progress = round(length(valid_isrc)/100);
+        weights = zeros(length(valid_isrc), 1);
+        
+        % TODO: apply masking even before -> directly receive masked
+        % fluences -> will spare lots of memory
+        masked_fluence_volumes = cell(nHolders,1);
+        bst_progress('start', 'Masking fluences', sprintf('Masking fluence volumes within VOI...'),...
+            1, nHolders);
+        for iholder=1:nHolders
+            masked_fluence_volumes{iholder} = fluence_volumes{iholder}{iwl}(vois{ivoi});
+            bst_progress('inc', 1);
+        end
+        bst_progress('stop');
+
+        bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities...'),...
+                     1, length(valid_isrc));
+        for ipair=1:length(valid_isrc)
+            isrc = valid_isrc(ipair);
+            idet = valid_idet(ipair);
+            
+            % TODO: use cached values of nnz because this function takes
+            %       time!
+            if nnz(masked_fluence_volumes{isrc}) == 0 || nnz(masked_fluence_volumes{idet}) == 0
+                sensitivity = 0;
+            else
+                ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), ...
+                    all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+                fluence_ref = full(fluence_volumes{isrc}{iwl}(ref_det_pos));
+                if fluence_ref == 0
+                    sensitivity = 0;
+                else
+                    fluenceSrc = full(masked_fluence_volumes{isrc});
+                    fluenceDet = full(masked_fluence_volumes{idet});
                     %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
-                    fluenceSrc = full(fluence_volumes{isrc}{iwl}(vois{ivoi}));
-                    fluenceDet = full(fluence_volumes{idet}{iwl}(vois{ivoi}));
-                    ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-                    %fluenceSD = mri_zeros;
-                    %fluenceSD(:) = fluence_volumes{isrc}{iwl};
-                    if full(fluence_volumes{isrc}{iwl}(ref_det_pos))==0
-                        sensitivity = 0;
-                    else
-                        sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
-                        % bst_progress('text', ['Maximum sensitivity: ' num2str(round(max(sensitivity),5))]);
-                    end
-                    weight_tables{ivoi}(isrc, idet) = sum(sensitivity(:));
+
+                    sensitivity = fluenceSrc .* fluenceDet ./ fluence_ref; % Asymmetry
+                    % bst_progress('text', ['Maximum sensitivity: ' num2str(round(max(sensitivity),5))]);
                 end
             end
-            bst_progress('inc', nHolders);
+            weights(ipair) = sum(sensitivity(:));
+            if mod(ipair, block_progress) == 0
+                bst_progress('inc', block_progress);
+            end
         end
+        % It's a bit faster to build sparse matrix from non-zeros values in one
+        % shot instead of building an empty sparse matrix and then filling it
+        % incrementally
+        weight_tables{ivoi} = sparse(valid_isrc, valid_idet, weights);
         if(nnz(weight_tables{ivoi}) == 0)
             bst_error(sprintf('Weight table is null for VOI %d', ivoi));
             return
         end
     end
     bst_progress('stop');
+    fprintf('Weight table (search space) computed in %1.2f sec\n',toc(weights_tstart));
     if ~isempty(options.outputdir)
         save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_tables');
     end
@@ -396,7 +429,7 @@ else
     load (fullfile(options.outputdir, 'weight_tables.mat'),'weight_tables');
 end
 
-
+clear masked_fluence_volumes fluence_volumes weights
 
 nS = options.nb_sources; % number of sources
 nD = options.nb_detectors; % number of detectors
@@ -451,7 +484,7 @@ if 0
 end
 
 
- 
+
 %==========================================================================
 % Create inequality matrixes
 %==========================================================================
@@ -612,7 +645,7 @@ for iVOI=1:nVois
     end
     incumbent_x0=[];
     incumbent_x0=full(sum(reshape(weight_table(src_pos_idx,det_pos_idx),[],1)));
-    display(sprintf('incumbent=%g',incumbent_x0))
+    fprintf('incumbent=%g\n',incumbent_x0)
     clear src_pos_idx det_pos_idx
     x0=[xp_0;yq_0; wq_V_O];
     
@@ -639,7 +672,7 @@ for iVOI=1:nVois
     bst_progress('stop');
     
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 2);
-    
+    cplex_tstart = tic();
     cplex=Cplex(prob);
     cplex.Model.sense = 'maximize';
     cplex.Param.timelimit.Cur=120;
@@ -653,7 +686,7 @@ for iVOI=1:nVois
     results = cplex.solve;
     bst_progress('inc', 2);
     bst_progress('stop');
-    
+    fprintf('CPLEX optimization done in %1.2f sec\n',toc(cplex_tstart));
     if ~isfield(results, 'x')
         bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
         return;
