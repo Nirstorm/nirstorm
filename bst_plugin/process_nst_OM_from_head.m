@@ -189,70 +189,69 @@ options.exist_weight = sProcess.options.exist_weight.Value;
 % TODO: assert that selected subject is the same as for the head scout
 roi_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
 sCortex = in_tess_bst(roi_scout_selection.sSubject.Surface(roi_scout_selection.isurface).FileName);
-sScoutsFinal = {roi_scout_selection.sScout};
+sScoutsFinal = roi_scout_selection.sScout;
 
-vois = cell(length(sScoutsFinal), 1);
-for iroi=1:length(sScoutsFinal)
-    sROI = extract_scout_surface(sCortex, sScoutsFinal{iroi});
-    sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices);
+sROI = extract_scout_surface(sCortex, sScoutsFinal);
+sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices);
+
+% Get VOI from cortical ROI -> interpolate
+tess2mri_interp = tess_tri_interp(sROI.Vertices, sROI.Faces, cubeSize);
+index_binary_mask = (sum(tess2mri_interp,2) >0);
+voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
+if 1
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
     
-    % Get VOI from cortical ROI -> interpolate
-    tess2mri_interp = tess_tri_interp(sROI.Vertices, sROI.Faces, cubeSize);
-    index_binary_mask = (sum(tess2mri_interp,2) >0);
-    voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
-    if 1
-        voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-        
-        if ~exist(voronoi_fn, 'file')
-            process_nst_compute_voronoi('Run', sProcess, sInputs);%TODO: test this because compute voro expect subject name as input option
-        end
-        voronoi_bst = in_mri_bst(voronoi_fn);
-        voronoi = voronoi_bst.Cube;
-        % Load segmentation
-        segmentation_name = 'segmentation_5tissues';
-        iseg = 0;
-        for ianat = 1:size(sSubject.Anatomy,2)
-            if any(strcmp(sSubject.Anatomy(ianat).Comment, segmentation_name))
-                iseg = ianat;
-            end
-        end
-        if iseg == 0
-            bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
-        end
-        seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-        %TODO: make sure segmentation has proper indexing from 0 to 5
-        %      Sometimes goes between 0 and 255 because of encoding issues
-        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal{iroi}.Vertices);
-        %         gm_mask = (seg.Cube == 4);
-        %         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
-        
-        % Save MRI to nifti:
-        %         sVol = sMri;
-        %         sVol.Cube(:) = gm_mask(:) * 1.0;
-        %         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
-        %         out_mri_nii(sVol, out_fn, 'float32');
-        %
-        %         sVol = sMri;
-        %         sVol.Cube = seg.Cube;
-        %         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
-        %         out_mri_nii(sVol, out_fn, 'float32');
-        %
-        %
-        %         sVol = sMri;
-        %         sVol.Cube(:) = voi_mask(:) * 1.0;
-        %         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
-        %         out_mri_nii(sVol, out_fn, 'float32');
-        
-        voi(voronoi_mask) = 1;
+    if ~exist(voronoi_fn, 'file')
+        process_nst_compute_voronoi('Run', sProcess, sInputs);%TODO: test this because compute voro expect subject name as input option
     end
-    %voi(index_binary_mask) = 1;
-    voi_flat = voi(:);
-    vois{iroi} = sparse(voi_flat > 0);
-    if nnz(voi)==0
-        bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
-        return;
+    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi = voronoi_bst.Cube;
+    % Load segmentation
+    segmentation_name = 'segmentation_5tissues';
+    iseg = 0;
+    for ianat = 1:size(sSubject.Anatomy,2)
+        if any(strcmp(sSubject.Anatomy(ianat).Comment, segmentation_name))
+            iseg = ianat;
+        end
     end
+    if iseg == 0
+        bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
+    end
+    seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
+    %TODO: make sure segmentation has proper indexing from 0 to 5
+    %      Sometimes goes between 0 and 255 because of encoding issues
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal.Vertices);
+    %         gm_mask = (seg.Cube == 4);
+    %         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
+    
+    % Save MRI to nifti:
+    %         sVol = sMri;
+    %         sVol.Cube(:) = gm_mask(:) * 1.0;
+    %         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
+    %         out_mri_nii(sVol, out_fn, 'float32');
+    %
+    %         sVol = sMri;
+    %         sVol.Cube = seg.Cube;
+    %         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
+    %         out_mri_nii(sVol, out_fn, 'float32');
+    %
+    %
+    %         sVol = sMri;
+    %         sVol.Cube(:) = voi_mask(:) * 1.0;
+    %         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
+    %         out_mri_nii(sVol, out_fn, 'float32');
+    
+    voi(voronoi_mask) = 1;
 end
+%voi(index_binary_mask) = 1;
+voi_flat = voi(:);
+clear voi;
+voi_mask = sparse(voi_flat > 0);
+if nnz(voi_mask)==0
+    bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
+    return;
+end
+
 % Get fluences
 sparse_threshold = 1e-6;
 % TODO: sparsify saved fluences (faster loading, less memory during load)
@@ -260,16 +259,16 @@ fluence_data_source = sProcess.options.data_source.Value;
 if ~options.exist_weight
     [fluence_volumes,all_reference_voxels_index] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
         sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
-        wavelengths, fluence_data_source, sparse_threshold);
+        wavelengths, fluence_data_source, sparse_threshold); %, voi_mask
     if isempty(fluence_volumes)
         return;
     end
 end
 
 if options.exist_weight
-    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, [], wavelengths, vois, options, []);
+    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, [], wavelengths, voi_mask, options, []);
 else
-    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, vois, options, all_reference_voxels_index);
+    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, voi_mask, options, all_reference_voxels_index);
 end
 % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
 src_indexes = zeros(max(montage_pairs(:, 1)), 1);
@@ -328,7 +327,7 @@ db_set_channel(iStudy, ChannelMat, 1, 0);
 end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, ...
-    wavelengths, vois, options, all_reference_voxels_index)
+                                                                   wavelengths, voi_mask, options, all_reference_voxels_index)
 
 % TODO: filter holders by distance to VOI
 % TODO: subsample holder mesh if head mesh edge are too small
@@ -355,81 +354,76 @@ end
 
 holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
 nHolders = size(head_vertices_coords, 1);
-nVois = length(vois);
-iwl = 1;
-weight_tables = cell(nVois, 1);
+
+iwl = 1; %TODO: explicitely limit to 1 wavelength??
 if ~options.exist_weight
     weights_tstart = tic();
-    for ivoi=1:nVois
-        % Resolve all holder pairs fulfilling distance criteria
-        % -> avoid a double loop nHolder X nHolder
-        [valid_isrc, valid_idet] = find(holder_distances > options.sep_optode_min & holder_distances < options.sep_optode_max);
+    % Resolve all holder pairs fulfilling distance criteria
+    % -> avoid a double loop nHolder X nHolder
+    [valid_isrc, valid_idet] = find(holder_distances > options.sep_optode_min & holder_distances < options.sep_optode_max);
+    
+    bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities of holder pairs ...'),...
+        1, length(valid_isrc));
+    block_progress = round(length(valid_isrc)/100);
+    weights = zeros(length(valid_isrc), 1);
+    
+    masked_fluence_volumes = cell(nHolders,1);
+    bst_progress('start', 'Masking fluences', sprintf('Masking fluence volumes within VOI...'),...
+        1, nHolders);
+    for iholder=1:nHolders
+        masked_fluence_volumes{iholder} = fluence_volumes{iholder}{iwl}(voi_mask);
+        bst_progress('inc', 1);
+    end
+    bst_progress('stop');
+    
+    bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities...'),...
+        1, length(valid_isrc));
+    for ipair=1:length(valid_isrc)
+        isrc = valid_isrc(ipair);
+        idet = valid_idet(ipair);
         
-        bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities of holder pairs for VOI %d...', ivoi),...
-            1, length(valid_isrc));
-        block_progress = round(length(valid_isrc)/100);
-        weights = zeros(length(valid_isrc), 1);
-        
-        % TODO: apply masking even before -> directly receive masked
-        % fluences -> will spare lots of memory
-        masked_fluence_volumes = cell(nHolders,1);
-        bst_progress('start', 'Masking fluences', sprintf('Masking fluence volumes within VOI...'),...
-            1, nHolders);
-        for iholder=1:nHolders
-            masked_fluence_volumes{iholder} = fluence_volumes{iholder}{iwl}(vois{ivoi});
-            bst_progress('inc', 1);
-        end
-        bst_progress('stop');
-
-        bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities...'),...
-                     1, length(valid_isrc));
-        for ipair=1:length(valid_isrc)
-            isrc = valid_isrc(ipair);
-            idet = valid_idet(ipair);
-            
-            % TODO: use cached values of nnz because this function takes
-            %       time!
-            if nnz(masked_fluence_volumes{isrc}) == 0 || nnz(masked_fluence_volumes{idet}) == 0
+        % TODO: use cached values of nnz because this function takes
+        %       time!
+        if nnz(masked_fluence_volumes{isrc}) == 0 || nnz(masked_fluence_volumes{idet}) == 0
+            sensitivity = 0;
+        else
+            ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), ...
+                all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+            fluence_ref = full(fluence_volumes{isrc}{iwl}(ref_det_pos));
+            if fluence_ref == 0
                 sensitivity = 0;
             else
-                ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), ...
-                    all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-                fluence_ref = full(fluence_volumes{isrc}{iwl}(ref_det_pos));
-                if fluence_ref == 0
-                    sensitivity = 0;
-                else
-                    fluenceSrc = full(masked_fluence_volumes{isrc});
-                    fluenceDet = full(masked_fluence_volumes{idet});
-                    %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
-
-                    sensitivity = fluenceSrc .* fluenceDet ./ fluence_ref; % Asymmetry
-                    % bst_progress('text', ['Maximum sensitivity: ' num2str(round(max(sensitivity),5))]);
-                end
-            end
-            weights(ipair) = sum(sensitivity(:));
-            if mod(ipair, block_progress) == 0
-                bst_progress('inc', block_progress);
+                fluenceSrc = full(masked_fluence_volumes{isrc});
+                fluenceDet = full(masked_fluence_volumes{idet});
+                %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
+                
+                sensitivity = fluenceSrc .* fluenceDet ./ fluence_ref; % Asymmetry
+                % bst_progress('text', ['Maximum sensitivity: ' num2str(round(max(sensitivity),5))]);
             end
         end
-        % It's a bit faster to build sparse matrix from non-zeros values in one
-        % shot instead of building an empty sparse matrix and then filling it
-        % incrementally
-        weight_tables{ivoi} = sparse(valid_isrc, valid_idet, weights);
-        if(nnz(weight_tables{ivoi}) == 0)
-            bst_error(sprintf('Weight table is null for VOI %d', ivoi));
-            return
+        weights(ipair) = sum(sensitivity(:));
+        if mod(ipair, block_progress) == 0
+            bst_progress('inc', block_progress);
         end
+    end
+    % It's a bit faster to build sparse matrix from non-zeros values in one
+    % shot instead of building an empty sparse matrix and then filling it
+    % incrementally
+    weight_table = sparse(valid_isrc, valid_idet, weights);
+    if(nnz(weight_table) == 0)
+        bst_error(sprintf('Weight table is null for VOI %d', ivoi));
+        return
     end
     bst_progress('stop');
     fprintf('Weight table (search space) computed in %1.2f sec\n',toc(weights_tstart));
     if ~isempty(options.outputdir)
-        save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_tables');
+        save(fullfile(options.outputdir, 'weight_table.mat'), 'weight_table');
     end
 else
-    load (fullfile(options.outputdir, 'weight_tables.mat'),'weight_tables');
+    load (fullfile(options.outputdir, 'weight_table.mat'),'weight_table');
 end
 
-clear masked_fluence_volumes fluence_volumes weights
+clear masked_fluence_volumes fluence_volumes weights;
 
 nS = options.nb_sources; % number of sources
 nD = options.nb_detectors; % number of detectors
@@ -444,8 +438,6 @@ flag_adjacency=1;
 nAdjacentDet= options.nAdjacentDet; % minimal number of adjacent detector in the given range
 
 flag_init=0; % provide an initial solution
-
-%TODO: fix loop over VOIs!
 
 nH = nHolders; % number of holders
 xp=zeros(nH,1); nX=size(xp,1); % binary
@@ -501,222 +493,218 @@ I_1=zeros(nH,1);
 
 
 ipair = 1;
-for iVOI=1:nVois
-    bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
-    weight_table = weight_tables{iVOI};
-    % eq 27 ??
-    
-    if 0 weight_table=weight_table/max(weight_table(:)); end % normalize weigth table
-    
-    %..........................................................................
-    % Aineq2: Equation 13: wq_V-Sum(Vpq*xp)<=0
-    %..........................................................................
-    Aineq_2=zeros(nH,nVar);
-    for iH=1:nH
-        Aineq_2(iH,2*nH+iH) = 1;
-        Aineq_2(iH,1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
-    end
-    I_2=zeros(nH,1);
-    
-    %..........................................................................
-    % Aineq3: Optode/Optode minimal separation constraints
-    %..........................................................................
-    if flag_sep_optode_optode
-        separations=holder_distances;
-        forbid_sets=zeros(nH);
-        forbid_sets(separations<thresh_sep_optode_optode(1))=1; %TODO expose as separate parameter
-        
-        M2=nS+nD;
-        Aineq_3=sparse(2*nH,nVar);
-        Aineq_3(1:nH,1:2*nH)=[(M2-1)*eye(nH) + forbid_sets  forbid_sets] ;
-        Aineq_3(nH +1:2*nH,1:2*nH)=[forbid_sets (M2-1)*eye(nH) + forbid_sets] ;
-        I_3=M2*ones(2*nH,1);
-        clear M2
-        clear forbid_sets separations
-    else
-        Aineq_3=[];
-        I_3=[];
-    end
-    bst_progress('inc', 1);
-    %..........................................................................
-    % Aineq4: constraint source/det min separations
-    %..........................................................................
-    if flag_sep_src_det
-        separations=holder_distances;
-        forbid_sets=zeros(nH);
-        forbid_sets(separations<thresh_min_sep_src_det)=1;
-        
-        M2=nD;
-        Aineq_4=sparse(nH,nVar);
-        Aineq_4(1:nH,1:2*nH)=[M2*eye(nH) forbid_sets] ;
-        I_4=M2*ones(nH,1);
-        clear M2
-        clear forbid_sets separations
-    else
-        Aineq_4=[];
-        I_4=[];
-    end
-    
-    %..........................................................................
-    % Aineq5: Adjacency constraints
-    %..........................................................................
-    if flag_adjacency
-        separations=holder_distances;
-        Allow_sets=zeros(nH);
-        Allow_sets(separations>=thresh_sep_optode_optode(1) & separations<=thresh_sep_optode_optode(2))=1;
-        
-        Aineq_5=sparse(nH,nVar);
-        Aineq_5(1:nH,1:2*nH)=[eye(nH)*nAdjacentDet , -Allow_sets];
-        I_5=zeros(nH,1);
-    else
-        Aineq_5=[];
-        I_5=[];
-    end
-    
-    %..........................................................................
-    % Display InEquality matrix
-    %..........................................................................
-    if 0
-        matrixes2show={Aineq_1,Aineq_2,Aineq_3, Aineq_4,[Aineq_1;Aineq_2;Aineq_3; Aineq_4; Aineq_5]};
-        for ii=1:5
-            figure('name','inequality matrix')
-            %colormap(flipud(autumn(3)))
-            mat2show=matrixes2show{ii};
-            imagesc(mat2show);
-            %set(gca,'PlotBoxAspectRatio',[size(mat2show,1) size(mat2show,2) 1])
-            ylim([0.5 size(mat2show,1)+0.5])
-        end
-        clear ii
-    end
-    
-    bst_progress('inc', 1);
-    %==========================================================================
-    % initial condition: find sources whose pairs have maximum energy then
-    % complete with detectors
-    %==========================================================================
-    xp_0=zeros(nH,1);
-    yq_0=zeros(nH,1);
-    [~,idx] = sort(weight_table(:),'descend');
-    % Seems to only needed if holder list is not the same size as
-    % weight_table
-    if 0
-        inc=1; src_pos_idx=[];det_pos_idx=[];
-        while numel(src_pos_idx)~=nS
-            [ia,~]=ind2sub(size(weight_table),idx(inc));
-            if ~ismember(ia,src_pos_idx) && ismember(ia,find(ismember(mont.list_hold,holderList)))
-                src_pos_idx = [src_pos_idx ia];
-                inc=inc+1;
-            else
-                inc=inc+1;
-                continue
-            end
-        end
-        clear inc ia ib
-    end
-    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
-    
-    red_weight_table = weight_table(src_pos_idx,:);
-    [~,idx] = sort(red_weight_table(:),'descend');
-    if 0
-        inc=1;
-        while numel(det_pos_idx)~=nD
-            [~,ib]=ind2sub(size(red_weight_table),idx(inc));
-            if   ~ismember(ib,src_pos_idx) && ismember(ib,find(ismember(mont.list_hold,holderList)))
-                det_pos_idx=unique([det_pos_idx ib]);
-                inc=inc+1;
-            else
-                inc=inc+1;
-                continue
-            end
-        end
-        clear inc ia ib
-    end
-    bst_progress('inc', 1);
-    [~, det_pos_idx] = ind2sub(size(red_weight_table), idx(1:nD));
-    
-    xp_0(src_pos_idx)=1;
-    yq_0(det_pos_idx)=1;
-    
-    wq_V_O=zeros(nH,1);
-    for ii=1:numel(yq_0)
-        if yq_0(ii)==1
-            wq_V_0(ii) = sum(weight_table(src_pos_idx,ii));
-        end
-    end
-    incumbent_x0=[];
-    incumbent_x0=full(sum(reshape(weight_table(src_pos_idx,det_pos_idx),[],1)));
-    fprintf('incumbent=%g\n',incumbent_x0)
-    clear src_pos_idx det_pos_idx
-    x0=[xp_0;yq_0; wq_V_O];
-    
-    Aeq=[Aeq_1;Aeq_2];
-    E=[E_1;E_2];
-    
-    Aineq=[Aineq_1;Aineq_2;Aineq_3;Aineq_4,;Aineq_5];
-    I=[I_1;I_2;I_3;I_4;I_5];
-    
-    f=[zeros(1,2*nH) ones(1,nH)]';
-    lb=[];%[zeros(1,2*nH) zeros(1,nH)]';
-    ub=[];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
-    ctype=[repmat('B',1,2*nH) repmat('S',1,nH)];
-    
-    prob = cplexcreateprob('cplexmilp');
-    prob.f = f;
-    prob.lb = lb; prob.ub = ub;
-    prob.ctype=ctype;
-    prob.Aineq=Aineq; prob.bineq = I;
-    prob.Aeq=Aeq; prob.beq = E;
-    prob.x0=[];
-    prob.options = [];
-    bst_progress('inc', 1);
-    bst_progress('stop');
-    
-    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 2);
-    cplex_tstart = tic();
-    cplex=Cplex(prob);
-    cplex.Model.sense = 'maximize';
-    cplex.Param.timelimit.Cur=120;
-    
-    if flag_init
-        cplex.MipStart(1).name='optim';
-        cplex.MipStart(1).effortlevel=1;
-        cplex.MipStart(1).x=x0;
-        cplex.MipStart(1).xindices=int32([1:numel(x0)]');
-    end
-    results = cplex.solve;
-    bst_progress('inc', 2);
-    bst_progress('stop');
-    fprintf('CPLEX optimization done in %1.2f sec\n',toc(cplex_tstart));
-    if ~isfield(results, 'x')
-        bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
-        return;
-    end
-    x=results.x;
-    x=round(x);
-    isources = find(x(1:nH)==1);
-    idetectors = find(x(nH+1:2*nH)==1);
-    
-    for isrc=1:length(isources)
-        for idet=1:length(idetectors)
-            if holder_distances(isources(isrc),idetectors(idet)) > thresh_sep_optode_optode(1) && ...
-                    holder_distances(isources(isrc),idetectors(idet)) < thresh_sep_optode_optode(2) && ...
-                    full(weight_table(isources(isrc),idetectors(idet)))
-                montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                montage_weight(ipair,:) = full(weight_table(isources(isrc),idetectors(idet)));
-                %             disp(['Channel S', num2str(isrc), 'D' num2str(idet) ' >>> Distance: ',...
-                %                 num2str(round(holder_distances(isources(isrc),idetectors(idet)),1)), 'mm    ', 'Weight: ',...
-                %                 num2str(round(montage_weight(ipair,:),3))]);
-                ipair = ipair + 1;
-            end
-        end
-    end
-    
-    %     sensitivity_thresh = 0.05;
-    %
-    %montage_pairs = montage_pairs(find(montage_weight > 0),:);
-    
-    
+bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
+% eq 27 ??
+
+if 0 weight_table=weight_table/max(weight_table(:)); end % normalize weigth table
+
+%..........................................................................
+% Aineq2: Equation 13: wq_V-Sum(Vpq*xp)<=0
+%..........................................................................
+Aineq_2=zeros(nH,nVar);
+for iH=1:nH
+    Aineq_2(iH,2*nH+iH) = 1;
+    Aineq_2(iH,1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
 end
+I_2=zeros(nH,1);
+
+%..........................................................................
+% Aineq3: Optode/Optode minimal separation constraints
+%..........................................................................
+if flag_sep_optode_optode
+    separations=holder_distances;
+    forbid_sets=zeros(nH);
+    forbid_sets(separations<thresh_sep_optode_optode(1))=1; %TODO expose as separate parameter
+    
+    M2=nS+nD;
+    Aineq_3=sparse(2*nH,nVar);
+    Aineq_3(1:nH,1:2*nH)=[(M2-1)*eye(nH) + forbid_sets  forbid_sets] ;
+    Aineq_3(nH +1:2*nH,1:2*nH)=[forbid_sets (M2-1)*eye(nH) + forbid_sets] ;
+    I_3=M2*ones(2*nH,1);
+    clear M2
+    clear forbid_sets separations
+else
+    Aineq_3=[];
+    I_3=[];
+end
+bst_progress('inc', 1);
+%..........................................................................
+% Aineq4: constraint source/det min separations
+%..........................................................................
+if flag_sep_src_det
+    separations=holder_distances;
+    forbid_sets=zeros(nH);
+    forbid_sets(separations<thresh_min_sep_src_det)=1;
+    
+    M2=nD;
+    Aineq_4=sparse(nH,nVar);
+    Aineq_4(1:nH,1:2*nH)=[M2*eye(nH) forbid_sets] ;
+    I_4=M2*ones(nH,1);
+    clear M2
+    clear forbid_sets separations
+else
+    Aineq_4=[];
+    I_4=[];
+end
+
+%..........................................................................
+% Aineq5: Adjacency constraints
+%..........................................................................
+if flag_adjacency
+    separations=holder_distances;
+    Allow_sets=zeros(nH);
+    Allow_sets(separations>=thresh_sep_optode_optode(1) & separations<=thresh_sep_optode_optode(2))=1;
+    
+    Aineq_5=sparse(nH,nVar);
+    Aineq_5(1:nH,1:2*nH)=[eye(nH)*nAdjacentDet , -Allow_sets];
+    I_5=zeros(nH,1);
+else
+    Aineq_5=[];
+    I_5=[];
+end
+
+%..........................................................................
+% Display InEquality matrix
+%..........................................................................
+if 0
+    matrixes2show={Aineq_1,Aineq_2,Aineq_3, Aineq_4,[Aineq_1;Aineq_2;Aineq_3; Aineq_4; Aineq_5]};
+    for ii=1:5
+        figure('name','inequality matrix')
+        %colormap(flipud(autumn(3)))
+        mat2show=matrixes2show{ii};
+        imagesc(mat2show);
+        %set(gca,'PlotBoxAspectRatio',[size(mat2show,1) size(mat2show,2) 1])
+        ylim([0.5 size(mat2show,1)+0.5])
+    end
+    clear ii
+end
+
+bst_progress('inc', 1);
+%==========================================================================
+% initial condition: find sources whose pairs have maximum energy then
+% complete with detectors
+%==========================================================================
+xp_0=zeros(nH,1);
+yq_0=zeros(nH,1);
+[~,idx] = sort(weight_table(:),'descend');
+% Seems to only needed if holder list is not the same size as
+% weight_table
+if 0
+    inc=1; src_pos_idx=[];det_pos_idx=[];
+    while numel(src_pos_idx)~=nS
+        [ia,~]=ind2sub(size(weight_table),idx(inc));
+        if ~ismember(ia,src_pos_idx) && ismember(ia,find(ismember(mont.list_hold,holderList)))
+            src_pos_idx = [src_pos_idx ia];
+            inc=inc+1;
+        else
+            inc=inc+1;
+            continue
+        end
+    end
+    clear inc ia ib
+end
+[src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
+
+red_weight_table = weight_table(src_pos_idx,:);
+[~,idx] = sort(red_weight_table(:),'descend');
+if 0
+    inc=1;
+    while numel(det_pos_idx)~=nD
+        [~,ib]=ind2sub(size(red_weight_table),idx(inc));
+        if   ~ismember(ib,src_pos_idx) && ismember(ib,find(ismember(mont.list_hold,holderList)))
+            det_pos_idx=unique([det_pos_idx ib]);
+            inc=inc+1;
+        else
+            inc=inc+1;
+            continue
+        end
+    end
+    clear inc ia ib
+end
+bst_progress('inc', 1);
+[~, det_pos_idx] = ind2sub(size(red_weight_table), idx(1:nD));
+
+xp_0(src_pos_idx)=1;
+yq_0(det_pos_idx)=1;
+
+wq_V_O=zeros(nH,1);
+for ii=1:numel(yq_0)
+    if yq_0(ii)==1
+        wq_V_0(ii) = sum(weight_table(src_pos_idx,ii));
+    end
+end
+incumbent_x0=[];
+incumbent_x0=full(sum(reshape(weight_table(src_pos_idx,det_pos_idx),[],1)));
+fprintf('incumbent=%g\n',incumbent_x0)
+clear src_pos_idx det_pos_idx
+x0=[xp_0;yq_0; wq_V_O];
+
+Aeq=[Aeq_1;Aeq_2];
+E=[E_1;E_2];
+
+Aineq=[Aineq_1;Aineq_2;Aineq_3;Aineq_4,;Aineq_5];
+I=[I_1;I_2;I_3;I_4;I_5];
+
+f=[zeros(1,2*nH) ones(1,nH)]';
+lb=[];%[zeros(1,2*nH) zeros(1,nH)]';
+ub=[];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
+ctype=[repmat('B',1,2*nH) repmat('S',1,nH)];
+
+prob = cplexcreateprob('cplexmilp');
+prob.f = f;
+prob.lb = lb; prob.ub = ub;
+prob.ctype=ctype;
+prob.Aineq=Aineq; prob.bineq = I;
+prob.Aeq=Aeq; prob.beq = E;
+prob.x0=[];
+prob.options = [];
+bst_progress('inc', 1);
+bst_progress('stop');
+
+bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 2);
+cplex_tstart = tic();
+cplex=Cplex(prob);
+cplex.Model.sense = 'maximize';
+cplex.Param.timelimit.Cur=120;
+
+if flag_init
+    cplex.MipStart(1).name='optim';
+    cplex.MipStart(1).effortlevel=1;
+    cplex.MipStart(1).x=x0;
+    cplex.MipStart(1).xindices=int32([1:numel(x0)]');
+end
+results = cplex.solve;
+bst_progress('inc', 2);
+bst_progress('stop');
+fprintf('CPLEX optimization done in %1.2f sec\n',toc(cplex_tstart));
+if ~isfield(results, 'x')
+    bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
+    return;
+end
+x=results.x;
+x=round(x);
+isources = find(x(1:nH)==1);
+idetectors = find(x(nH+1:2*nH)==1);
+
+for isrc=1:length(isources)
+    for idet=1:length(idetectors)
+        if holder_distances(isources(isrc),idetectors(idet)) > thresh_sep_optode_optode(1) && ...
+                holder_distances(isources(isrc),idetectors(idet)) < thresh_sep_optode_optode(2) && ...
+                full(weight_table(isources(isrc),idetectors(idet)))
+            montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
+            montage_weight(ipair,:) = full(weight_table(isources(isrc),idetectors(idet)));
+            %             disp(['Channel S', num2str(isrc), 'D' num2str(idet) ' >>> Distance: ',...
+            %                 num2str(round(holder_distances(isources(isrc),idetectors(idet)),1)), 'mm    ', 'Weight: ',...
+            %                 num2str(round(montage_weight(ipair,:),3))]);
+            ipair = ipair + 1;
+        end
+    end
+end
+
+%     sensitivity_thresh = 0.05;
+%
+%montage_pairs = montage_pairs(find(montage_weight > 0),:);
+
 
 if 0
     %% Dummy positioning
