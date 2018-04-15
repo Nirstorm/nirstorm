@@ -386,15 +386,17 @@ OutputFiles{1} = sInputs.FileName;
 db_save();
 end
 
-function [fluences reference_voxels_index] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold)
+function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size)
 
 if nargin < 5
     sparse_threshold = nan;
 end
 
-fluences = {};
+if nargin < 6
+    voi_mask = nan;
+end
+
 fluence_fns = {};
-reference_voxels_index = {};
 if ~isempty(strfind(data_source, 'http'))
     if ~fluence_is_available(anat_name)
         bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
@@ -474,10 +476,10 @@ if ~isempty(strfind(data_source, 'http'))
             return;
         end
         % Process downloads
-        bst_progress('start', 'Downloading fluences', sprintf('Downloading %d fluence files (%s)...', ...
-                                                              length(to_download_urls), ...
-                                                              format_file_size(total_download_size)), ...
-                     1, length(to_download_urls));
+        msg = sprintf('Downloading %d fluence files (%s)...', ...
+                      length(to_download_urls), ...
+                      format_file_size(total_download_size))
+        bst_progress('start', 'Downloading fluences', msg, 1, length(to_download_urls));
         for idownload=1:length(to_download_urls)
             vertex_id = to_download_spec{idownload}(1);
             wl = to_download_spec{idownload}(2);
@@ -507,22 +509,55 @@ else
     end
 end
 
-bst_progress('start', 'Get fluences', sprintf('Load volumic fluences (%d files)...', length(head_vertices)*length(wavelengths)), 1, length(head_vertices)*length(wavelengths));
-for ivertex=1:length(head_vertices)
-    for iwl=1:length(wavelengths)
-        fluence = load(fluence_fns{ivertex}{iwl});
-        reference_voxel_index = fluence.reference_voxel_index;
-        fluence = fluence.fluence_flat_sparse_vol;
-%         if ~issparse(fluence) && ~isnan(sparse_threshold)
-%             fluence(fluence < sparse_threshold) = 0;
-%             %fluence = sparse(fluence(:));
-%         end
-        fluences{ivertex}{iwl} = fluence;
-        reference_voxels_index{ivertex}{iwl} = reference_voxel_index;
+fluences = cell(length(head_vertices), 1);
+if any(isnan(voi_mask))
+    bst_progress('start', 'Get fluences', sprintf('Load volumic fluences (%d files)...', ...
+                 length(head_vertices)*length(wavelengths)), 1, length(head_vertices)*length(wavelengths));
+    reference_voxels_index = cell(length(head_vertices), 1);
+    for ivertex=1:length(head_vertices)
+        for iwl=1:length(wavelengths)
+            fluence = load(fluence_fns{ivertex}{iwl});
+            reference_voxel_index = fluence.reference_voxel_index;
+            fluence = fluence.fluence_flat_sparse_vol;
+            %         if ~issparse(fluence) && ~isnan(sparse_threshold)
+            %             fluence(fluence < sparse_threshold) = 0;
+            %             %fluence = sparse(fluence(:));
+            %         end
+            fluences{ivertex}{iwl} = fluence;
+            reference_voxels_index{ivertex}{iwl} = reference_voxel_index;
+            bst_progress('inc',1);
+        end
+    end
+    reference = reference_voxels_index;
+    bst_progress('stop');
+else
+    bst_progress('start', 'Get fluences', 'Load fluences head mask...',...
+                 1, length(head_vertices));
+    ref_voxel_indexes = zeros(size(head_vertices));
+    for ivertex=1:length(head_vertices)
+        data = load(fluence_fns{ivertex}{1}, 'reference_voxel_index');
+        reference_voxel_index = data.reference_voxel_index;
+        ref_voxel_indexes(ivertex) = sub2ind(cube_size, reference_voxel_index(1), ...
+                                             reference_voxel_index(2), ...
+                                             reference_voxel_index(3));
         bst_progress('inc',1);
     end
+    bst_progress('stop');
+    bst_progress('start', 'Get fluences', ...
+                 sprintf('Load & mask volumic fluences (%d files)...', length(head_vertices)*length(wavelengths)), ...
+                 1, length(head_vertices)*length(wavelengths));
+    ref_fluences = cell(length(head_vertices), 1);
+    for ivertex=1:length(head_vertices)
+        for iwl=1:length(wavelengths)
+            data = load(fluence_fns{ivertex}{iwl}, 'fluence_flat_sparse_vol');
+            fluences{ivertex}{iwl} = data.fluence_flat_sparse_vol(voi_mask);
+            ref_fluences{ivertex}{iwl} = data.fluence_flat_sparse_vol(ref_voxel_indexes);
+            bst_progress('inc',1);
+        end
+    end
+    bst_progress('stop');
+    reference = ref_fluences;
 end
-bst_progress('stop');   
 
 end
 

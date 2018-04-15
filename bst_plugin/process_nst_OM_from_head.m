@@ -257,9 +257,9 @@ sparse_threshold = 1e-6;
 % TODO: sparsify saved fluences (faster loading, less memory during load)
 fluence_data_source = sProcess.options.data_source.Value;
 if ~options.exist_weight
-    [fluence_volumes,all_reference_voxels_index] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
+    [fluence_volumes,fluence_ref] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
         sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
-        wavelengths, fluence_data_source, sparse_threshold); %, voi_mask
+        wavelengths, fluence_data_source, sparse_threshold, voi_mask, cubeSize); %
     if isempty(fluence_volumes)
         return;
     end
@@ -268,7 +268,7 @@ end
 if options.exist_weight
     [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, [], wavelengths, voi_mask, options, []);
 else
-    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, voi_mask, options, all_reference_voxels_index);
+    [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, voi_mask, options, fluence_ref);
 end
 % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
 src_indexes = zeros(max(montage_pairs(:, 1)), 1);
@@ -326,8 +326,8 @@ sStudy = bst_get('Study', iStudy);
 db_set_channel(iStudy, ChannelMat, 1, 0);
 end
 
-function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, ...
-                                                                   wavelengths, voi_mask, options, all_reference_voxels_index)
+function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_voi, ...
+                                                                   wavelengths, voi_mask, options, fluence_head)
 
 % TODO: filter holders by distance to VOI
 % TODO: subsample holder mesh if head mesh edge are too small
@@ -367,14 +367,14 @@ if ~options.exist_weight
     block_progress = round(length(valid_isrc)/100);
     weights = zeros(length(valid_isrc), 1);
     
-    masked_fluence_volumes = cell(nHolders,1);
-    bst_progress('start', 'Masking fluences', sprintf('Masking fluence volumes within VOI...'),...
-        1, nHolders);
-    for iholder=1:nHolders
-        masked_fluence_volumes{iholder} = fluence_volumes{iholder}{iwl}(voi_mask);
-        bst_progress('inc', 1);
-    end
-    bst_progress('stop');
+%     masked_fluence_volumes = cell(nHolders,1);
+%     bst_progress('start', 'Masking fluences', sprintf('Masking fluence volumes within VOI...'),...
+%         1, nHolders);
+%     for iholder=1:nHolders
+%         masked_fluence_volumes{iholder} = fluence_volumes{iholder}{iwl}(voi_mask);
+%         bst_progress('inc', 1);
+%     end
+%     bst_progress('stop');
     
     bst_progress('start', 'Compute weights',sprintf('Computing summed sensitivities...'),...
         1, length(valid_isrc));
@@ -384,17 +384,19 @@ if ~options.exist_weight
         
         % TODO: use cached values of nnz because this function takes
         %       time!
-        if nnz(masked_fluence_volumes{isrc}) == 0 || nnz(masked_fluence_volumes{idet}) == 0
+        %if nnz(masked_fluence_volumes{isrc}) == 0 || nnz(masked_fluence_volumes{idet}) == 0
+        if nnz(fluence_voi{isrc}{iwl}) == 0 || nnz(fluence_voi{idet}{iwl}) == 0
             sensitivity = 0;
         else
-            ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), ...
-                all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-            fluence_ref = full(fluence_volumes{isrc}{iwl}(ref_det_pos));
+%             ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), ...
+%                 all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+%             fluence_ref = full(fluence_volumes{isrc}{iwl}(ref_det_pos));
+            fluence_ref = fluence_head{isrc}{iwl}(idet);
             if fluence_ref == 0
                 sensitivity = 0;
             else
-                fluenceSrc = full(masked_fluence_volumes{isrc});
-                fluenceDet = full(masked_fluence_volumes{idet});
+                fluenceSrc = full(fluence_voi{isrc}{iwl});
+                fluenceDet = full(fluence_voi{idet}{iwl});
                 %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
                 
                 sensitivity = fluenceSrc .* fluenceDet ./ fluence_ref; % Asymmetry
@@ -423,7 +425,7 @@ else
     load (fullfile(options.outputdir, 'weight_table.mat'),'weight_table');
 end
 
-clear masked_fluence_volumes fluence_volumes weights;
+clear fluence_voi weights fluence_ref valid_isrc valid_idet;
 
 nS = options.nb_sources; % number of sources
 nD = options.nb_detectors; % number of detectors
