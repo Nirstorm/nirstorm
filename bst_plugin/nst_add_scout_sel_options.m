@@ -23,7 +23,7 @@ iscout_info = 1;
 scout_info = struct([]);
 for isubject=1:length(pSubjects.Subject)
     sSubject = pSubjects.Subject(isubject);
-    if ~isempty(sSubject.Surface) % no suirface for subject "group_analysis"
+    if ~isempty(sSubject.Surface) && ~isempty(sSubject.(s_isurf)) % no surface available
         sSurf = in_tess_bst(sSubject.Surface(sSubject.(s_isurf)).FileName);
         for iatlas=1:length(atlas_names)
             iatlas_selected = strcmp(atlas_names{iatlas}, {sSurf.Atlas.Name});

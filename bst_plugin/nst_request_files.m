@@ -146,7 +146,7 @@ downloads_failed = {};
 if ~isempty(to_download_urls)
     confirm_msg = sprintf('Warning: %s of data (%d files) will be downloaded to %s.\n\nConfirm download?', ...
                           format_file_size(total_download_size), length(to_download_urls), local_repository);
-    if confirm_download && ~java_dialog('confirm', confirm_msg, 'Download warning');
+    if confirm_download && ~java_dialog('confirm', confirm_msg, 'Download warning')
         downloaded_files = {};
         local_fns = {};
         return;
@@ -154,7 +154,7 @@ if ~isempty(to_download_urls)
     
     bst_progress('start', 'Data download', 'Downloading data...', 1, length(to_download_urls));
     for idownload=1:length(to_download_urls)
-        if ~nst_download(to_download_urls{idownload}, download_targets{idownload});
+        if ~nst_download(to_download_urls{idownload}, download_targets{idownload})
             downloads_failed{end+1} = to_download_urls{idownload};
         end
         bst_progress('inc',1);
