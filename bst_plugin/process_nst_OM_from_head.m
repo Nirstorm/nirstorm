@@ -667,7 +667,7 @@ bst_progress('start', 'Optimization','Running optimization with Cplex. May take 
 cplex_tstart = tic();
 cplex=Cplex(prob);
 cplex.Model.sense = 'maximize';
-cplex.Param.timelimit.Cur=120;
+cplex.Param.timelimit.Cur=300; %120
 
 if flag_init
     cplex.MipStart(1).name='optim';
