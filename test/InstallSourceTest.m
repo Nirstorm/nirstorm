@@ -1,5 +1,22 @@
 classdef InstallSourceTest < matlab.unittest.TestCase
     methods(Test)
+        function test_matlab_version_comparison(testCase)
+            exception_caught = 0;
+            try
+                compare_matlab_versions('8.1', 9.1);
+            catch ME
+                testCase.assertTrue(strcmp(ME.identifier, ...
+                                    'Nirstorm:compare_matlab_versions:invalidInput'));
+                 exception_caught = 1;
+            end
+            testCase.assertTrue(exception_caught==1);
+            
+            testCase.assertEqual(compare_matlab_versions('8.1', '9.1.1'), -1);
+            testCase.assertEqual(compare_matlab_versions('8.1', '9.1'), -1);
+            testCase.assertEqual(compare_matlab_versions('8.1', '9'), -1);
+            testCase.assertEqual(compare_matlab_versions('7.11.1', '7.2'), 1);
+            testCase.assertEqual(compare_matlab_versions('7.11.1', '7.11.1'), 0);
+        end
         function test_package_install(testCase)
             import matlab.unittest.fixtures.SuppressedWarningsFixture
 
