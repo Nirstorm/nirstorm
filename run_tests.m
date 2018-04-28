@@ -32,8 +32,8 @@ else
         if strcmp(to_run, 'all')
             to_run = {'package', 'source', 'scripts'};
         else
-            to_run = {'package'};
-            end
+            to_run = {to_run};
+        end
     end
         
     assert(all(ismember(to_run, {'package', 'source', 'scripts'})));
@@ -60,7 +60,7 @@ ips = 1;
 ics = 1;
 for iscript=1:length(test_scripts)
     test_fn = fullfile('test', test_scripts(iscript).name);
-    if ~isempty(strfind(test_fn, 'Test.m')) && ~isempty(regexp(test_fn, re_match_filter, 'match'));
+    if ~isempty(strfind(test_fn, 'Test.m')) && ~isempty(regexp(test_fn, re_match_filter, 'match'))
         tests = TestSuite.fromFile(test_fn);
         if ~isempty(strfind(test_fn, 'SourceTest'))
             source_suite(iss:(iss+length(tests)-1)) = tests;
