@@ -30,6 +30,11 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             
             extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
             testCase.assertTrue(isempty(extras));
+            
+%             To test extras on the current matlab version (number of extras may vary):         
+%             extras = get_older_matlab_extras(testCase.tmp_dir);
+%             testCase.assertTrue(isempty(extras));
+
         end
         
         function test_matlab_version_comparison(testCase)

@@ -25,11 +25,26 @@ extras = {};
 for iitem=1:length(items)
     item = items(iitem);
     [root, basename, ext] = fileparts(item.name);
-    manifest_mat_version = ext(2:end); % discard dot
-    if ~item.isdir && strcmp(basename, 'MANIFEST') && ...
-        compare_matlab_versions(matlab_version, rdate_to_version(manifest_mat_version)) == -1
-        extras = [extras manifest_mat_version]; 
+    try
+        manifest_mat_rdate = ext(2:end); % discard dot
+        manifest_mat_version = rdate_to_version(manifest_mat_rdate); 
+        if ~item.isdir && strcmp(basename, 'MANIFEST') && ...
+                compare_matlab_versions(matlab_version, manifest_mat_version) == -1
+            extras = [extras manifest_mat_rdate];
+        end
+    catch ME
+        if ~strcmp(ME.identifier, 'Nirstorm:BadMatlabVersionString')
+            rethrow(ME);
+        end
     end
+end
+if ~isempty(extras)
+    s_extras = extras{1};
+    for iextra=2:length(extras)
+        s_extras = [s_extras ', ' extras{iextra}];
+    end
+    fprintf('Adding functions for matlab versions %s to support current version %s.\n', ...
+            s_extras, matlab_version);
 end
 
 end

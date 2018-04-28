@@ -25,8 +25,15 @@ order = 0;
 end
 
 function parts = getParts(V)
-parts = sscanf(V, '%d.%d.%d')';
+parts = sscanf(V, '%d.%d.%d.%d')';
+% zero-fills:
+if length(parts) < 2
+    parts(2) = 0;  
+end
 if length(parts) < 3
-    parts(3) = 0; % zero-fills to 3 elements
+    parts(3) = 0; 
+end
+if length(parts) < 4
+    parts(4) = 0;
 end
 end

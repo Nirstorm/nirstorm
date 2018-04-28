@@ -62,5 +62,5 @@ switch(rdate)
     case 'R2018b'
         version_str = '9.4';        
     otherwise
-        error(['Unknown release date: ' rdate]);
+        throw(MException('Nirstorm:BadMatlabVersionString', ['Unknown release date: ' rdate]));
 end
