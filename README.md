@@ -17,7 +17,7 @@ Current features include classical within-subject analysis comprising motion-cor
 
 The script `nst_install.m` takes care of copying or linking processes and functions into the brainstorm user folder.
 
-Parts of the nirstorm plugin may already shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu. Namely: modified bear lambert law and bad channel tagging.
+Parts of the nirstorm plugin may already be shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu (modified bear lambert law and bad channel tagging).
 The current installation will override them.
 
 ### Copy installation (windows, linux)
@@ -38,14 +38,4 @@ When updates are downloaded, this installation command has to be run again only 
 
 ## Usage
 
-The main documentation is in the form Brainstorm tutorials.
-See http://neuroimage.usc.edu/brainstorm/Tutorials for a complete list.
-
-See http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping for a turorial on basic fNIRS data processing comprising:
-- data import & visualization
-- bad channel tagging
-- movement correction
-- MBLL 
-- detrending and filtering
-- block averaging
-
+The main documentation is in the form tutorials available on the [nirstorm github project wiki](https://github.com/Nirstorm/nirstorm/wiki#tutorials).
