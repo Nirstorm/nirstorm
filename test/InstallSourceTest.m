@@ -1,5 +1,37 @@
 classdef InstallSourceTest < matlab.unittest.TestCase
+    properties
+        tmp_dir
+    end
+    
+    methods(TestMethodSetup)
+        function setup(testCase)
+            tmpd = tempname;
+            mkdir(tmpd);
+            testCase.tmp_dir = tmpd;
+        end
+    end
+    
+    methods(TestMethodTeardown)
+        function tear_down(testCase)
+            rmdir(testCase.tmp_dir, 's');
+        end
+    end
+    
     methods(Test)
+                
+        function test_older_matlab_install(testCase)
+            create_tmp_files(testCase, {'MANIFEST.R2008a', 'MANIFEST.R2009b', 'MANIFEST.R2014b'});
+            
+            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
+            testCase.assertTrue(all(ismember(extras, {'R2009b', 'R2014b'})) && length(extras)==2);
+            
+            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
+            testCase.assertTrue(all(ismember(extras, {'R2008a', 'R2009b', 'R2014b'})) && length(extras)==3);
+            
+            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
+            testCase.assertTrue(isempty(extras));
+        end
+        
         function test_matlab_version_comparison(testCase)
             exception_caught = 0;
             try
@@ -17,19 +49,26 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             testCase.assertEqual(compare_matlab_versions('7.11.1', '7.2'), 1);
             testCase.assertEqual(compare_matlab_versions('7.11.1', '7.11.1'), 0);
         end
+        
         function test_package_install(testCase)
             import matlab.unittest.fixtures.SuppressedWarningsFixture
 
             addpath('../dist_tools');
             
             testCase.applyFixture(SuppressedWarningsFixture('DistPackage:FileNotFound'));
-            package_rel_files = {fullfile('script', 'script1.m'), ...
-                                 'func1.m', 'func2.m', fullfile('extra', 'func_extra.m'), ...
-                                 'dont_touch_me.sh', fullfile('please','dont_touch_me.m'),...
-                                 fullfile('dep', 'dep_func1.m'), ...
-                                 fullfile('dep', 'dep_func2.m')};
-            files_not_to_install = {'dont_touch_me.sh', fullfile('please','dont_touch_me.m')};
-            [package_files, root_src_dir] = create_tmp_files(package_rel_files);
+                        
+            package_rel_files = {fullfile('src_root', 'script', 'script1.m'), ...
+                                 fullfile('src_root', 'func1.m'), ...
+                                 fullfile('src_root', 'func2.m'), ...
+                                 fullfile('src_root', 'extra', 'func_extra.m'), ...
+                                 fullfile('src_root', 'dont_touch_me.sh'),...
+                                 fullfile('src_root', 'please','dont_touch_me.m'),...
+                                 fullfile('src_root', 'dep', 'dep_func1.m'), ...
+                                 fullfile('src_root', 'dep', 'dep_func2.m')};
+            files_not_to_install = {fullfile('src_root', 'dont_touch_me.sh'), ...
+                                    fullfile('src_root', 'please','dont_touch_me.m')};
+            create_tmp_files(testCase, package_rel_files);
+            root_src_dir = fullfile(testCase.tmp_dir, 'src_root');
 
             % Create MANIFEST files
             manifest_base_fn = fullfile(root_src_dir, 'MANIFEST');
@@ -46,14 +85,14 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(version_fn, {version_tag});
 
             % Create target directory
-            target_dir = tempname;
+            target_dir = fullfile(testCase.tmp_dir, 'target');
             mkdir(target_dir);
 
             % Test installation and uninstallation, copy mode
             package_name = 'my_package';
             uninstall_script_fn = fullfile(target_dir, ['uninstall_' package_name '.m']);
             install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(all(~files_are_symlinks(target_dir, base_rel_fns)));
             testCase.assertTrue(all(~files_exist(target_dir, extra_rel_fns)));
@@ -61,13 +100,13 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
 
             uninstall_package(package_name, target_dir);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
 
             % Test installation and uninstallation, link mode
             install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(all(files_are_symlinks(target_dir, base_rel_fns)));
             testCase.assertTrue(all(~files_exist(target_dir, extra_rel_fns)));
@@ -75,7 +114,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
 
             uninstall_package(package_name, target_dir);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
 
@@ -89,14 +128,14 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fclose(fout);
             install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
 
             uninstall_package(package_name, target_dir);
             testCase.assertTrue(exist(existing_target_fn, 'file')>0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')==0);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(~files_exist(target_dir, [base_rel_fns(1) base_rel_fns(3:end)])));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
 
@@ -110,18 +149,16 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fclose(fout);
             install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
 
             delete(existing_target_backup_fn);
             uninstall_package(package_name, target_dir);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
             
-            rmdir(target_dir, 's');
-            rmdir(root_src_dir, 's');
         end
         
         function test_package_install_errors(testCase)
@@ -130,12 +167,17 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             addpath('../dist_tools');
             
             testCase.applyFixture(SuppressedWarningsFixture('DistPackage:FileNotFound'));
-            package_rel_files = {fullfile('script', 'script1.m'), ...
-                     'func1.m', 'func2.m', fullfile('extra', 'func_extra.m'), ...
-                     'dont_touch_me.sh', fullfile('please','dont_touch_me.m'),...
-                     fullfile('dep', 'dep_func1.m'), ...
-                     fullfile('dep', 'dep_func2.m')};
-            [package_files, root_src_dir] = create_tmp_files(package_rel_files);
+            
+            package_rel_files = {fullfile('src_root', 'script', 'script1.m'), ...
+                                 fullfile('src_root', 'func1.m'), ...
+                                 fullfile('src_root', 'func2.m'), ...
+                                 fullfile('src_root', 'extra', 'func_extra.m'), ...
+                                 fullfile('src_root', 'dont_touch_me.sh'),...
+                                 fullfile('src_root', 'please','dont_touch_me.m'),...
+                                 fullfile('src_root', 'dep', 'dep_func1.m'), ...
+                                 fullfile('src_root', 'dep', 'dep_func2.m')};            
+            create_tmp_files(testCase, package_rel_files);
+            root_src_dir = fullfile(testCase.tmp_dir, 'src_root');
 
             % Create MANIFEST files
             manifest_base_fn = fullfile(root_src_dir, 'MANIFEST');
@@ -151,7 +193,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(version_fn, {version_tag});
 
             % Create target directory
-            target_dir = tempname;
+            target_dir = fullfile(testCase.tmp_dir, 'target');
             mkdir(target_dir);
 
             % Test installation with bad MANIFEST
@@ -167,7 +209,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 testCase.assertTrue(~isempty(strfind(ME.message, 'dir_crowe')));
                 exception_caught = 1;
             end
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
             testCase.assertTrue(exception_caught==1);
@@ -191,7 +233,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 exception_caught = 1;
             end
             testCase.assertTrue(exception_caught==1);
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(exist(existing_target_fn, 'file')>0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             
@@ -205,7 +247,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 testCase.assertTrue(~isempty(strfind(ME.message, 'VERSION file')));
                 exception_caught = 1;
             end
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(exist(existing_target_fn, 'file')>0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
@@ -222,7 +264,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 testCase.assertTrue(~isempty(strfind(ME.message, version_tag)));
                 exception_caught = 1;
             end
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(exist(existing_target_fn, 'file')>0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
@@ -237,14 +279,12 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 testCase.assertTrue(strcmp(ME.identifier, 'DistPackage:BadVersionTag'))
                 exception_caught = 1;
             end
-            testCase.assertTrue(all(files_exist(root_src_dir, package_rel_files)));
+            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(exist(existing_target_fn, 'file')>0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
             testCase.assertTrue(exception_caught==1);
             
-            rmdir(target_dir, 's');
-            rmdir(root_src_dir, 's');
         end
         
         function test_uninstall_error(testCase)
@@ -253,12 +293,16 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             addpath('../dist_tools');
             
             testCase.applyFixture(SuppressedWarningsFixture('DistPackage:FileNotFound'));
-            package_rel_files = {fullfile('script', 'script1.m'), ...
-                     'func1.m', 'func2.m', fullfile('extra', 'func_extra.m'), ...
-                     'dont_touch_me.sh', fullfile('please','dont_touch_me.m'),...
-                     fullfile('dep', 'dep_func1.m'), ...
-                     fullfile('dep', 'dep_func2.m')};
-            [package_files, root_src_dir] = create_tmp_files(package_rel_files);
+            package_rel_files = {fullfile('src_root', 'script', 'script1.m'), ...
+                                 fullfile('src_root', 'func1.m'), ...
+                                 fullfile('src_root', 'func2.m'), ...
+                                 fullfile('src_root', 'extra', 'func_extra.m'), ...
+                                 fullfile('src_root', 'dont_touch_me.sh'),...
+                                 fullfile('src_root', 'please','dont_touch_me.m'),...
+                                 fullfile('src_root', 'dep', 'dep_func1.m'), ...
+                                 fullfile('src_root', 'dep', 'dep_func2.m')};            
+            create_tmp_files(testCase, package_rel_files);
+            root_src_dir = fullfile(testCase.tmp_dir, 'src_root');
             
             % Create MANIFEST files
             manifest_base_fn = fullfile(root_src_dir, 'MANIFEST');
@@ -275,7 +319,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(version_fn, {version_tag});
 
             % Create target directory
-            target_dir = tempname;
+            target_dir = fullfile(testCase.tmp_dir, 'target');
             mkdir(target_dir);
 
             % Test uninstallation where installed file has been deleted
@@ -299,9 +343,6 @@ classdef InstallSourceTest < matlab.unittest.TestCase
                 exception_caught = 1;
             end
             testCase.assertTrue(exception_caught==1);
-            
-            rmdir(target_dir, 's');
-            rmdir(root_src_dir, 's');
         end
     end
 end
@@ -311,14 +352,12 @@ function new_fn = add_fn_prefix(fn, prefix)
 new_fn = fullfile(rr, [prefix bfn ext]);
 end
 
-function [tmp_fns, tmp_dir] = create_tmp_files(rel_fns)
+function [tmp_fns] = create_tmp_files(testCase, rel_fns)
 % Create empty temporary files from the given list of relative pathes
 
-tmp_dir = tempname;
-mkdir(tmp_dir);
 tmp_fns = cell(1, length(rel_fns));
 for ifn=1:length(rel_fns)
-    tmp_fn = fullfile(tmp_dir, rel_fns{ifn});
+    tmp_fn = fullfile(testCase.tmp_dir, rel_fns{ifn});
     dest_folder = fileparts(tmp_fn);
     if ~exist(dest_folder, 'dir')
         mkdir(dest_folder);
