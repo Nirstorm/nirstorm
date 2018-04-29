@@ -157,7 +157,8 @@ code = strjoin(code, '\n');
 end
 
 function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras)
-extras = [extras get_older_matlab_extras(source_dir)];
+extras = [extras get_older_matlab_extras(source_dir) ...
+                 get_installable_extras(source_dir)];
 manifest_fns = [{fullfile(source_dir, 'MANIFEST')} ...
                 cellfun(@(extra_tag) fullfile(source_dir, ['MANIFEST.' extra_tag]), ...
                         extras, 'UniformOutput', false)];
