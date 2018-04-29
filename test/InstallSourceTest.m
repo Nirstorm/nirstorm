@@ -20,7 +20,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
     methods(Test)
                 
         function test_older_matlab_install(testCase)
-            create_tmp_files(testCase, {'MANIFEST.R2008a', 'MANIFEST.R2009b', 'MANIFEST.R2014b'});
+            create_tmp_files(testCase, {'MANIFEST_compat.R2008a', 'MANIFEST_compat.R2009b', 'MANIFEST_compat.R2014b'});
             
             extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
             testCase.assertTrue(all(ismember(extras, {'R2009b', 'R2014b'})) && length(extras)==2);

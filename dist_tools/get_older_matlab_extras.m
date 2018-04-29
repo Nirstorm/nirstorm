@@ -25,16 +25,17 @@ extras = {};
 for iitem=1:length(items)
     item = items(iitem);
     [root, basename, ext] = fileparts(item.name);
-    try
-        manifest_mat_rdate = ext(2:end); % discard dot
-        manifest_mat_version = rdate_to_version(manifest_mat_rdate); 
-        if ~item.isdir && strcmp(basename, 'MANIFEST') && ...
-                compare_matlab_versions(matlab_version, manifest_mat_version) == -1
-            extras = [extras manifest_mat_rdate];
-        end
-    catch ME
-        if ~strcmp(ME.identifier, 'Nirstorm:BadMatlabVersionString')
-            rethrow(ME);
+    if ~item.isdir && strcmp(basename, 'MANIFEST_compat')
+        try
+            manifest_mat_rdate = ext(2:end); % 2: to discard dot
+            manifest_mat_version = rdate_to_version(manifest_mat_rdate);
+            if  compare_matlab_versions(matlab_version, manifest_mat_version) == -1
+                extras = [extras manifest_mat_rdate];
+            end
+        catch ME
+            if ~strcmp(ME.identifier, 'Nirstorm:BadMatlabVersionString')
+                rethrow(ME);
+            end
         end
     end
 end
