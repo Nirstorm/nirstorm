@@ -1,7 +1,9 @@
 function extras = get_older_matlab_extras(manifest_dir, matlab_version)
-% Append extra installation scenarios for older versions of matlab.
-% Add extras corresponding to MANIFEST.<mat_release> where <release_date>
-% is more recent than given matlab.
+% Append extra installation scenarios for old versions of matlab. These
+% scenarios should provide alternate implementation of matlab core functions 
+% not available for the given version.
+% Add extras corresponding to MANIFEST_compat.<mat_release> where <release_date>
+% is more recent than the given matlab version.
 %
 % Args:
 %    - manifest_dir (str):
