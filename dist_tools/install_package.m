@@ -94,7 +94,7 @@ for iop=1:length(operations)
                 content{end+1} = code_check_not_windows();
                 content{end+1} = sprintf('unix(''ln -s %s %s'')', operation.file1, operation.file2);
             case 'remove'              
-                content{end+1} = strjoin({sprintf('if ~isempty(strfind(computer, ''WIN'')) || unix(''test -L %s'')', operation.file1), ...
+                content{end+1} = strjoin_({sprintf('if ~isempty(strfind(computer, ''WIN'')) || unix(''test -L %s'')', operation.file1), ...
                                           sprintf('    if isdir(''%s'')', operation.file1), ...
                                           sprintf('        rmdir(''%s'', ''s'');', operation.file1), ...
                                                   '    else', ...
@@ -120,7 +120,7 @@ end
 [rr, bfn, ext] = fileparts(script_fn);
 func_header = sprintf('function %s()', bfn);
 content = [func_header content 'end'];
-content = sprintf('%s\n', strjoin(content, '\n'));
+content = sprintf('%s\n', strjoin_(content, '\n'));
 if ~dry
     fout = fopen(script_fn, 'w');
     fprintf(fout, content);
@@ -139,21 +139,21 @@ code = {sprintf('if ~exist(fullfile(pwd, ''%s''), ''file'')', fn), ...
         sprintf('        warning(''DistPackage:BrokenLink'', [fullfile(pwd, ''%s'') ''seems to be a broken link'']);',fn),...        
                 '    end',...
                 'end'};
-code = strjoin(code, '\n');
+code = strjoin_(code, '\n');
 end
 
 function code = code_check_file_doesnt_exist(fn)
 code = {sprintf('if exist(fullfile(pwd,''%s''), ''file'')', fn), ...
         sprintf('    throw(MException(''DistPackage:FileExists'',''File "%s" exists''));',fn),...
         'end'};
-code = strjoin(code, '\n');
+code = strjoin_(code, '\n');
 end
 
 function code = code_check_not_windows()
 code = {'if ~isempty(strfind(computer, ''WIN''))', ...
         '    throw(MException(''DistPackage:BadOperation'', ''windows not supported''));', ...
         'end'};
-code = strjoin(code, '\n');
+code = strjoin_(code, '\n');
 end
 
 function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras)
@@ -215,13 +215,13 @@ end
 end
 
 function fns = read_manifest(manifest_fn)
-fns = cellfun(@(fn) strtrim(fn), strsplit(fileread(manifest_fn), '\n'), 'UniformOutput', false);
+fns = cellfun(@(fn) strtrim(fn), strsplit_(fileread(manifest_fn), '\n'), 'UniformOutput', false);
 fns = fns(~cellfun(@isempty, fns));
 files_not_found = cellfun(@(fn) ~exist(fullfile(fileparts(manifest_fn), fn), 'file'), fns);
 if any(files_not_found)
     throw(MException('DistPackage:FileNotFound', ...
                      sprintf('Non-existing files from %s:\n%s', ...
-                             manifest_fn, strjoin(fns(files_not_found), '\n'))));
+                             manifest_fn, strjoin_(fns(files_not_found), '\n'))));
 end
 end
 
@@ -343,4 +343,47 @@ if ~(dry==0 || dry==1)
    throw(MException('DistPackage:BadOption', 'dry must be either 1 or 0'));
 end
 
+end
+
+function toks = strsplit_(s, delimiter)
+% For compatibility
+if ~verLessThan('matlab', '8.2')
+    toks = strsplit(s, delimiter);
+else
+    d = strtrim(delimiter);
+    p = strfind(s, d);
+    if ~isempty(p)                
+        nt = numel(p) + 1;
+        toks = cell(1, nt);
+        sp = 1;
+        dl = length(delimiter);
+        for i=1:(nt-1)
+            toks{i} = strtrim(s(sp:p(i)-1));
+            sp = p(i) + dl;
+        end         
+        toks{nt} = strtrim(s(sp:end));
+    else
+        toks = {s};
+    end        
+end
+end
+
+function joined = strjoin_(toks, delimiter)
+% For compatibility
+if ~verLessThan('matlab', '8.2')
+    joined = strjoin(toks, delimiter);
+else
+    d = delimiter;
+    n = numel(toks);
+    if n == 0
+        joined = '';
+    elseif n == 1
+        joined = toks{1};
+    else
+        ss = cell(1, 2 * n - 1);
+        ss(1:2:end) = toks;
+        [ss{2:2:end}] = deal(d);
+        joined = [ss{:}];
+    end
+end
 end
