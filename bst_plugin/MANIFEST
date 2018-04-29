@@ -3,7 +3,6 @@ process_nst_cpt_fluences_from_head.m
 process_nst_compute_voronoi.m
 process_nst_detect_bad.m
 process_nst_export_nirs.m
-process_nst_import_csv_events.m
 process_nst_import_head_model.m
 process_nst_mbll.m
 process_nst_motion_correction.m
