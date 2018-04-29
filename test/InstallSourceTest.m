@@ -37,6 +37,25 @@ classdef InstallSourceTest < matlab.unittest.TestCase
 
         end
         
+        function test_specific_matlab_install(testCase)
+            manifest_files = create_tmp_files(testCase, {'MANIFEST_only_from.R2008a', ...
+                                                         'MANIFEST_only_from.R2009b', ...
+                                                         'MANIFEST_only_from.R2014b'});
+            write_file(manifest_files{1}, {'func1_only_from_R2008a.m', 'func2_only_from_R2008a.m'});
+            write_file(manifest_files{2}, {'func1_only_from_R2009b.m', 'func2_only_from_R2009b.m'});
+            write_file(manifest_files{3}, {'func1_only_from_R2014b.m', 'func2_only_from_R2014b.m'});
+            
+            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
+            testCase.assertTrue(all(ismember(extras, {'R2008a'})) && length(extras)==1);
+            
+            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
+            testCase.assertTrue(isempty(extras));
+            
+            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
+            testCase.assertTrue(all(ismember(extras, {'R2008a', 'R2009b', 'R2014b'})) && length(extras)==3);            
+        end
+        
+        
         function test_matlab_version_comparison(testCase)
             exception_caught = 0;
             try
