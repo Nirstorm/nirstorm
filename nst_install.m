@@ -25,11 +25,12 @@ function nst_install(mode, extra)
 %            brainstorm, so it's better to have the most up-to-date
 %            version.
 %            DO NOT install these scripts unless you know what you're doing ;)
-%   EXTRA can be one of:
-%       - 'none' (default): do not install extra scripts
-%       - 'debug': install debuging scripts: bst_call.m and bst_process.m.
-%            They enable bypassing Brainstorm exception handling.
-%         IMPORTANT: this is needed to run unit tests.
+%   EXTRA can be a string or cell of string corresponding to extra
+%   installation scenarios. Files specified in MANIFEST.<extra> will then
+%   be installed.
+%   For instance 'debug' will install debuging scripts: bst_call.m and bst_process.m.
+%         They enable bypassing Brainstorm exception handling.
+%         IMPORTANT: 'debug' is needed to run unit tests.
 %
 %  To cleanly uninstall nirstorm, run nst_uninstall() (see nst_unsintall.m)
 %
@@ -39,7 +40,10 @@ end
 
 if nargin < 2
     extra = {};
-else
+elseif ~iscellstr(extra)
+    if ~ischar(extra)
+        error('Argument "extra" must be a string');
+    end
     extra = {extra};
 end
 
