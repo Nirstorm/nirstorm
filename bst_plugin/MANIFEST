@@ -1,13 +1,16 @@
+process_nst_cmem.m
 process_nst_cpt_fluences_from_cortex.m
 process_nst_cpt_fluences_from_head.m
 process_nst_compute_voronoi.m
 process_nst_detect_bad.m
 process_nst_export_nirs.m
+process_nst_extract_sensitivity_from_head_model.m
 process_nst_import_head_model.m
 process_nst_mbll.m
 process_nst_motion_correction.m
 process_nst_OM_from_cortex.m
 process_nst_OM_from_head.m
+process_nst_wmne.m
 nst_add_scout_sel_options.m
 nst_get_option_selected_scout.m
 nst_download.m
