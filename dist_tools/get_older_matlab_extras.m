@@ -1,4 +1,4 @@
-function extras = get_older_matlab_extras(manifest_dir, matlab_version)
+function suffixes = get_older_matlab_extras(manifest_dir, matlab_version)
 % Append extra installation scenarios for old versions of matlab. These
 % scenarios should provide alternate implementation of matlab core functions 
 % not available for the given version.
@@ -13,8 +13,8 @@ function extras = get_older_matlab_extras(manifest_dir, matlab_version)
 %         Default is current matlab version
 %
 % Outputs:
-%     - extras (cell of str):
-%         List of extra scenario labels corresponding to MANIFEST.extra
+%     - suffixes (cell of str):
+%         List of extra scenario labels corresponding to MANIFEST<_suffix>
 %         files that will install functions to support an older matlab
 %
 
@@ -23,7 +23,7 @@ if nargin < 2
 end
 
 items = dir(manifest_dir);
-extras = {};
+suffixes = {};
 for iitem=1:length(items)
     item = items(iitem);
     [root, basename, ext] = fileparts(item.name);
@@ -32,7 +32,7 @@ for iitem=1:length(items)
             manifest_mat_rdate = ext(2:end); % 2: to discard dot
             manifest_mat_version = rdate_to_version(manifest_mat_rdate);
             if  compare_matlab_versions(matlab_version, manifest_mat_version) == -1
-                extras = [extras manifest_mat_rdate];
+                suffixes = [suffixes ['_compat.' manifest_mat_rdate]];
             end
         catch ME
             if ~strcmp(ME.identifier, 'Nirstorm:BadMatlabVersionString')
@@ -41,10 +41,10 @@ for iitem=1:length(items)
         end
     end
 end
-if ~isempty(extras)
-    s_extras = extras{1};
-    for iextra=2:length(extras)
-        s_extras = [s_extras ', ' extras{iextra}];
+if ~isempty(suffixes)
+    s_extras = suffixes{1};
+    for iextra=2:length(suffixes)
+        s_extras = [s_extras ', ' suffixes{iextra}];
     end
     fprintf('Adding functions for matlab versions %s to support current version %s.\n', ...
             s_extras, matlab_version);

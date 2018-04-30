@@ -1,4 +1,4 @@
-function extras = get_installable_extras(manifest_dir, matlab_version)
+function suffixes = get_installable_extras(manifest_dir, matlab_version)
 % Append extra installation scenarios for specific versions of matlab.
 % This prevents installing features relying on core matlab functions that
 % are not available.
@@ -13,10 +13,10 @@ function extras = get_installable_extras(manifest_dir, matlab_version)
 %         Default is current matlab version
 %
 % Outputs:
-%     - extras (cell of str):
-%         List of extra scenario labels corresponding to MANIFEST_only_from...
-%         files that will install functions that valid only from specific
-%         matlab versions.
+%     - suffixes (cell of str):
+%         List of extra scenario labels corresponding to
+%         MANIFEST<_only_from...>  files that will install functions that 
+%         are valid only from specific matlab versions.
 %
 
 if nargin < 2
@@ -24,7 +24,7 @@ if nargin < 2
 end
 
 items = dir(manifest_dir);
-extras = {};
+suffixes = {};
 funcs_not_installed = {};
 funcs_not_installed_requirements = {};
 for iitem=1:length(items)
@@ -35,7 +35,7 @@ for iitem=1:length(items)
             manifest_mat_rdate = ext(2:end); % 2: to discard dot
             manifest_mat_version = rdate_to_version(manifest_mat_rdate);
             if  compare_matlab_versions(matlab_version, manifest_mat_version) >= 0
-                extras = [extras manifest_mat_rdate];
+                suffixes = [suffixes ['_only_from.' manifest_mat_rdate]];
             else
                 new_funcs = readlines(fullfile(item.folder, item.name));
                 funcs_not_installed = [funcs_not_installed new_funcs];
