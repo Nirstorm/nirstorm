@@ -13,12 +13,15 @@ Current features include classical within-subject analysis comprising motion-cor
 
 ## Installation
 
-[Brainstorm](http://neuroimage.usc.edu/brainstorm/) must be installed prior to installing nirstorm. It can also help to have brainstorm running while installing nirstorm.
+[Brainstorm](http://neuroimage.usc.edu/brainstorm/) must be installed prior to installing nirstorm. 
 
 The script `nst_install.m` takes care of copying or linking processes and functions into the brainstorm user folder.
 
 Parts of the nirstorm plugin may already be shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu (modified bear lambert law and bad channel tagging).
 The current installation will override them.
+
+Run brainstorm before installing nirstorm.
+All commands indicated below must be run in the nirstorm folder where the archive was uncrompressed.
 
 ### Copy installation (windows, linux)
 
