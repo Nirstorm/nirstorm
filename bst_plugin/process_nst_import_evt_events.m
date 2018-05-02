@@ -21,34 +21,12 @@ function varargout = process_nst_import_csv_events( varargin )
 %
 % Authors: Edouard Delaire, 2018
 %
-% Import events from a CSV file with trial as rows and which must at least
-% has a column with trial labels and a column with trial onsets. 
-% The trial end is optional. If not given, then single events are
-% created. If given, it can either be trial durations of trial ending times 
-% (the user has to specify this).
-%
-% The time unit within the CSV file can be specified by the user (sec, msec, musec or nsec).
-%
-% The time origin of trials can be redefined in two ways:
-%    - by adding an offset (in sec.), eg when stimulations and recordings are
-%      synchronized on the same time clock and the origin of the stimulations 
-%      need to be set relatively to the begining of recordings.
-%    - by forcing the origin to a given value (in sec.), eg when stimulations and 
-%      recordings were not synchronized but the temporal origin of
-%      stimulation has been manually recorded.
-%
-% Trials, ie rows in the CSV file, can be optionaly filtered by a list of 
-% rules. The filter "col_name1=valueA, col_name2<valueB" will select
-% only rows where values in col_name1 are equal to valueA and values in
-% col_name2 are below valueB.
-% Allowed operators: 
-%   - "=, ~=": comparison between strings is supported. 
-%              If target column can be converted to numerical values then
-%              comparison will be numerical (compared value will also be converted).
-%   - "<, <=, >, >=": order comparison between numerical values.
-%              Target column and value will be converted to numerical
-%              values.
-% 
+% Import events from a evt file with the following structure 
+% sample1  X X X X  
+% sample2  Y Y Y Y
+%       ... 
+% such as the event coded by XXXX last from sample1 to sample2
+
 eval(macro_method);
 end
 
@@ -211,7 +189,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end
         message{end+1} = sprintf(' - %s : %d trials. 1st trial at %1.3f sec.%s', ...
                                  newEvents(ievt).label, length(newEvents(ievt).epochs), ...
-                                 newEvents(ievt).samples(1,1), duration_info);
+                                 newEvents(ievt).samples(1,1)/12.5, duration_info);
 
     end
     
@@ -228,4 +206,92 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
      end
     
     
+end
+
+
+function OutputFile = import_events(sProcess, sInput, newEvents)
+
+OutputFile = [];
+
+% Load the raw file descriptor
+isRaw = strcmpi(sInput.FileType, 'raw');
+if isRaw
+    DataMat = in_bst_data(sInput.FileName, 'F');
+    sFile = DataMat.F;
+else
+    sFile = in_fopen(sInput.FileName, 'BST-DATA');
+end
+
+%% ===== MERGE EVENTS LISTS =====
+% Add each new event
+for iNew = 1:length(newEvents)
+    % Look for an existing event
+    if ~isempty(sFile.events)
+        iEvt = find(strcmpi(newEvents(iNew).label, {sFile.events.label}));
+    else
+        iEvt = [];
+    end
+    % Make sure that the sample indices are round values
+    if ~isempty(newEvents(iNew).samples)
+        newEvents(iNew).samples = round(newEvents(iNew).samples);
+        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+    else
+        newEvents(iNew).samples = round(newEvents(iNew).times .* sFile.prop.sfreq);
+        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+    end
+    % If event does not exist yet: add it at the end of the list
+    if isempty(iEvt)
+        if isempty(sFile.events)
+            iEvt = 1;
+            sFile.events = newEvents(iNew);
+        else
+            iEvt = length(sFile.events) + 1;
+            sFile.events(iEvt) = newEvents(iNew);
+        end
+        % Event exists: merge occurrences
+    else
+        % Merge events occurrences
+        %TODO, tell FT that if events are extended and were previously
+        % single then bug -> FIX IT
+        sFile.events(iEvt).times      = [sFile.events(iEvt).times, newEvents(iNew).times];
+        sFile.events(iEvt).samples    = [sFile.events(iEvt).samples, newEvents(iNew).samples];
+        sFile.events(iEvt).epochs     = [sFile.events(iEvt).epochs, newEvents(iNew).epochs];
+        sFile.events(iEvt).reactTimes = [sFile.events(iEvt).reactTimes, newEvents(iNew).reactTimes];
+        % Sort by sample indices
+        if (size(sFile.events(iEvt).samples, 2) > 1)
+            [tmp__, iSort] = unique(sFile.events(iEvt).samples(1,:));
+            sFile.events(iEvt).samples = sFile.events(iEvt).samples(:,iSort);
+            sFile.events(iEvt).times   = sFile.events(iEvt).times(:,iSort);
+            sFile.events(iEvt).epochs  = sFile.events(iEvt).epochs(iSort);
+            if ~isempty(sFile.events(iEvt).reactTimes)
+                sFile.events(iEvt).reactTimes = sFile.events(iEvt).reactTimes(iSort);
+            end
+        end
+    end
+    % Add color if does not exist yet
+    if isempty(sFile.events(iEvt).color)
+        % Get the default color for this new event
+        sFile.events(iEvt).color = panel_record('GetNewEventColor', iEvt, sFile.events);
+    end
+end
+
+
+%% Set and save the events
+if ~isempty(newEvents)
+    % Report changes in .mat structure
+    if isRaw
+        DataMat.F = sFile;
+    else
+        DataMat.Events = sFile.events;
+    end
+    % Save file definition
+    bst_save(file_fullpath(sInput.FileName), DataMat, 'v6', 1);
+    % Report number of detected events
+    bst_report('Info', sProcess, sInput, ...
+        sprintf('Added to file: %d events in %d different categories', ...
+        size([newEvents.epochs],2), length(newEvents)));
+    OutputFile = sInput.FileName;
+else
+    bst_report('Error', sProcess, sInput, 'No events read from file.');
+end
 end
