@@ -126,6 +126,38 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             
         end
     end
+    
+    
+    %== Merging event== %
+    
+    if( length( unique( raw_events_name ) ) < number_of_events ) 
+       % Two or more events have the same name;
+       events_index=containers.Map('KeyType','char','ValueType','any');
+       for i = 1:(n-2)
+            key=int2str(bi2de( event_table(i,2:end),'right-msb' ));
+            key_name=events_names( key);
+            next_key=events_names( int2str(bi2de( event_table(i+1,2:end),'right-msb' )));
+
+            %if two consecutive events have the same name, we can merge them
+            if(  strcmp(key_name, next_key) )
+                event_table(i+1,1)=event_table(i,1);
+            else  
+                if( isKey (events_index,key) ) 
+                    events_index(key)=[  events_index(key) ;  event_table(i,1) event_table(i+1,1)  ];
+                else
+                    events_index(key)=[ event_table(i,1)  event_table(i+1,1) ];
+                end
+            end
+        end
+       i=n-1;
+       % adding the last event
+       if( isKey (events_index,key) ) 
+           events_index(key)=[  events_index(key) ;  event_table(i,1) event_table(i+1,1)  ];
+       else
+           events_names(key)=key;
+           events_index(key)=[ event_table(i,1)  event_table(i+1,1) ];
+       end
+    end
 
     
 
