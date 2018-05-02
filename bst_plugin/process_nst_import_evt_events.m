@@ -64,56 +64,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.label_cols.Type    = 'text';
     sProcess.options.label_cols.Value    = '';
 
-%     sProcess.options.trial_label_column.Comment = 'Column name for trial label: ';
-%     sProcess.options.trial_label_column.Type = 'text';
-%     sProcess.options.trial_label_column.Value = '';
-    
-    
-    sProcess.options.label_span_help.Comment = 'Trial span:';
-    sProcess.options.label_span_help.Type    = 'label';
-    [ts, sProcess.options.span_type] = get_trial_spans_opt();
-    
-   
-    sProcess.options.label_timing.Comment = '<HTML> <B> Time origin </B>';
-    sProcess.options.label_timing.Type    = 'label';
-  
-    [to, sProcess.options.time_origin_type] = get_time_origin_opt();
-    
-    sProcess.options.time_origin_value_sec.Comment = 'Time origin -- specific value: ';
-    sProcess.options.time_origin_value_sec.Type = 'value';
-    sProcess.options.time_origin_value_sec.Value = {0.0, 'sec.', 4};
-    
-    sProcess.options.time_origin_offset_sec.Comment = 'Time origin -- offset: ';
-    sProcess.options.time_origin_offset_sec.Type = 'value';
-    sProcess.options.time_origin_offset_sec.Value = {0.0, 'sec.', 4};
-    
-    
     sProcess.options.confirm_importation.Comment = 'Confirm importation';
     sProcess.options.confirm_importation.Type = 'checkbox';
     sProcess.options.confirm_importation.Value = 1; 
 end
 
-function [trials_spans, process_option] = get_trial_spans_opt()
-trials_spans.START_ONLY = 1;
-trials_spans.START_END = 2;
-trials_spans.START_DURATION = 3;
-
-process_option.Comment = {'start only  <HTML> <I> (single events, column name for trial end ignored)</I>', ...
-                          'start & end  <HTML> <I> (extended events) </I>', ...
-                          'start & duration <HTML> <I> (extended events) </I>'};
-process_option.Type    = 'radio';
-process_option.Value   = trials_spans.START_ONLY;
-end
 
 
-function [time_origin_types, process_option] = get_time_origin_opt()
-time_origin_types.OFFSET = 1;
-time_origin_types.VALUE = 2;
-
-process_option.Comment = {'Offset', 'Specific', 'Time origin definition:'};
-process_option.Type    = 'radio_line';
-process_option.Value   = time_origin_types.OFFSET;
-end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) %#ok<DEFNU>
@@ -127,10 +84,13 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFiles = {};
     
     trial_span_types = process_nst_import_csv_events('get_trial_spans_opt');
-    time_origin_types = process_nst_import_csv_events('get_time_origin_opt');
     
     %% Process inputs & do checks
     event_file  = sProcess.options.evtfile.Value{1};
+    raw_events_name= strsplit(sProcess.options.label_cols.Value, ','); 
+    number_of_events=length(raw_events_name);
+    
+    
     if ~exist(event_file, 'file')
         bst_error(['Event file not found: ' event_file]);
         return;
@@ -145,25 +105,29 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
     events_names=containers.Map('KeyType','char','ValueType','char');
     events_index=containers.Map('KeyType','char','ValueType','any');
-
+    
+    
+    k=1;
+    
     for i = 1:(n-1)
 
         key=int2str(bi2de( event_table(i,2:end),'right-msb' ));
 
         if( isKey (events_index,key) ) 
-            events_index(key)=[  events_index(key) ;  event_table(i,1)  event_table(i+1,1)  ];
+            events_index(key)= [  events_index(key) ;  event_table(i,1)  event_table(i+1,1)  ];
         else
-            events_names(key)=key;
-            events_index(key)=[ event_table(i,1)  event_table(i+1,1) ];
+            if k > number_of_events 
+                bst_error('Not enough event name');
+                return;
+            end
+            events_names(key)=char(raw_events_name(k));
+            k=k+1;
+            events_index(key)= [ event_table(i,1)  event_table(i+1,1) ];
+            
         end
     end
 
-    disp('Name #events Mean Duration First Event');
-    for key=events_index.keys() 
-
-        evt=events_index(char(key));
-        disp( [ key  length(evt) mean( evt(:,2) - evt(:,1) )  evt(1,1) ]);
-    end
+    
 
     
     newEvents = repmat(db_template('event'), [1, length(events_index.keys())]);
@@ -182,15 +146,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     if sProcess.options.confirm_importation.Value
     message = {'The following events will be imported:'};
     for ievt=1:length(newEvents)
-        if sProcess.options.span_type.Value == trial_span_types.START_ONLY
-            duration_info = ' (single)';
-        else
-            duration_info = sprintf(', avg duration=%1.3f sec.', mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/12.5);
-        end
+        duration_info = sprintf(', avg duration=%1.3f sec.', mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/12.5);
         message{end+1} = sprintf(' - %s : %d trials. 1st trial at %1.3f sec.%s', ...
                                  newEvents(ievt).label, length(newEvents(ievt).epochs), ...
                                  newEvents(ievt).samples(1,1)/12.5, duration_info);
-
     end
     
     [res, isCancel] = java_dialog('question', strjoin(message, ['' 10]));
