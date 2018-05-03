@@ -11,7 +11,7 @@ if nargin < 1
 end
 
 if nargin < 2
-    server_mode = 0;
+    server_mode = 1;
 end
 
 if ~brainstorm('status')

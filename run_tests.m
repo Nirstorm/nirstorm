@@ -41,7 +41,6 @@ else
                          ['Wrong test scenario(s) must be "package", '...
                           '"source", or "scripts"']));
     end
-    %TODO: better message
 end
 
 if nargin < 2
