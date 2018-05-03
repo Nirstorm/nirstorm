@@ -1,4 +1,4 @@
-function install_package(package_name, source_dir, target_dir, mode, extras, dry)
+function install_package(package_name, source_dir, target_dir, mode, extras, dry, target_matlab_ver)
 % Install a package and manage version. From given package_name and a version 
 % tag that must be defined in source_dir/VERSION, the function ensures 
 % that only one package version is installed in the target directory.
@@ -49,6 +49,10 @@ function install_package(package_name, source_dir, target_dir, mode, extras, dry
 %    [- dry (boolean):]
 %         If 1 then no file operations are displayed, not executed.
 %         If 0 (default) then file operations are performed.
+%    [- target_matlab_ver (str):]
+%         Specify the target matlab version to consider for compatibility.
+%         This is mainly for tests since it is always better to use
+%         the current matlab version
 
 if nargin < 4
     mode = 'copy';
@@ -60,16 +64,20 @@ if nargin < 6
     dry = 0;
 end
 
+if nargin < 7
+    target_matlab_ver = version(); 
+end
+
 check_inputs(package_name, source_dir, target_dir, mode, extras, dry);
 
 uninstall_package(package_name, target_dir);
 version_tag = get_version_tag(source_dir);
-[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras);
+[install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, target_matlab_ver);
 disp(['Installing ' package_name '--' version_tag ' to ' target_dir '...']);
 execute_file_operations(install_operations, dry);
 uninstall_script = fullfile(target_dir, ['uninstall_' package_name '.m']);
 uninstall_header = sprintf('disp(''Uninstalling %s--%s from %s...'');', ...
-                           package_name, version_tag, target_dir);
+                           package_name, version_tag, protect_path(target_dir));
 make_file_operations_script(uninstall_operations, uninstall_script, uninstall_header, dry);
 end
 
@@ -156,9 +164,9 @@ code = {'if ~isempty(strfind(computer, ''WIN''))', ...
 code = strjoin_(code, '\n');
 end
 
-function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras)
-compat_suffixes = [get_older_matlab_extras(source_dir) ...
-                   get_installable_extras(source_dir)];
+function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, target_matlab_ver)
+compat_suffixes = [get_older_matlab_extras(source_dir, target_matlab_ver) ...
+                   get_installable_extras(source_dir, target_matlab_ver)];
 manifest_fns = [{fullfile(source_dir, 'MANIFEST')} ...
                 cellfun(@(extra_tag) fullfile(source_dir, ['MANIFEST.' extra_tag]), ...
                         extras, 'UniformOutput', false) ...
@@ -388,4 +396,8 @@ else
         joined = [ss{:}];
     end
 end
+end
+
+function ppath = protect_path(path)
+ppath = replace(path, '\', '\\');
 end
