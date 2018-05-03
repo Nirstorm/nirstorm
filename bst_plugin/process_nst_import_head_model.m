@@ -41,7 +41,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
-    sProcess.options.data_source.Value = nst_get_repository_url();
+    sProcess.options.data_source.Value = [nst_get_repository_url(), 'fluence/MRI__Colin27_4NIRS/'];
     
 %     %TODO: complete file selection window for segmentation 
     sProcess.options.do_grey_mask.Comment = 'Mask sensitivity projection in grey matter';
@@ -413,16 +413,7 @@ if ~isempty(strfind(data_source, 'http'))
     to_download_urls = {};
     to_download_spec = {};
     dest_fns = {};
-    default_fluence_file_size = 1500000; %bytes
-    try
-        fluence_file_sizes = webread([data_source 'fluence_file_sizes.csv']);
-    catch
-        disp(['Warning: table of file sizes not found at ' [data_source 'fluence_file_sizes.csv'] ...
-              '. Assuming default fluence file size of ' format_file_size(default_fluence_file_size)]);
-        fluence_file_sizes.vertex_id = -1;
-        fluence_file_sizes.wavelength = -1;
-        fluence_file_sizes.size = -1;
-    end
+    default_fluence_file_size = 1000000; %bytes
     idownload = 1;
     total_download_size = 0;
     nb_files_to_check = length(head_vertices)*length(wavelengths);
@@ -437,7 +428,7 @@ if ~isempty(strfind(data_source, 'http'))
             fluence_fns{ivertex}{iwl} = fluence_fn;
             
             if ~file_exist(fluence_fn)
-                url = [data_source fluence_bfn];
+                url = [data_source protect_fn_str(anat_name) '/' fluence_bfn];
                 to_download_urls{idownload} = url;
                 if check_url_existence
                     tstart = tic();
@@ -449,7 +440,7 @@ if ~isempty(strfind(data_source, 'http'))
                         return;
                     end
                     query_duration = toc(tstart);
-                    if query_duration > 0.1
+                    if query_duration > 0.15
                         fprintf('Quit checking fluence file existence (too much time: %1.2f s / file).\n', query_duration);
                         check_url_existence = 0;
                     end
@@ -458,10 +449,7 @@ if ~isempty(strfind(data_source, 'http'))
                 dest_fns{idownload} = fluence_fn;
                 idownload = idownload + 1;
                 
-                download_size = fluence_file_sizes.size(strcmp(fluence_file_sizes.file_name, fluence_bfn));
-                if isempty(download_size)
-                    download_size = default_fluence_file_size;
-                end
+                download_size = default_fluence_file_size;
                 total_download_size = total_download_size + download_size;
             end
             bst_progress('inc',1);

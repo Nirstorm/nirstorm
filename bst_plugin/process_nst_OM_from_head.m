@@ -69,7 +69,7 @@ options.wavelengths.Value = '';
 
 options.data_source.Comment = 'Fluence Data Source (URL or path)';
 options.data_source.Type    = 'text';
-options.data_source.Value = 'http://thomasvincent.xyz/nst_data/fluence/MRI__Colin27_4NIRS/';
+options.data_source.Value = [nst_get_repository_url() '/fluence/'];
 
 options.nb_sources.Comment = 'Number of sources:';
 options.nb_sources.Type = 'value';
