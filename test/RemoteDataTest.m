@@ -60,6 +60,25 @@ classdef RemoteDataTest < matlab.unittest.TestCase
             
         end
         
+        function test_fluence_download(testCase)
+            utest_bst_setup();
+            
+            data_url = [nst_get_repository_url() '/fluence/'];
+            vol_shape = [256,256,256];
+            [fluence_volumes, fluence_ref] = process_nst_import_head_model('request_fluences', [3000 4002], ...
+                                                                          'MRI: Colin27 4NIRS', 685, ...
+                                                                          data_url, nan, nan, ...
+                                                                          vol_shape); 
+            assert(length(fluence_volumes) == 2);
+            assert(length(fluence_ref) == 2);
+            assert(numel(fluence_volumes{1}{1}) == prod(vol_shape));
+            assert(numel(fluence_ref{1}{1}) == 3);
+            
+            % TODO: test failed fluence download
+            % TODO: test with VOI masking
+            utest_clean_bst();
+        end
+        
     end
 end
 
