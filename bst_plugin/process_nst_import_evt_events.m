@@ -34,7 +34,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Import from evt table file';
+    sProcess.Comment     = 'Import from .evt table file';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'Events';
     sProcess.Index       = 40;
