@@ -22,14 +22,14 @@ classdef InstallSourceTest < matlab.unittest.TestCase
         function test_older_matlab_install(testCase)
             create_tmp_files(testCase, {'MANIFEST_compat.R2008a', 'MANIFEST_compat.R2009b', 'MANIFEST_compat.R2014b'});
             
-            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
-            testCase.assertTrue(all(ismember(extras, {'R2009b', 'R2014b'})) && length(extras)==2);
+            suffixes = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
+            testCase.assertTrue(all(ismember(suffixes, {'_compat.R2009b', '_compat.R2014b'})) && length(suffixes)==2);
             
-            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
-            testCase.assertTrue(all(ismember(extras, {'R2008a', 'R2009b', 'R2014b'})) && length(extras)==3);
+            suffixes = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
+            testCase.assertTrue(all(ismember(suffixes, {'_compat.R2008a', '_compat.R2009b', '_compat.R2014b'})) && length(suffixes)==3);
             
-            extras = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
-            testCase.assertTrue(isempty(extras));
+            suffixes = get_older_matlab_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
+            testCase.assertTrue(isempty(suffixes));
             
 %             To test extras on the current matlab version (number of extras may vary):         
 %             extras = get_older_matlab_extras(testCase.tmp_dir);
@@ -45,14 +45,14 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(manifest_files{2}, {'func1_only_from_R2009b.m', 'func2_only_from_R2009b.m'});
             write_file(manifest_files{3}, {'func1_only_from_R2014b.m', 'func2_only_from_R2014b.m'});
             
-            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
-            testCase.assertTrue(all(ismember(extras, {'R2008a'})) && length(extras)==1);
+            suffixes = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2008a'));
+            testCase.assertTrue(all(ismember(suffixes, {'_only_from.R2008a'})) && length(suffixes)==1);
             
-            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
-            testCase.assertTrue(isempty(extras));
+            suffixes = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2007a'));
+            testCase.assertTrue(isempty(suffixes));
             
-            extras = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
-            testCase.assertTrue(all(ismember(extras, {'R2008a', 'R2009b', 'R2014b'})) && length(extras)==3);            
+            suffixes = get_installable_extras(testCase.tmp_dir, rdate_to_version('R2015a'));
+            testCase.assertTrue(all(ismember(suffixes, {'_only_from.R2008a', '_only_from.R2009b', '_only_from.R2014b'})) && length(suffixes)==3);            
         end
         
         
@@ -72,6 +72,48 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             testCase.assertEqual(compare_matlab_versions('8.1', '9'), -1);
             testCase.assertEqual(compare_matlab_versions('7.11.1', '7.2'), 1);
             testCase.assertEqual(compare_matlab_versions('7.11.1', '7.11.1'), 0);
+        end
+        
+        
+        function test_matlab_version_specifics(testCase)
+            base_rel_fns = { 'func1.m', 'func_R2015b_alternate.m', ...
+                             'func_only_for_R2016a.m'};
+            package_rel_files = cellfun(@(rfn) fullfile('src_root', rfn), base_rel_fns, 'UniformOutput', false);
+            create_tmp_files(testCase, package_rel_files);
+            root_src_dir = fullfile(testCase.tmp_dir, 'src_root');
+
+            % Create MANIFEST files
+            manifest_base_fn = fullfile(root_src_dir, 'MANIFEST');
+            write_file(manifest_base_fn, {'func1.m'});
+
+            manifest_compat_fn = fullfile(root_src_dir, 'MANIFEST_compat.R2015b');
+            write_file(manifest_compat_fn, {'func_R2015b_alternate.m'});
+
+            manifest_vspec_fn = fullfile(root_src_dir, 'MANIFEST_only_from.R2016a');
+            write_file(manifest_vspec_fn, {'func_only_for_R2016a.m'});
+            
+            % Create VERSION file
+            version_fn = fullfile(root_src_dir, 'VERSION');
+            version_tag = '0.2.5';
+            write_file(version_fn, {version_tag});
+
+            % Create target directory
+            target_dir = fullfile(testCase.tmp_dir, 'target');
+            mkdir(target_dir);
+
+            % Test installation and uninstallation, copy mode
+            package_name = 'my_package';
+            matlab_version = '7.10'; % R0210a
+            install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0, matlab_version);
+            testCase.assertTrue(all(files_exist(target_dir, {base_rel_fns{1:2}})));
+            testCase.assertTrue(all(~files_exist(target_dir, {base_rel_fns{3}})));
+            uninstall_package(package_name, target_dir);
+            
+            matlab_version = '9.4'; % R0218b
+            install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0, matlab_version);
+            testCase.assertTrue(all(files_exist(target_dir, base_rel_fns([1 3]))));
+            testCase.assertTrue(all(~files_exist(target_dir, {base_rel_fns{2}})));
+            uninstall_package(package_name, target_dir);
         end
         
         function test_package_install(testCase)
