@@ -41,7 +41,7 @@ if ~isempty(strfind(source_fn, 'https:')) || ~isempty(strfind(source_fn, 'ftp:')
     end
     copyfile(tmp_download, dest_fn);
 elseif ~isempty(strfind(source_fn, 'http'))
-    errMsg = gui_brainstorm('DownloadFile', source_fn, dest_fn, download_msg);
+    errMsg = gui_brainstorm('DownloadFile', source_fn, dest_fn, basename(dest_fn));
     % Error message
     if ~isempty(errMsg)
         errMsg = ['Download data failed from:' 10 source_fn];

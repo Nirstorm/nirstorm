@@ -1,4 +1,4 @@
-function [local_fns, downloaded_files] = nst_request_files(relative_fns, confirm_download, remote_repository, default_file_size, local_repository)
+function [local_fns, downloaded_files] = nst_request_files(relative_fns, confirm_download, remote_repository, default_file_size, local_repository, download_title)
 % Request local files: if they are not available in the given local repository
 % then attempt to download them from given remote repository.
 % The given files in relative_fns are relative to both local_repository and 
@@ -28,7 +28,7 @@ function [local_fns, downloaded_files] = nst_request_files(relative_fns, confirm
 %        Example:  { {'subd1', 'subd1_2', 'file.txt'},
 %                    {'subd2', 'file2.txt'},
 %                    {'file_at_root.txt'} }
-%        Note: this is a portable way of specifying file pathes that can 
+%        Note: this is used as a portable way of specifying file pathes that can 
 %              be used both for url where separator is "/" and for windows
 %              where separator is "\".
 %    - confirm_download (boolean):
@@ -55,6 +55,12 @@ function [local_fns, downloaded_files] = nst_request_files(relative_fns, confirm
 %      - downloaded_files (cell array of string):
 %          Remote file names that actually got downloaded (were not
 %          available locally)
+global GlobalData;
+
+bst_interactive = ~isempty(GlobalData) && isfield(GlobalData, 'Program') && ...
+                  ~isempty(GlobalData.Program) && ...
+                  (~isfield(GlobalData.Program, 'isServer') || ...
+                   ~GlobalData.Program.isServer);
 
 if nargin < 2
     confirm_download = 1;
@@ -71,6 +77,9 @@ end
 if nargin < 5
     local_repository = nst_get_local_user_dir();
 end
+if nargin < 6
+    download_title = 'Download data';
+end
 if ~iscell(relative_fns) || (~isempty(relative_fns) && (~iscell(relative_fns{1}) || ~isstr(relative_fns{1}{1})))
     error('Given relative_fns must be a cell array of cell arrays of str');
 end
@@ -80,9 +89,13 @@ remote_files_not_found = {};
 to_download_sizes = [];
 idownload = 1;
 
-bst_progress('start', 'Retrieve server info','Evaluate data to download from server...', 1, length(relative_fns));
+bst_progress('start', download_title, 'Checking data on server...', 1, length(relative_fns));
 for ifn=1:length(relative_fns)
     local_fns{ifn} = fullfile(local_repository, strjoin(relative_fns{ifn}, filesep));
+    output_dir = dirname(local_fns{ifn});
+    if ~exist(output_dir, 'dir')
+        mkdir(output_dir)
+    end
     if ~exist(local_fns{ifn}, 'file')
         remote_folder = strjoin({remote_repository, strjoin(relative_fns{ifn}(1:(end-1)), '/')}, '/');
         url = strjoin({remote_folder, relative_fns{ifn}{end}}, '/');
@@ -148,11 +161,10 @@ if ~isempty(to_download_urls)
                           format_file_size(total_download_size), length(to_download_urls), local_repository);
     if confirm_download && ~java_dialog('confirm', confirm_msg, 'Download warning')
         downloaded_files = {};
-        local_fns = {};
         return;
     end
     
-    bst_progress('start', 'Data download', 'Downloading data...', 1, length(to_download_urls));
+    bst_progress('start', download_title, 'Downloading data...', 1, length(to_download_urls));
     for idownload=1:length(to_download_urls)
         if ~nst_download(to_download_urls{idownload}, download_targets{idownload})
             downloads_failed{end+1} = to_download_urls{idownload};
@@ -160,6 +172,29 @@ if ~isempty(to_download_urls)
         bst_progress('inc',1);
     end
     bst_progress('stop');
+else
+    if ~isempty(local_fns)
+        if length(local_fns) == 1
+            message = sprintf('%s: File "%s" already downloaded (erase to redownload)', ...
+                              download_title, local_fns{1});
+        else
+            root_dirs = unique(cellfun(@(fn) dirname(fn), local_fns, 'UniformOutput', false));
+            if length(root_dirs) == 1
+                message = sprintf('%s: Files in "%s" already downloaded (erase to redownload)', ...
+                                  download_title, root_dirs{1});
+            else
+                message = sprintf('%s: already done (erase files to redownload)',...
+                                  download_title);
+            end
+        end
+    else
+        message = 'Nothing to download';        
+    end
+    if bst_interactive
+        java_dialog('msgbox', message, download_title);
+    else
+        fprintf('Nirstorm:RequestFiles >>> %s:%s\n', download_title, message);
+    end
 end
 
 if ~isempty(downloads_failed)
