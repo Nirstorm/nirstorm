@@ -386,7 +386,7 @@ OutputFiles{1} = sInputs.FileName;
 db_save();
 end
 
-function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size)
+function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir)
 
 if nargin < 5
     sparse_threshold = nan;
@@ -396,7 +396,19 @@ if nargin < 6
     voi_mask = nan;
 end
 
+if nargin < 7
+    cube_size = [];
+end
+
+if nargin < 8
+    local_cache_dir = bst_fullfile(nst_get_local_user_dir(), ...
+                                   'fluence', protect_fn_str(anat_name));
+end
+
+
 fluence_fns = {};
+fluences = {};
+reference = {};
 if ~isempty(strfind(data_source, 'http'))
     if ~fluence_is_available(anat_name)
         bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
@@ -405,8 +417,6 @@ if ~isempty(strfind(data_source, 'http'))
     if ~strcmp(data_source(end), '/')
         data_source = [data_source '/'];
     end
-    local_cache_dir = bst_fullfile(bst_get('BrainstormUserDir'), 'defaults', 'nirstorm', ...
-                                   'fluence', protect_fn_str(anat_name));
     if ~exist(local_cache_dir, 'dir')
         mkdir(local_cache_dir);
     end
