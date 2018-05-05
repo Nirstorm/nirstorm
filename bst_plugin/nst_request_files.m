@@ -80,6 +80,7 @@ end
 if nargin < 6
     download_title = 'Download data';
 end
+
 if ~iscell(relative_fns) || (~isempty(relative_fns) && (~iscell(relative_fns{1}) || ~isstr(relative_fns{1}{1})))
     error('Given relative_fns must be a cell array of cell arrays of str');
 end
@@ -102,7 +103,7 @@ for ifn=1:length(relative_fns)
         % Check if remote file exist:
         jurl = java.net.URL(url);
         conn = openConnection(jurl);
-        conn.setConnectTimeout(10000);
+        conn.setConnectTimeout(15000);
         if ~isempty(strfind(url, 'http:'))
             status = getResponseCode(conn);
             if status == 404
@@ -190,10 +191,10 @@ else
     else
         message = 'Nothing to download';        
     end
-    if bst_interactive
+    if confirm_download && bst_interactive
         java_dialog('msgbox', message, download_title);
     else
-        fprintf('Nirstorm:RequestFiles >>> %s:%s\n', download_title, message);
+        fprintf('Nirstorm:RequestFiles >>> %s\n', message);
     end
 end
 

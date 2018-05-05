@@ -39,6 +39,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'data', 'data'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
+    sProcess.isSeparator = 1;
+    
     % Definition of the options
     sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
     sProcess.options.thresh_dis2cortex.Type    = 'value';
