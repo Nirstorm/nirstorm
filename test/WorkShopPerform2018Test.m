@@ -51,8 +51,7 @@ classdef WorkShopPerform2018Test < matlab.unittest.TestCase
                              process_nst_get_data_perform_2018('get_OM_fluence_fns', bst_dir)];
                          
             fluence_uncompress_dir = fullfile(workshop_data_path, 'fluences_for_OM');
-            testCase.assertTrue(exist(fluence_uncompress_dir, 'dir')>0);
-            rmdir(fluence_uncompress_dir, 's');
+            testCase.assertTrue(exist(fluence_uncompress_dir, 'dir')==0);
             
             testCase.assertEmpty(GlobalData.lastestFullErrMsg);
             testCase.assertTrue(files_exist(installed_fns));
