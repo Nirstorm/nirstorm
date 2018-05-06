@@ -71,7 +71,6 @@ sProcess.options.confirm_download.Comment = 'Confirm download';
 sProcess.options.confirm_download.Type    = 'checkbox';
 sProcess.options.confirm_download.Value   = 0;
 
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -86,12 +85,21 @@ global GlobalData;
 OutputFiles = {};
 
 data_dir = sProcess.options.inputdir.Value{1};
-if ~exist(data_dir)
+if ~exist(data_dir, 'dir')
     bst_error(sprintf('Input data folder not found: %s', data_dir));
 end
 bst_dir = sProcess.options.bst_dir.Value;
 
-confirm_download = sProcess.options.confirm_download.Value;
+%% Create protocol if not already there
+protocol_name = 'nirstorm_perform_2018';
+% i_protocol = ;
+if isempty(bst_get('Protocol', protocol_name))
+    % Create new protocol
+    gui_brainstorm('CreateProtocol', protocol_name, 0, 0);
+end
+gui_brainstorm('SetCurrentProtocol', bst_get('Protocol', protocol_name));
+
+bst_report('Start');
 
 %% Check sample data sets
 bst_progress('start', 'Data check','Checking package data...');
@@ -101,7 +109,8 @@ if files_exist(data_fns)
     bst_report('Info', sProcess, sInputs, 'Input sample data ok');
 else
     % TODO: show download URL
-    bst_error('Input sample data not ok. Try redownloading' );
+    bst_error(sprintf('Sample data not found in %s', data_dir));
+    return;
 end
 bst_progress('stop');
 
@@ -129,6 +138,10 @@ bst_progress('stop');
 
 % Import fluences from uncompressed archive
 fluence_fns = get_OM_fluence_fns(bst_dir);
+fluence_install_dir = fileparts(fluence_fns{1});
+if ~exist(fluence_install_dir, 'dir')
+    mkdir(fluence_install_dir);
+end
 bst_progress('start', 'Install fluences', 'Installing fluence files...', 1, length(fluence_fns));
 for ifluence=1:length(fluence_fns)
     dest_fn = fluence_fns{ifluence};
@@ -162,9 +175,11 @@ catch
 end
 bst_progress('inc', 1);
 
-%% TODO: Check curve fitting toolbox
-%% mention that it's not important since little mvt -> just skip motion correction
-%% Issue warning not error
+if ~license('test', 'Curve_Fitting_Toolbox')
+    bst_report('Warning', sProcess, sInputs, 'Curve Fitting Toolbox not available. Motion correction will not work.');
+else
+    bst_report('Info', sProcess, sInputs, 'Curve Fitting Toolbox found');
+end
 bst_progress('inc', 1);
 
 bst_progress('stop');

@@ -27,7 +27,11 @@ classdef WorkShopPerform2018Test < matlab.unittest.TestCase
             % tmp_dir = testCase.tmp_dir;
             tmpdir = '/home/tom/test'; %HACK
             workshop_data_path = fullfile(nst_get_local_user_dir(), 'tutorials', 'Nirstorm_workshop_PERFORM_2018');
-            
+            if ~exist(workshop_data_path, 'dir')
+                warning('Skipping test setup of workshop PERFORM 2018. Sample data directory not found in %s', ...
+                        workshop_data_path);
+                return; 
+            end
             fluence_uncompress_dir = fullfile(workshop_data_path, 'fluences_for_OM');
             if exist(fluence_uncompress_dir , 'dir')
                 warning('Uncompressed fluence folder exists, deleting it...');
