@@ -101,7 +101,8 @@ if files_exist(data_fns)
     bst_report('Info', sProcess, sInputs, 'Input sample data ok');
 else
     % TODO: show download URL
-    bst_error('Input sample data not ok. Try redownloading' );
+    bst_error(sprintf('Sample data not found in %s', data_dir));
+    return;
 end
 bst_progress('stop');
 
@@ -162,9 +163,12 @@ catch
 end
 bst_progress('inc', 1);
 
-%% TODO: Check curve fitting toolbox
-%% mention that it's not important since little mvt -> just skip motion correction
-%% Issue warning not error
+if ~license('test', 'Curve_Fitting_Toolbox')
+    bst_report('Warning', sProcess, sInputs, 'Curve Fitting Toolbox not available. Motion correction will not work.');
+else
+    bst_report('Info', sProcess, sInputs, 'Curve Fitting Toolbox found');
+end
+
 bst_progress('inc', 1);
 
 bst_progress('stop');
