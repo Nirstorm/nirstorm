@@ -47,15 +47,15 @@ end
 option_name = ['scout_sel_' label];
 
 if add_hint==1
-    msg = '<B>If scout does not appear in list, cancel process, use File > Reload process definitions,</B><BR>';
+    msg = '<B>If scout does not appear in list, reset process options,</B><BR>';
     options.([option_name '_hint1']).Comment = msg;
     options.([option_name '_hint1']).Type = 'label';
     
-    msg = '<B>Or run the matlab command: panel_process_select(''ParseProcessFolder'', 1);</B><BR>';
+    msg = '<B> and run the matlab command: panel_process_select(''ParseProcessFolder'', 1);</B><BR>';
     options.([option_name '_hint2']).Comment = msg;
     options.([option_name '_hint2']).Type = 'label';
     
-    msg = '<B>Then run this process again</B><BR>';
+    msg = '<B>As a last resort, restart brainstorm and run the process again.</B><BR>';
     options.([option_name '_hint3']).Comment = msg;
     options.([option_name '_hint3']).Type = 'label';
 end
