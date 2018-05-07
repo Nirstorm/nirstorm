@@ -399,5 +399,5 @@ end
 end
 
 function ppath = protect_path(path)
-ppath = replace(path, '\', '\\');
+ppath = strrep(path, '\', '\\');
 end
