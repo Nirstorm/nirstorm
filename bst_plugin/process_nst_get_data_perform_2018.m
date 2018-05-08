@@ -159,7 +159,7 @@ else
     bst_error('Fluence data installation failed');
 end
 
-bst_progress('start', 'Check dependencies', 'Checking dependencies...', 1, 2);
+bst_progress('start', 'Check dependencies', 'Checking dependencies...', 1, 3);
 %% Check CPLEX
 try
     cplx = Cplex();
@@ -178,7 +178,13 @@ bst_progress('inc', 1);
 if ~license('test', 'Curve_Fitting_Toolbox')
     bst_report('Warning', sProcess, sInputs, 'Curve Fitting Toolbox not available. Motion correction will not work.');
 else
-    bst_report('Info', sProcess, sInputs, 'Curve Fitting Toolbox found');
+    if isempty(which('csaps'))
+        bst_report('Warning', sProcess, sInputs, ...
+                   ['Curve Fitting Toolbox OK but function csaps not found.<BR>' ...
+                    'Try refreshing matlab cache using command: rehash toolboxcache']);
+    else
+        bst_report('Info', sProcess, sInputs, 'Curve Fitting Toolbox found');
+    end
 end
 bst_progress('inc', 1);
 
