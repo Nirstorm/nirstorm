@@ -21,7 +21,7 @@ function varargout = process_inverse_mem( varargin )
 %
 % Authors: Francois Tadel, 2012-2014
 
-macro_methodcall;
+eval(macro_method);
 end
 
 
