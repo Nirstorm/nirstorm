@@ -54,6 +54,16 @@ end
 
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
+OutputFile = {};
+
+if ~license('test', 'Curve_Fitting_Toolbox')
+    bst_error('Curve Fitting Toolbox not available');
+    return 
+elseif isempty(which('csaps'))
+    bst_error(['Curve Fitting Toolbox OK but function csaps not found.<BR>' ...
+               'Try refreshing matlab cache using command: rehash toolboxcache']);
+    return
+end
 
 % Get selected events
 event_name =  strtrim(sProcess.options.option_event_name.Value);
