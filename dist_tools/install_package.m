@@ -184,13 +184,13 @@ for im=1:length(manifest_fns)
     for ifn=1:length(source_rfns)
         source_fn = fullfile(source_dir, source_rfns{ifn});
         if ~exist(source_fn, 'file')
-            throw(MException('DistPackage:FileNotFound', [source_fn ' does not exist in source dir']));
+            throw(MException('DistPackage:FileNotFound', [protect_path(source_fn) ' does not exist in source dir']));
         end
         target_fn = fullfile(target_dir, source_rfns{ifn});
         if exist(target_fn, 'file')
             backup_rfn = add_fn_prefix(source_rfns{ifn}, backup_prefix);
             warning('DistPackage:ExistingTarget', ...
-                    ['"' source_rfns{ifn} '" already exists in target directory. ' ...
+                    ['"' protect_path(source_rfns{ifn}) '" already exists in target directory. ' ...
                      'It will be backuped to "' backup_rfn '"']);
             install_operations(iop).file1 = target_fn;
             install_operations(iop).action = 'move';
@@ -227,11 +227,13 @@ end
 function fns = read_manifest(manifest_fn)
 fns = cellfun(@(fn) strtrim(fn), strsplit_(fileread(manifest_fn), '\n'), 'UniformOutput', false);
 fns = fns(~cellfun(@isempty, fns));
-files_not_found = cellfun(@(fn) ~exist(fullfile(fileparts(manifest_fn), fn), 'file'), fns);
+[root, ignore_bfn, ignore_ext] = fileparts(manifest_fn);
+files_not_found = cellfun(@(fn) ~exist(fullfile(root, fn), 'file'), fns);
 if any(files_not_found)
+    fns_not_found = cellfun(@(fn) protect_path(fn), fns(files_not_found), 'UniformOutput', false);
     throw(MException('DistPackage:FileNotFound', ...
                      sprintf('Non-existing files from %s:\n%s', ...
-                             manifest_fn, strjoin_(fns(files_not_found), '\n'))));
+                             manifest_fn, strjoin_(fns_not_found, '\n'))));
 end
 end
 
@@ -245,12 +247,12 @@ for iop=1:length(operations)
     operation = operations(iop);
     if isdir(operation.file2) && exist(operation.file2, 'dir') || exist(operation.file2, 'file')
         throw(MException('DistPackage:TargetExists', ... 
-                         ['Target ' operation.file2 ' already exists. ' ...
+                         ['Target ' protect_path(operation.file2) ' already exists. ' ...
                           'Installation aborted, consider manually cleaning target directory.']));
     end
     if ~isfield(operation, 'dont_check_file1') && (isdir(operation.file1) && ~exist(operation.file1, 'dir') || ~exist(operation.file1, 'file'))
         throw(MException('DistPackage:FileNotFound', ...
-                         [operation.file1 ' does not exist. ' ...
+                         [protect_path(operation.file1) ' does not exist. ' ...
                           'Installation aborted, consider manually cleaning target directory.']));
     end
     if ~dry
@@ -290,13 +292,13 @@ for iop=1:length(operations)
     else
         switch operation.action
             case 'copy'
-                disp(['copy ' operation.file1 ' to ' operation.file2]);
+                disp(['copy ' protect_path(operation.file1) ' to ' protect_path(operation.file2)]);
             case 'link'
-                disp(['link ' operation.file1 ' to ' operation.file2]);
+                disp(['link ' protect_path(operation.file1) ' to ' protect_path(operation.file2)]);
             case 'remove'
-                disp(['remove ' operation.file1]);
+                disp(['remove ' protect_path(operation.file1)]);
             case 'move'
-                disp(['move ' operation.file1 ' to ' operation.file2]);
+                disp(['move ' protect_path(operation.file1) ' to ' protect_path(operation.file2)]);
         end
     end
 end
@@ -330,7 +332,9 @@ if~isvarname(package_name)
 end
 
 if ~exist(source_dir, 'dir')
-   throw(MException('DistPackage:DirNotFound', 'source_dir does not exist'));
+   throw(MException('DistPackage:DirNotFound', ...
+                    sprintf('source_dir "%s "does not exist', ...
+                            protect_path(source_dir))));
 end
 
 if ~exist(target_dir, 'dir')
@@ -378,25 +382,6 @@ else
 end
 end
 
-function joined = strjoin_(toks, delimiter)
-% For compatibility
-if ~verLessThan('matlab', '8.2')
-    joined = strjoin(toks, delimiter);
-else
-    d = delimiter;
-    n = numel(toks);
-    if n == 0
-        joined = '';
-    elseif n == 1
-        joined = toks{1};
-    else
-        ss = cell(1, 2 * n - 1);
-        ss(1:2:end) = toks;
-        [ss{2:2:end}] = deal(d);
-        joined = [ss{:}];
-    end
-end
-end
 
 function ppath = protect_path(path)
 ppath = strrep(path, '\', '\\');
