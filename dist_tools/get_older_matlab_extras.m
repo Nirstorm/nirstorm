@@ -44,9 +44,9 @@ end
 if ~isempty(suffixes)
     s_extras = suffixes{1};
     for iextra=2:length(suffixes)
-        s_extras = [s_extras ', ' suffixes{iextra}];
+        s_extras = ['MANIFEST' s_extras ', ' suffixes{iextra}];
     end
-    fprintf('Adding functions for matlab versions %s to support current version %s.\n', ...
+    fprintf('Adding functions from %s to support matlab version %s.\n', ...
             s_extras, matlab_version);
 end
 

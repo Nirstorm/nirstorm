@@ -93,7 +93,7 @@ idownload = 1;
 bst_progress('start', download_title, 'Checking data on server...', 1, length(relative_fns));
 for ifn=1:length(relative_fns)
     local_fns{ifn} = fullfile(local_repository, strjoin(relative_fns{ifn}, filesep));
-    output_dir = dirname(local_fns{ifn});
+    [output_dir, ignore_bfn, ignore_ext] = fileparts(local_fns{ifn});
     if ~exist(output_dir, 'dir')
         mkdir(output_dir)
     end
@@ -219,4 +219,9 @@ elseif size < 1e12
 else
     ssize = sprintf('%1.2f Tb', size / 1e12);
 end
+end
+
+
+function dn = dirname(fn)
+[dn, tmpf, tmpe] = fileparts(fn);
 end
