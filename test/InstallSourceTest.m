@@ -170,20 +170,22 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
             testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
 
-            % Test installation and uninstallation, link mode
-            install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
-            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
-            testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
-            testCase.assertTrue(all(files_are_symlinks(target_dir, base_rel_fns)));
-            testCase.assertTrue(all(~files_exist(target_dir, extra_rel_fns)));
-            testCase.assertTrue(all(~files_exist(target_dir,files_not_to_install)));
-            testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
-
-            uninstall_package(package_name, target_dir);
-            testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
-            testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
-            testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
-
+            if isempty(strfind(computer, 'WIN'))
+                % Test installation and uninstallation, link mode
+                install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+                testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
+                testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
+                testCase.assertTrue(all(files_are_symlinks(target_dir, base_rel_fns)));
+                testCase.assertTrue(all(~files_exist(target_dir, extra_rel_fns)));
+                testCase.assertTrue(all(~files_exist(target_dir,files_not_to_install)));
+                testCase.assertTrue(exist(uninstall_script_fn, 'file')>0);
+                
+                uninstall_package(package_name, target_dir);
+                testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
+                testCase.assertTrue(all(~files_exist(target_dir, base_rel_fns)));
+                testCase.assertTrue(~exist(uninstall_script_fn, 'file')>0);
+            end
+            
             % Test installation with already existing items in target_dir 
             % -> should be backuped
             existing_target_fn = fullfile(target_dir, 'func1.m');
@@ -192,7 +194,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fout = fopen(existing_target_fn, 'w');
             fprintf(fout, 'blah');
             fclose(fout);
-            install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+            install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
@@ -213,7 +215,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fout = fopen(existing_target_fn, 'w');
             fprintf(fout, 'blah');
             fclose(fout);
-            install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+            install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             testCase.assertTrue(exist(existing_target_backup_fn, 'file')>0);
             testCase.assertTrue(all(files_exist(testCase.tmp_dir, package_rel_files)));
             testCase.assertTrue(all(files_exist(target_dir, base_rel_fns)));
@@ -292,7 +294,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fclose(fout);
             exception_caught = 0;
             try
-                install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+                install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             catch ME
                 testCase.assertTrue(strcmp(ME.identifier, 'DistPackage:TargetExists'))
                 testCase.assertTrue(~isempty(strfind(ME.message, existing_target_backup_fn)));
@@ -307,7 +309,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             delete(version_fn)
             exception_caught = 0;
             try
-                install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+                install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             catch ME
                 testCase.assertTrue(strcmp(ME.identifier, 'DistPackage:FileNotFound'))
                 testCase.assertTrue(~isempty(strfind(ME.message, 'VERSION file')));
@@ -324,7 +326,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(version_fn, {version_tag});
             exception_caught = 0;
             try
-                install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+                install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             catch ME
                 testCase.assertTrue(strcmp(ME.identifier, 'DistPackage:BadVersionTag'))
                 testCase.assertTrue(~isempty(strfind(ME.message, version_tag)));
@@ -340,7 +342,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             write_file(version_fn, {version_tag});
             exception_caught = 0;
             try
-                install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+                install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             catch ME
                 testCase.assertTrue(strcmp(ME.identifier, 'DistPackage:BadVersionTag'))
                 exception_caught = 1;
@@ -397,7 +399,7 @@ classdef InstallSourceTest < matlab.unittest.TestCase
             fprintf(fout, 'blah');
             fclose(fout);
             
-            install_package(package_name, root_src_dir, target_dir, 'link', {}, 0);
+            install_package(package_name, root_src_dir, target_dir, 'copy', {}, 0);
             delete(existing_target_backup_fn);
             delete(existing_target_fn);
             exception_caught = 0;
@@ -451,7 +453,7 @@ end
 
 function flags = files_are_symlinks(root_dir, rel_fns)
 if ~isempty(strfind(computer, 'WIN'))
-    flags = zeros(1, length(rel_fns))==0;
+    flags = zeros(1, length(rel_fns))==1;
 else
     flags = cellfun(@(rfn) unix(['test -L ' fullfile(root_dir, rfn)])==0, rel_fns); 
 end

@@ -233,7 +233,7 @@ if any(files_not_found)
     fns_not_found = cellfun(@(fn) protect_path(fn), fns(files_not_found), 'UniformOutput', false);
     throw(MException('DistPackage:FileNotFound', ...
                      sprintf('Non-existing files from %s:\n%s', ...
-                             manifest_fn, strjoin_(fns_not_found, '\n'))));
+                             protect_path(manifest_fn), strjoin_(fns_not_found, '\n'))));
 end
 end
 

@@ -37,7 +37,7 @@ for iitem=1:length(items)
             if  compare_matlab_versions(matlab_version, manifest_mat_version) >= 0
                 suffixes = [suffixes ['_only_from.' manifest_mat_rdate]];
             else
-                new_funcs = readlines(fullfile(item.folder, item.name));
+                new_funcs = readlines(fullfile(manifest_dir, item.name));
                 funcs_not_installed = [funcs_not_installed new_funcs];
                 funcs_not_installed_requirements = [funcs_not_installed_requirements ...
                                                     repmat({manifest_mat_rdate}, ...

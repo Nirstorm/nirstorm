@@ -18,6 +18,9 @@ subject_name = 'test_subject';
 
 sTemplates = bst_get('AnatomyDefaults');
 iTemplate = strcmpi('Colin27_4NIRS', {sTemplates.Name});
+if ~any(iTemplate)
+    error('Template Colin27_4NIRS not found');
+end
 db_set_template(iSubject, sTemplates(iTemplate), 0);
 db_save();
 sSubject = bst_get('Subject', subject_name);
