@@ -384,7 +384,7 @@ dpf = y0 + a1 .* age.^a2;
 ppf = dpf / pvf;
 
 nb_samples = size(delta_od, 2);
-delta_od_fixed = delta_od ./ repmat(ppf', 1, nb_samples);
+delta_od_fixed = delta_od ./ repmat(ppf, 1, nb_samples);
 end
 
 function delta_od = normalize_nirs(nirs_sig, method)
