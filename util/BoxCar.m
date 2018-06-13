@@ -5,7 +5,7 @@ function signal= BoxCar(t_vect,lag,duration)
     i=1;
     
     for t=t_vect
-        if( t >= lag && t < lag + duration ) 
+        if( t >= lag && t <= lag + duration ) 
             signal(i)=1;
         else
             signal(i)=0;

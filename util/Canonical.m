@@ -4,7 +4,7 @@ function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio)
     assert( isvector(t)  )
 
     %signal=zeros( size(t_vect) );  
-    if nargin <  2, peakTime    = 4;end
+    if nargin <  2, peakTime    = 6;end
     if nargin <  3, uShootTime  = 16;end
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
