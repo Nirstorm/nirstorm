@@ -38,7 +38,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'GLM';
     sProcess.Index       = 1400;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
     % todo add a new tutorials
     
@@ -51,17 +51,23 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.basis.Comment = 'Basis function';
     sProcess.options.basis.Type    = 'combobox';
-    sProcess.options.basis.Value   = {2, {'Hrf','Gamma'}};
+    sProcess.options.basis.Value   = {1, {'Hrf','Gamma','BoxCar'}};
     
     sProcess.options.trend.Comment = 'Add a constant trend function ';
     sProcess.options.trend.Type    = 'checkbox';
     sProcess.options.trend.Value   =  1;
+    
+    sProcess.options.disp.Comment = 'Display the design matrix';
+    sProcess.options.disp.Type    = 'checkbox';
+    sProcess.options.disp.Value   =  1;
+    
 end
 
 
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) %#ok<DEFNU>
+    
     Comment = sProcess.Comment;
 
     basis_choice=cell2mat(sProcess.options.basis.Value(1));
@@ -70,6 +76,8 @@ function Comment = FormatComment(sProcess) %#ok<DEFNU>
         Comment=[ Comment ',basis=HRF'];
     elseif ( basis_choice == 2)
         Comment=[ Comment ',basis=gamma'];
+    elseif ( basis_choice ==3)
+        Comment=[ Comment ',basis=BoxCar'];
     else
         Comment=[ Comment ',basis=HRF'];
     end
@@ -78,54 +86,33 @@ function Comment = FormatComment(sProcess) %#ok<DEFNU>
     end
 end
 
-function OutputFile = Run(sProcess, sInput)
+function OutputFile = Run(sProcess, sInput)  
     DataMat = in_bst_data(sInput.FileName);
-    
-    events=DataMat.Events;
-    n_event=length(events);
-    n_sample=length(DataMat.Time);
-    
-    n_regressor=n_event;
-    if sProcess.options.trend.Value == 1
-        n_regressor=n_regressor+1;
-    end
-    X=zeros(n_sample,n_regressor);
-    
-    
-    % create the stim matrix    
-    for i=1:n_event
-       disp(events(i).label)
-       n_run=length(events(i).samples);
-       for j =  1:n_run
-           disp([ events(i).samples(1,j),events(i).samples(2,j)]);
-           event=events(i).samples(1,j):events(i).samples(2,j);
-           X(event,i)=ones(size(event));
-       end
-       
-    end
-    
+      
     basis_choice=cell2mat(sProcess.options.basis.Value(1));
     % 1= HRF, 2=Gamma, else= HRF
     if( basis_choice == 1 )
-        basis_function=Canonical( DataMat.Time);
+        basis_function=@Canonical; 
     elseif ( basis_choice == 2)
-        basis_function=Gamma(DataMat.Time);
+        basis_function=@Gamma;
+    elseif ( basis_choice ==3)
+        basis_function=@BoxCar;
     else
-        basis_function=Canonical( DataMat.Time);
+        basis_function=@Canonical;
     end
-    
-    for i=1:n_event
-        X(:,i) = filter(basis_function, 1, X(:,i));
-        %X(:,i)= conv(X(:,i),basis_function,'same');
-    end
+
+    [X,names]=getX(DataMat.Time,DataMat.Events,basis_function);
     
     % Add trend function
     if sProcess.options.trend.Value == 1 
-       X(:,n_event+1)= ones(n_sample,1);
+       C = Constant(DataMat.Time);
+       X=[ X C ];
+       names={ names 'Constant'};
     end
     
-    % Check the rank of the matrix
     
+    % Check the rank of the matrix
+    n_regressor=size(X,2);
     if  rank(X) < n_regressor
         bst_report('Warning', sProcess, sInputs, 'The design matrix is not full-ranked');
     end
@@ -146,5 +133,101 @@ function OutputFile = Run(sProcess, sInput)
 	save(OutputFile{1}, '-struct', 'Out_DataMat');
 	% Register in database
 	db_add_data(iStudy, OutputFile{1}, Out_DataMat);
+    
+    
+    if sProcess.options.disp.Value == 1 
+        Xv = X;
+        Xv(:,end)=Xv(:,end)*max(max(Xv)); % Make trend regressor white
+        figure;
+        imagesc(Xv);
+        colormap(gray); 
+        
+        title('Design matrix')
+
+    end    
            
 end
+
+function [X,names]=getX(time,events,basis_function)
+	n_event=length(events);
+    n_sample=length(time);
+    
+    X=zeros(n_sample,n_event);   
+    % create the stim matrix    
+    for i=1:n_event
+       %disp(events(i).label)
+       names{i}=events(i).label;
+       n_run=length(events(i).samples);
+       for j =  1:n_run
+           %disp([ events(i).samples(1,j),events(i).samples(2,j)]);
+           event=events(i).samples(1,j):events(i).samples(2,j);
+           X(event,i)=ones(size(event)); 
+       end
+    end
+    
+    
+    for i=1:n_event
+        X(:,i) = filter(basis_function(time), 1, X(:,i));
+        %X(:,i)= conv(X(:,i),basis_function,'same');
+    end
+end
+function signal= Gamma(t,peakTime,peakDisp) 
+% Gamma : apply the gamma function over t_vect
+    
+    %signal=zeros( size(t_vect) );  
+    if nargin <  3, peakDisp = 1; end
+    if nargin <  2, peakTime = 6; end
+
+    signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime);
+    signal = signal / sum(signal);
+end
+
+function signal= BoxCar(t_vect,lag,duration)
+% BoxCar : apply the box car function over t_vect
+    
+    if nargin <  3, duration = 5; end
+    if nargin <  2, lag = 3; end
+
+
+    signal=zeros( size(t_vect) );
+    i=1;
+    
+    for t=t_vect
+        if( t >= lag && t <= lag + duration ) 
+            signal(i)=1;
+        else
+            signal(i)=0;
+        end;
+        i=i+1;
+    end
+end
+
+function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio) 
+% Canonical :return the Canonical Hrf
+    
+    assert( isvector(t)  )
+
+    %signal=zeros( size(t_vect) );  
+    if nargin <  2, peakTime    = 6;end
+    if nargin <  3, uShootTime  = 16;end
+    if nargin <  4, peakDisp    = 1;end
+    if nargin <  5, uShootDisp  = 1;end
+    if nargin <  6, ratio       = 1/6;end
+        
+   signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime) - ratio*uShootDisp^uShootTime*t.^(uShootTime-1).*exp(-uShootDisp*t)/gamma(uShootTime);
+   signal = signal / sum(signal);
+end
+
+function signal= Constant(t,value) 
+% Constant : return a constant function.
+    
+    %signal=zeros( size(t_vect) );  
+    if nargin <  2, value = 1; end
+
+    assert( isvector(t)  )
+    signal = value * ones(numel(t),1);
+    
+end
+
+
+
