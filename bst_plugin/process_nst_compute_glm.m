@@ -139,10 +139,8 @@ function OutputFiles = Run(sProcess, sInput)
     
     % Solving  B such as Y = XB +e 
     
-    %Y= DataMat.F' ;
-    B_r=randn(3,60);
-    Y=X*B_r;
-    Y= Y + + 0.5*randn(size(Y));
+    Y= DataMat.F' ;
+
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)  
          B=ols_fit( Y, X );
