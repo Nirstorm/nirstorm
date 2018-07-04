@@ -35,7 +35,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Compute GLM';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'GLM';
+    sProcess.SubGroup    = '[wip]GLM';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 1;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
@@ -139,7 +139,10 @@ function OutputFiles = Run(sProcess, sInput)
     
     % Solving  B such as Y = XB +e 
     
-    Y= DataMat.F' ; 
+    %Y= DataMat.F' ;
+    B_r=randn(3,60);
+    Y=X*B_r;
+    Y= Y + + 0.5*randn(size(Y));
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)  
          B=ols_fit( Y, X );
