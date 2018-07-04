@@ -35,7 +35,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Compute GLM';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = '[wip]GLM';
+    sProcess.SubGroup    = 'wip - GLM';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 1;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
@@ -208,12 +208,7 @@ end
 
 
 function B=ols_fit(y,X)
-
-    %B= (transpose(X)*X)\transpose(X)*y;
-    %B=X\y;
-    
-    B= pinv(X'*X)* X'*y;
- 
+    B= pinv(X'*X)* X'*y; % or B=X\y; 
 end
 
 
@@ -254,7 +249,7 @@ function [X,names]=getX(time,events,basis_choice)
     
     
     for i=1:n_event
-        X(:,i) = filter(basis_function(time-time(1)), 1, X(:,i));
+        X(:,i) = filter(basis_function(time ), 1, X(:,i));
         %X(:,i)= conv(X(:,i),basis_function,'same');
     end
 end
