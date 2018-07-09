@@ -78,7 +78,7 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 )
@@ -89,7 +89,7 @@ end
 function OutputFiles = Run(sProcess, sInput)
 
     OutputFiles={};
-    
+
     DataMat = in_bst_data(sInput.FileName);
     basis_choice=sProcess.options.basis.Value{2}(sProcess.options.basis.Value{1});
 
@@ -174,34 +174,42 @@ function OutputFiles = Run(sProcess, sInput)
     
     % Saving the residual matrix.
     
-    Out_DataMat = db_template('matrixmat');
-    Out_DataMat.Value           = residual';
+    Out_DataMat = db_template('data');
+    Out_DataMat.F           = residual' ;
     Out_DataMat.Comment     = 'Residual Matrix';
-    %Out_DataMat.Device      = DataMat.Device;
+    Out_DataMat.DataType     = 'recordings'; 
     Out_DataMat.Time        =  DataMat.Time;
     Out_DataMat.Events      =  DataMat.Events;
     Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
     Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
-    
+    Out_DataMat.nAvg         = 1;
+
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'residual_matrix');
-    save(OutputFiles{2}, '-struct', 'Out_DataMat');
+    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
+    Out_DataMat.FileName = file_short(OutputFiles{2});
+
+    bst_save(OutputFiles{2}, Out_DataMat, 'v7');
+
+    %save(OutputFiles{2}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{2}, Out_DataMat);    
     
     % Saving the prediction matrix for debug purpose
     
-    Out_DataMat = db_template('matrixmat');
-    Out_DataMat.Value           = x_hat';
+    Out_DataMat = db_template('data');
+    Out_DataMat.F           = x_hat' ;
     Out_DataMat.Comment     = 'Predict Matrix';
-    %Out_DataMat.Device      = DataMat.Device;
+    Out_DataMat.DataType     = 'recordings'; 
     Out_DataMat.Time        =  DataMat.Time;
     Out_DataMat.Events      =  DataMat.Events;
     Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
-    Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
+    Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
+    Out_DataMat.nAvg         = 1;
+
     
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{3} = bst_process('GetNewFilename', fileparts(sInput.FileName), ' _matrix');
-    save(OutputFiles{3}, '-struct', 'Out_DataMat');
+    OutputFiles{3} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_prediction');
+    bst_save(OutputFiles{3}, Out_DataMat, 'v7');
+
     db_add_data(iStudy, OutputFiles{3}, Out_DataMat);    
 
 end
@@ -250,7 +258,7 @@ function [X,names]=getX(time,events,basis_choice)
     
     for i=1:n_event
         X(:,i) = filter(basis_function(time ), 1, X(:,i));
-        %X(:,i)= conv(X(:,i),basis_function,'same');
+        %X(:,i) = X(:,i) - mean(X(:,i));
     end
 end
 
@@ -308,11 +316,14 @@ function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio)
     assert( isvector(t)  )
 
     %signal=zeros( size(t_vect) );  
-    if nargin <  2, peakTime    = 6;end
+    if nargin <  2, peakTime    = 4;end
     if nargin <  3, uShootTime  = 16;end
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
     if nargin <  6, ratio       = 1/6;end
+    
+
+    
         
    signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime) - ratio*uShootDisp^uShootTime*t.^(uShootTime-1).*exp(-uShootDisp*t)/gamma(uShootTime);
    signal = signal / sum(signal);
