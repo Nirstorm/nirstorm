@@ -37,7 +37,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'wip - GLM';
     sProcess.Index       = 1401;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
     % todo add a new tutorials
     
@@ -155,7 +155,7 @@ function OutputFiles = Run(sProcess, sInput)
     covE=cov(residual);
     
     for i=1:size(residual,2)     
-        covB(:,:,i)=covE(i,i) * inv(transpose(X)*X);
+        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
     end
     dfe = size(Y,1) - rank(X);
 
@@ -172,6 +172,16 @@ function OutputFiles = Run(sProcess, sInput)
     save(OutputFiles{1}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{1}, Out_DataMat);
     
+    % Saving the covB Matrix.
+    
+    Out_DataMat = db_template('matrixmat');
+    Out_DataMat.Value           = covB;
+    Out_DataMat.Comment     = [ 'covB Matrix, df=' int2str(dfe) ];
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
+    save(OutputFiles{2}, '-struct', 'Out_DataMat');
+    db_add_data(iStudy, OutputFiles{2}, Out_DataMat);    
+    
     % Saving the residual matrix.
     
     Out_DataMat = db_template('data');
@@ -183,34 +193,12 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
     Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
     Out_DataMat.nAvg         = 1;
-
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
-    Out_DataMat.FileName = file_short(OutputFiles{2});
-
-    bst_save(OutputFiles{2}, Out_DataMat, 'v7');
-
-    %save(OutputFiles{2}, '-struct', 'Out_DataMat');
-    db_add_data(iStudy, OutputFiles{2}, Out_DataMat);    
-    
-    % Saving the prediction matrix for debug purpose
-    
-    Out_DataMat = db_template('data');
-    Out_DataMat.F           = x_hat' ;
-    Out_DataMat.Comment     = 'Predict Matrix';
-    Out_DataMat.DataType     = 'recordings'; 
-    Out_DataMat.Time        =  DataMat.Time;
-    Out_DataMat.Events      =  DataMat.Events;
-    Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
-    Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
-    Out_DataMat.nAvg         = 1;
-
-    
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{3} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_prediction');
+    OutputFiles{3} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
+    Out_DataMat.FileName = file_short(OutputFiles{3});
     bst_save(OutputFiles{3}, Out_DataMat, 'v7');
-
     db_add_data(iStudy, OutputFiles{3}, Out_DataMat);    
+    
 
 end
 
