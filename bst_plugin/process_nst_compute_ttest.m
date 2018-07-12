@@ -89,15 +89,30 @@ function OutputFiles = Run(sProcess, sInputs)
            bst_report('Error', sProcess, sInputs, [ 'The file ' sInputs(i).FileName ' is not recognized. Please only input the B and covB matrix' ]);
         end    
     end
+    n_cond=size(B.Value',1);
     n_chan=size(B.Value',2);
-    C=[1 -1 0]; 
-    disp( int2str(df));
     
-    B=C*B.Value';
+    % exctract the constrast vector. 
+    if( strcmp( sProcess.options.Contrast.Value(1),'[') && strcmp( sProcess.options.Contrast.Value(end),']') )
+        % The constrast vector is in a SPM-format : 
+        % sProcess.options.Contrast.Value = '[a,b,c]'
+        C=strsplit( sProcess.options.Contrast.Value(2:end-1),',');
+        C=str2num(cell2mat(C));
+
+    else
+         bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
+    end
+    
+    % Add zero padding for the trend regressor 
+    if length(C) < n_cond
+       C= [C zeros(1, n_cond - length(C)) ]; 
+    end    
+     
+    B.Value=C*B.Value';
     t=zeros(1,n_chan);
     
     for i = 1:n_chan
-        t(i)= B(i) / sqrt( C*covB.Value(:,:,i)*transpose(C) ) ; 
+        t(i)= B.Value(i) / sqrt( C*covB.Value(:,:,i)*transpose(C) ) ; 
     end
     
     if(  sProcess.options.Student.Value == 1)
@@ -106,7 +121,8 @@ function OutputFiles = Run(sProcess, sInputs)
         p=2*tcdf(-abs(t), df);
     end    
     df=ones(n_chan,1)*df;
-
+    
+    
     
     % Saving the output.
     iStudy = sInputs.iStudy;
@@ -124,18 +140,32 @@ function OutputFiles = Run(sProcess, sInputs)
     sOutput.Time         = 1;
     sOutput.ColormapType = 'stat2';
     sOutput.DisplayUnits = 'F';
-%     sOutput.nComponents  = StatA.nComponents;
-%     sOutput.GridAtlas    = StatA.GridAtlas;
-%     sOutput.Freqs        = StatA.Freqs;
-%     sOutput.TFmask       = StatA.TFmask;
 
-    sOutput = bst_history('add', sOutput, 'ttest computation', FormatComment(sProcess));
+    
+    % Formating a readable comment such as -Rest +Task
+    comment='T-test : ';
+    for i=1:n_cond
+        if ( C(i) < 0)
+            if( C(i) == -1 )
+                comment=[  comment  ' - ' cell2mat(B.Description(i)) ' '];
+            else
+                comment=[  comment num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
+            end
+        elseif ( C(i) > 0 )
+            if( C(i) == 1)
+                comment=[  comment  ' + ' cell2mat(B.Description(i)) ' '];  
+            else
+                comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
+            end 
+        end     
+    end    
+    
+    sOutput.Comment=comment;
+    sOutput = bst_history('add', sOutput, B.History, '');
+
+    sOutput = bst_history('add', sOutput, 'ttest computation', comment);
     OutputFiles{1} = bst_process('GetNewFilename', fileparts(sInputs(1).FileName), 'pdata_ttest_matrix');
     save(OutputFiles{1}, '-struct', 'sOutput');
     db_add_data(iStudy, OutputFiles{1}, sOutput);
-    
-    
-    
-    
-    
+
 end
