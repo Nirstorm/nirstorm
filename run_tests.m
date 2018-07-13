@@ -62,9 +62,16 @@ test_scripts = dir(fullfile('test', '*.m'));
 iss = 1;
 ips = 1;
 ics = 1;
+
+tests_to_ignore = readlines(fullfile('test', 'IGNORE'));
 for iscript=1:length(test_scripts)
+    if ismember(test_scripts(iscript).name, tests_to_ignore)
+        warning(['Test ignored: ' test_scripts(iscript).name]);
+        continue
+    end
     test_fn = fullfile('test', test_scripts(iscript).name);
     if ~isempty(strfind(test_fn, 'Test.m')) && ~isempty(regexp(test_fn, re_match_filter, 'match'))
+
         tests = TestSuite.fromFile(test_fn);
         if ~isempty(strfind(test_fn, 'SourceTest'))
             source_suite(iss:(iss+length(tests)-1)) = tests;
@@ -117,4 +124,11 @@ if ismember('scripts', to_run)
     result = runner.run(script_suite);
 end
 
+end
+
+function lines = readlines(fn)
+f = fopen(fn);             
+lines = textscan(f,'%s','delimiter','\n');
+lines = lines{1};
+fclose(f);
 end
