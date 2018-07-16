@@ -1,4 +1,4 @@
-function varargout = process_nst_import_csv_events( varargin )
+function varargout = process_nst_import_evt_events( varargin )
 % PROCESS_EVT_IMPORT: Import events into a raw file
 
 % @=============================================================================
@@ -60,10 +60,14 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.evtfile.Type    = 'filename';
     sProcess.options.evtfile.Value   = SelectOptions;
     
-    sProcess.options.label_cols.Comment = '<HTML> <B> Events Names separated by coma </B>';
+    sProcess.options.label_cols.Comment = '<HTML> <B> Events Names separated by commas </B>';
     sProcess.options.label_cols.Type    = 'text';
     sProcess.options.label_cols.Value    = '';
-
+    
+    sProcess.options.last_event.Comment = 'Assume last event have the same duration than previus one';
+    sProcess.options.last_event.Type = 'checkbox';
+    sProcess.options.last_event.Value = 1; 
+    
     sProcess.options.confirm_importation.Comment = 'Confirm importation';
     sProcess.options.confirm_importation.Type = 'checkbox';
     sProcess.options.confirm_importation.Value = 1; 
@@ -83,9 +87,12 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
     OutputFiles = {};
     
-    trial_span_types = process_nst_import_csv_events('get_trial_spans_opt');
+    isRaw = strcmpi(sInputs.FileType, 'raw');
+    if ~isRaw
+        bst_error('The process has to be run on raw file');
+    end
     
-    %% Process inputs & do checks
+    % Process inputs & do checks
     event_file  = sProcess.options.evtfile.Value{1};
     raw_events_name= strsplit(sProcess.options.label_cols.Value, ','); 
     number_of_events=length(raw_events_name);
@@ -122,10 +129,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             end
             events_names(key)=char(raw_events_name(k));
             k=k+1;
-            events_index(key)= [ event_table(i,1)  event_table(i+1,1) ];
+            events_index(key)= [ event_table(i,1)  event_table(i+1,1)];
             
         end
     end
+    
+    % importing the last event
+
+    if( sProcess.options.confirm_importation.Value )
+    	key=int2str(bi2de( event_table(end,2:end),'right-msb' ));
+        if( isKey (events_index,key) ) 
+            evt=events_index(key);
+            evt_duration=evt(end,2) - evt(end,1);
+            events_index(key)= [  events_index(key) ;  event_table(end,1)  event_table(end,1)+evt_duration];
+        else
+        	bst_warning('Not able to import last event');
+        end
+   end    
     
     
     %== Merging event== %
@@ -213,6 +233,8 @@ else
     sFile = in_fopen(sInput.FileName, 'BST-DATA');
 end
 
+time_offset=sFile.prop.times(1);
+
 %% ===== MERGE EVENTS LISTS =====
 % Add each new event
 for iNew = 1:length(newEvents)
@@ -225,10 +247,10 @@ for iNew = 1:length(newEvents)
     % Make sure that the sample indices are round values
     if ~isempty(newEvents(iNew).samples)
         newEvents(iNew).samples = round(newEvents(iNew).samples);
-        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+        newEvents(iNew).times   = time_offset+ newEvents(iNew).samples ./ sFile.prop.sfreq;
     else
         newEvents(iNew).samples = round(newEvents(iNew).times .* sFile.prop.sfreq);
-        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+        newEvents(iNew).times   = time_offset + newEvents(iNew).samples ./ sFile.prop.sfreq;
     end
     % If event does not exist yet: add it at the end of the list
     if isempty(iEvt)
