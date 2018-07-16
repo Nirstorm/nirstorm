@@ -15,9 +15,10 @@ function [isrc, idet, measure, channel_type] = nst_unformat_channel(channel_labe
 %        MEAS (int | str): extracted measure value
 %        CHAN_TYPE (int): extracted channel type.
 %
-%   See also NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
+%   See also NST_UNFORMAT_CHANNELS, NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
+assert(ischar(channel_label));
 
-CHAN_RE = 'S([0-9]+)D([0-9]+)(WL\d+|HbO|HbR|HbT)';
+CHAN_RE = '^S([0-9]+)D([0-9]+)(WL\d+|HbO|HbR|HbT)$';
 toks = regexp(channel_label, CHAN_RE, 'tokens');
 if isempty(toks)
     exception = MException('NIRSTORM:MalformedChannelLabel', ...

@@ -60,7 +60,7 @@ classdef SciTest < matlab.unittest.TestCase
     end
 end
 
-function bst_create_nirs_data(label, signals, time, chan_names, srcs_pos, dets_pos)
+function OutputFile = bst_create_nirs_data(label, signals, time, chan_names, srcs_pos, dets_pos)
 % TODO: expose, doc, test
 iStudy = db_add_condition('nst_utest', 'test_sci');
 sStudy = bst_get('Study', iStudy);
