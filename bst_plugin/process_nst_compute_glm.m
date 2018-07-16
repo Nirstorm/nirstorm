@@ -38,6 +38,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 0;
+
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
     % todo add a new tutorials
     

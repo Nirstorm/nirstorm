@@ -24,8 +24,7 @@ classdef WorkShopPerform2018Test < matlab.unittest.TestCase
         
         function test_downloader(testCase)
             global GlobalData;
-            % tmp_dir = testCase.tmp_dir;
-            tmpdir = '/home/tom/test'; %HACK
+            tmp_dir = testCase.tmp_dir;
             workshop_data_path = fullfile(nst_get_local_user_dir(), 'tutorials', 'Nirstorm_workshop_PERFORM_2018');
             if ~exist(workshop_data_path, 'dir')
                 warning('Skipping test setup of workshop PERFORM 2018. Sample data directory not found in %s', ...
