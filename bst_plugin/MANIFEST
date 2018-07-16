@@ -12,6 +12,9 @@ process_nst_motion_correction.m
 process_nst_OM_from_cortex.m
 process_nst_OM_from_head.m
 process_nst_wmne.m
+nst_channel_types.m
+nst_format_channel.m
+nst_unformat_channel.m
 nst_add_scout_sel_options.m
 nst_get_option_selected_scout.m
 nst_download.m
