@@ -35,10 +35,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Compute GLM';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'wip - GLM';
+    sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 1;
-    sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
+    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
