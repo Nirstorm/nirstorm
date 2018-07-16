@@ -36,10 +36,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Compute ttest';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'wip - GLM';
+    sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1402;
     sProcess.isSeparator = 0;
-    sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
+    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
@@ -95,7 +95,7 @@ function OutputFiles = Run(sProcess, sInputs)
     % exctract the constrast vector. 
     if( strcmp( sProcess.options.Contrast.Value(1),'[') && strcmp( sProcess.options.Contrast.Value(end),']') )
         % The constrast vector is in a SPM-format : 
-        % sProcess.options.Contrast.Value = '[a,b,c]'
+        % sProcess.options.Contrast.Value = '[1,0,-1]'
         C=strsplit( sProcess.options.Contrast.Value(2:end-1),',');
         C=str2num(cell2mat(C));
 
@@ -121,7 +121,6 @@ function OutputFiles = Run(sProcess, sInputs)
         p=2*tcdf(-abs(t), df);
     end    
     df=ones(n_chan,1)*df;
-    
     
     
     % Saving the output.
