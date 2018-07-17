@@ -1,6 +1,50 @@
 classdef MontageTest < matlab.unittest.TestCase
     methods(Test)
         
+        
+        function test_pair_indexes(testCase)
+            chan_names = {'S1D3WL685', 'S1D2WL685', 'S1D2WL830', 'S1D3WL830', ...
+                          'S3D4WL830', 'S3D4WL685'};
+            [pair_chan_indexes, pair_sd_ids] = nst_get_pair_indexes_from_names(chan_names);
+            testCase.assertEqual(size(pair_chan_indexes, 1), 3);
+            testCase.assertEqual(size(pair_chan_indexes, 2), 2);
+            
+            testCase.assertEqual(size(pair_sd_ids, 1), 3);
+            testCase.assertEqual(size(pair_sd_ids, 2), 2);
+            
+            for ipair=1:size(pair_chan_indexes,1)
+                switch(pair_chan_indexes(ipair, 1))
+                    case 1
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 4);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 1);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 3);
+                    case 2
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 3);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 1);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 2);
+                    case 3
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 2);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 1);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 2);
+                    case 4
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 1);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 1);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 3);
+                    case 5
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 6);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 3);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 4);
+                    case 6
+                       testCase.assertEqual(pair_chan_indexes(ipair, 2), 5);
+                       testCase.assertEqual(pair_sd_ids(ipair,1), 3);
+                       testCase.assertEqual(pair_sd_ids(ipair,2), 4);
+                    otherwise
+                       testCase.assertTrue(0, sprintf('Wrong channel index %d', ...
+                                                      pair_chan_indexes(ipair, 1))); 
+                end
+            end            
+        end
+        
         function test_unformat_channel(testCase)
             chan_types = nst_channel_types();
             
@@ -26,7 +70,7 @@ classdef MontageTest < matlab.unittest.TestCase
                 end
             end
         end
-
+        
         function test_format_channel(testCase)
             testCase.assertTrue(strcmp(nst_format_channel(1, 3, 685), 'S1D3WL685'));
             
@@ -36,7 +80,7 @@ classdef MontageTest < matlab.unittest.TestCase
             
             %TODO: test bad inputs
         end
-
+        
         function test_unformat_channels(testCase)
             chan_types = nst_channel_types();
             
@@ -69,7 +113,7 @@ classdef MontageTest < matlab.unittest.TestCase
             catch ME
                 testCase.assertMatches(ME.identifier, 'NIRSTORM:NonHomogeneousChannelType');
             end
-
+            
             meas_nb_not_consistent = {'S01D03WL685', 'S01D03WL830', 'S1D1WL685', 'S2D2WL830'};
             [isrcs, idets, measures, mtype] = nst_unformat_channels(meas_nb_not_consistent);
             testCase.assertEqual(isrcs, [1 1 1 2]);
@@ -79,7 +123,7 @@ classdef MontageTest < matlab.unittest.TestCase
             
             [warning_msg, warning_msg_id] = lastwarn;
             testCase.assertMatches(warning_msg, 'Inconsistent measure.*');
-        
-        end 
+            
+        end     
     end
 end
