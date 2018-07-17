@@ -30,10 +30,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Scalp Coupling Index';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1402;
+sProcess.SubGroup    = 'NIRS';
+sProcess.Index       = 1001;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-Scalp-coupling-index';
+sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Scalp-coupling-index';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
