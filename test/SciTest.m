@@ -108,7 +108,9 @@ classdef SciTest < matlab.unittest.TestCase
             sFile = utest_import_nirs_in_bst(nirs_fn);
             output = bst_process('CallProcess', 'process_nst_sci', sFile, []);
             sDataOut = in_bst_data(output.FileName);
-                        
+            
+            % Non-regression test (sci results manually checked and
+            % recorded on 17 July 2018)
             expected_sci_fn = data_fns{end};
             expected_sci = load(expected_sci_fn);
             expected_sci = expected_sci.sci_motor;

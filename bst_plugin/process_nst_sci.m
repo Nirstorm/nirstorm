@@ -28,7 +28,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Compute SCI';
+sProcess.Comment     = 'Scalp Coupling Index';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS - wip';
 sProcess.Index       = 1402;
