@@ -97,20 +97,23 @@ classdef SciTest < matlab.unittest.TestCase
         
         function test_sci_on_tapping_data(testCase)
             repo_url = nst_get_repository_url();
-            nirs_fns = nst_request_files({{'tutorial_nirs_tapping','data','S01_Block_FO_LH_Run01.nirs'}, ...
-                                          {'tutorial_nirs_tapping','data','optodes.txt'}, ...
-                                          {'tutorial_nirs_tapping','data','fiducials.txt'}}, ...
+            data_fns = nst_request_files({{'unittest','motor_data','motor.nirs'}, ...
+                                          {'unittest','motor_data','optodes.txt'}, ...
+                                          {'unittest','motor_data','fiducials.txt'},...
+                                          {'unittest','motor_data','sci.mat'}}, ...
                                          1, repo_url);
-            nirs_fn = nirs_fns{1};
+
+                                    
+            nirs_fn = data_fns{1};
             sFile = utest_import_nirs_in_bst(nirs_fn);
             output = bst_process('CallProcess', 'process_nst_sci', sFile, []);
             sDataOut = in_bst_data(output.FileName);
+                        
+            expected_sci_fn = data_fns{end};
+            expected_sci = load(expected_sci_fn);
+            expected_sci = expected_sci.sci_motor;
             
-            %TODO: assert non-regression:
-            %  - create frozen results
-            %  - make available online
-            %  - retrieve here
-            %  - compare with computed results
+            testCase.assertTrue(all_close(sDataOut.F, expected_sci, 0.01, 0.01));
         end
         
         
@@ -199,4 +202,28 @@ bst_save(OutputFile, sDataOut, 'v7');
 % Register in database
 db_add_data(iStudy, OutputFile, sDataOut);
 db_save();
+end
+
+
+function flag = all_close(v1, v2, rtol, atol)
+
+if nargin < 3
+    rtol = 1e-5; %default relative tolerance
+end
+
+if nargin < 4
+    atol = 1e-5; %default absolute tolerance
+end
+
+% Convert to vectors if needed:
+if ndims(v1) == 2
+    v1 = v1(:)';
+end
+
+if ndims(v2) == 2
+    v2 = v2(:)';
+end
+
+flag = all(abs(v1 - v2) <= (atol + rtol * max(abs(v1), abs(v2))));
+
 end
