@@ -1,3 +1,4 @@
+process_nst_sci.m
 process_nst_get_data_perform_2018.m
 process_nst_cmem.m
 process_nst_cpt_fluences_from_cortex.m
@@ -13,6 +14,11 @@ process_nst_motion_correction.m
 process_nst_OM_from_cortex.m
 process_nst_OM_from_head.m
 process_nst_wmne.m
+nst_get_pair_indexes_from_names.m
+nst_channel_types.m
+nst_format_channel.m
+nst_unformat_channel.m
+nst_unformat_channels.m
 nst_add_scout_sel_options.m
 nst_get_option_selected_scout.m
 nst_download.m
