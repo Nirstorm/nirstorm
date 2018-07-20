@@ -24,7 +24,7 @@ function varargout = process_nst_compute_glm( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2018
+% Authors: Edouard Delaire, Thomas Vincent 2018
 %  
 eval(macro_method);
 end
@@ -54,6 +54,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.separator.Type = 'separator';
     sProcess.options.separator.Comment = ' ';
     
+    sProcess.options.stim_events.Comment = 'Stim events: ';
+    sProcess.options.stim_events.Type    = 'text';
+    sProcess.options.stim_events.Value   = '';
+    
     sProcess.options.basis.Comment = 'Basis function';
     sProcess.options.basis.Type    = 'combobox';
     sProcess.options.basis.Value   = {1, {'Hrf','Gamma','BoxCar'}};
@@ -62,7 +66,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trend.Type    = 'checkbox';
     sProcess.options.trend.Value   =  1;
     
-    sProcess.options.save.Comment = 'Savethe design matrix';
+    sProcess.options.save.Comment = 'Save the design matrix';
     sProcess.options.save.Type    = 'checkbox';
     sProcess.options.save.Value   =  1;
     
@@ -94,10 +98,38 @@ function OutputFiles = Run(sProcess, sInput)
     DataMat = in_bst_data(sInput.FileName);
     basis_choice=sProcess.options.basis.Value{2}(sProcess.options.basis.Value{1});
 
-    % Create the design matrix X : 
-
-    [X,names]=getX(DataMat.Time,DataMat.Events,basis_choice);
+    %% Select events
+    % TODO: utests with all events found, no event selected, no available
+    %       event in data, one event missing
+    if isempty(sProcess.options.stim_events.Value)
+         bst_error('No event selected');
+    end
+    selected_event_names = cellfun(@strtrim, split(sProcess.options.stim_events.Value, ','),...
+                                   'UniformOutput', 0);
+    all_event_names = {DataMat.Events.label};
+    events_found = ismember(selected_event_names, all_event_names);
+    if ~all(events_found)
+        bst_error(sprintf('Event names "%s" not found in "%s"', ...
+                          strjoin(selected_event_names(~events_found), ', '), ...
+                          strjoin(all_event_names, ',')));
+        return;
+    end
+    ievents = cellfun(@(l) find(strcmp(l,all_event_names)), selected_event_names);
     
+    % Check that all selected events are extended
+    % TODO: also handle single events for event-related design
+    isExtended = false(1,length(ievents));
+    for ievt=1:length(ievents)
+        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).samples, 1) == 2);
+    end
+    if ~all(isExtended)
+         bst_error(sprintf('Simple events not supported: %s ', ...
+                           strjoin(selected_event_names(ievents(~isExtended)), ', ')));
+         return;
+    end
+    
+    %% Create the design matrix X
+    [X,names]=getX(DataMat.Time, DataMat.Events(ievents), basis_choice);
     
     % Add trend function
     if sProcess.options.trend.Value == 1 
@@ -110,20 +142,20 @@ function OutputFiles = Run(sProcess, sInput)
     % Check the rank of the matrix
     n_regressor=size(X,2);
     if  rank(X) < n_regressor
-        bst_report('Warning', sProcess, sInputs, 'The design matrix is not full-ranked');
+        bst_report('Warning', sProcess, sInput, 'The design matrix is not full-ranked');
     end
     
     % Check the collinearity of the matrix
     
     if cond(X) > 300 
-        bst_report('Warning', sProcess, sInputs, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
+        bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
     end    
 
     
     iStudy = sInput.iStudy;
 
     if sProcess.options.save.Value == 1 
-    % Save the results 
+        % Save the design matrix
         Out_DataMat = db_template('matrixmat');
         Out_DataMat.Value           = X';
         Out_DataMat.Comment     = 'Design Matrix';
@@ -131,16 +163,19 @@ function OutputFiles = Run(sProcess, sInput)
         Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
         Out_DataMat.Time        =  DataMat.Time;
         Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
-        OutputFiles{4} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
+        OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
         % Save on disk
-        save(OutputFiles{4}, '-struct', 'Out_DataMat');
+        save(OutputFiles{end}, '-struct', 'Out_DataMat');
         % Register in database
-        db_add_data(iStudy, OutputFiles{4}, Out_DataMat);
+        db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
     end 
     
-    % Solving  B such as Y = XB +e 
+    %% Solving  B such as Y = XB +e 
     
-    Y= DataMat.F' ;
+    % Get signals of NIRS channels only:
+    ChannelMat = in_bst_channel(sInput.ChannelFile);
+    [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+    Y = DataMat.F(nirs_ichans,:)';
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)  
@@ -160,30 +195,50 @@ function OutputFiles = Run(sProcess, sInput)
     dfe = size(Y,1) - rank(X);
 
     
-    % Saving the B Matrix.
+    %% Save results
     
+    % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = B';
     Out_DataMat.Comment     = 'B Matrix';
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
-    save(OutputFiles{1}, '-struct', 'Out_DataMat');
-    db_add_data(iStudy, OutputFiles{1}, Out_DataMat);
+    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
+    save(OutputFiles{end}, '-struct', 'Out_DataMat');
+    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+    
+    % Saving B as maps
+    for i_reg_name=1:length(names)
+        data_out = zeros(size(DataMat.F, 1), 1);
+        data_out(nirs_ichans,:) = B(i_reg_name,:);
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = ['GLM_beta_' names{i_reg_name}];
+        sDataOut.ChannelFlag  = DataMat.ChannelFlag;
+        sDataOut.Time         = [1];
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
+        
+        sStudy = bst_get('Study', sInput.iStudy);
+        OutputFiles{end+1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
+        sDataOut.FileName = file_short(OutputFiles{end});
+        bst_save(OutputFiles{end}, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInput.iStudy, OutputFiles{end}, sDataOut);
+    end
     
     % Saving the covB Matrix.
-    
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = covB;
     Out_DataMat.Comment     = [ 'covB Matrix, df=' int2str(dfe) ];
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
-    save(OutputFiles{2}, '-struct', 'Out_DataMat');
-    db_add_data(iStudy, OutputFiles{2}, Out_DataMat);    
+    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
+    save(OutputFiles{end}, '-struct', 'Out_DataMat');
+    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);    
     
     % Saving the residual matrix.
-    
     Out_DataMat = db_template('data');
     Out_DataMat.F           = residual' ;
     Out_DataMat.Comment     = 'Residual Matrix';
@@ -194,12 +249,10 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
     Out_DataMat.nAvg         = 1;
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
-    OutputFiles{3} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
-    Out_DataMat.FileName = file_short(OutputFiles{3});
-    bst_save(OutputFiles{3}, Out_DataMat, 'v7');
-    db_add_data(iStudy, OutputFiles{3}, Out_DataMat);    
-    
-
+    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
+    Out_DataMat.FileName = file_short(OutputFiles{end});
+    bst_save(OutputFiles{end}, Out_DataMat, 'v7');
+    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
 end
 
 
