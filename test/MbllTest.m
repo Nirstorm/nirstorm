@@ -93,6 +93,36 @@ classdef MbllTest < matlab.unittest.TestCase
             format short; % assume defatul short format was used
         end
         
+        function test_mbll_on_tapping_data(testCase)
+            repo_url = nst_get_repository_url();
+            data_fns = nst_request_files({{'unittest','motor_data','motor.nirs'}, ...
+                                          {'unittest','motor_data','optodes.txt'}, ...
+                                          {'unittest','motor_data','fiducials.txt'}...
+                                          {'unittest','motor_data','mbll.mat'}}, ...
+                                         1, repo_url);
+                                    
+            nirs_fn = data_fns{1};
+            sFile = utest_import_nirs_in_bst(nirs_fn);
+            sFile_bad_tagged = bst_process('CallProcess', 'process_nst_detect_bad', sFile, [], ...
+                                       'option_remove_negative', 1, ...
+                                       'option_invalidate_paired_channels', 1, ...
+                                       'option_max_sat_prop', 1);
+            sFileHb = bst_process('CallProcess', 'process_nst_mbll', sFile_bad_tagged, [], ...
+                        'option_age', {25, ''}, ...
+                        'option_pvf', {50, ''}, ...
+                        'option_baseline_method', {1, {'mean', 'median'}}, ...
+                        'option_do_plp_corr', 1);
+                    
+            sDataOut = in_bst_data(sFileHb.FileName);
+            
+            % Non-regression test (on 23rd July 2018)
+            expected_mbll_fn = data_fns{end};
+            expected_mbll = load(expected_mbll_fn);
+            expected_mbll = expected_mbll.mbll_motor;
+            
+            testCase.assertTrue(all_close(sDataOut.F, expected_mbll));
+        end
+        
     end
     
 end
