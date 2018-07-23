@@ -34,7 +34,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Compute ttest';
+    sProcess.Comment     = 'Compute Subject Analysis';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1402;
