@@ -73,6 +73,10 @@ end
 function OutputFiles = Run(sProcess, sInputs)
     OutputFiles={};
     
+    % check if Beta and covV are in sInputs
+    check_beta=0;
+    check_covb=0;
+    
     % parse input : 
     for i=1:length(sInputs) 
         name= strsplit(sInputs(i).Comment,' ');
@@ -83,12 +87,16 @@ function OutputFiles = Run(sProcess, sInputs)
             name= strsplit(cell2mat(name(end)),'_');
 
             df=str2num(cell2mat(name(1)));
+            check_covb=1;
         elseif ( strcmp(name(1), 'B') == 1)
             B=in_bst_data(sInputs(i).FileName);
-        else
-           %bst_report('Error', sProcess, sInputs, [ 'The file ' sInputs(i).FileName ' is not recognized. Please only input the B and covB matrix' ]);
-        end    
-    end
+            check_beta=1;
+        end
+     end   
+    if( ~check_beta || ~check_covb ) 
+       bst_report('Error', sProcess, sInputs, 'This process require beta and its covariance ');
+    end    
+    
     n_cond=size(B.Value',1);
     n_chan=size(B.Value',2);
     
