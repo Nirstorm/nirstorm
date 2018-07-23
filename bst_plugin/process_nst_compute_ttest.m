@@ -86,7 +86,7 @@ function OutputFiles = Run(sProcess, sInputs)
         elseif ( strcmp(name(1), 'B') == 1)
             B=in_bst_data(sInputs(i).FileName);
         else
-           bst_report('Error', sProcess, sInputs, [ 'The file ' sInputs(i).FileName ' is not recognized. Please only input the B and covB matrix' ]);
+           %bst_report('Error', sProcess, sInputs, [ 'The file ' sInputs(i).FileName ' is not recognized. Please only input the B and covB matrix' ]);
         end    
     end
     n_cond=size(B.Value',1);
@@ -98,10 +98,51 @@ function OutputFiles = Run(sProcess, sInputs)
         % sProcess.options.Contrast.Value = '[1,0,-1]'
         C=strsplit( sProcess.options.Contrast.Value(2:end-1),',');
         C=str2num(cell2mat(C));
+    else 
+        C=[];
+        % Parse the input 
+        % Accepted form are : 'X event1 Y event2' 
+        % where X,Y is a sign(+,-), a signed number(-1,+1) or a decimal(+0.5,-0.5)
+        % event12 are the name of regressor present in the design matrix
+        % A valid input can be '- rest + task' ( spaces are important)
+        
+        expression='[-+]((\d+.\d+)|((\d)+)|)\s+\w+';
+        [startIndex,endIndex] = regexp( sProcess.options.Contrast.Value , expression ); 
 
-    else
-         bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
-    end
+        for(i=1:length(startIndex))
+            word=sProcess.options.Contrast.Value(startIndex(i):endIndex(i)); % can be '-rest','+rest'..
+            
+            [evt_ind_start,evt_ind_end]=regexp(word, '\s+\w+' );            
+            evt_name=word(evt_ind_start+1:evt_ind_end);
+
+            
+            % Find the weight of the regressor 
+            if strcmp(word(1:evt_ind_start-1),'+')
+                evt_coef=1;
+            elseif strcmp(word(1:evt_ind_start-1),'-')
+                evt_coef=-1;
+            else
+                evt_coef=str2double(word(1:evt_ind_start));
+            end
+            
+            
+            %Find the position of the regressor            
+            ind=find(strcmp(B.Description,evt_name))
+            if( isempty(ind) )
+               bst_report('Error', sProcess, sInputs, [ 'Event ' evt_name ' has not been found']);
+               return;
+            end
+            
+            C(ind)=evt_coef;
+        end
+        
+        
+
+        if isempty(C)
+            bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
+            return
+        end
+   end
     
     % Add zero padding for the trend regressor 
     if length(C) < n_cond
@@ -136,9 +177,10 @@ function OutputFiles = Run(sProcess, sInputs)
     sOutput.ChannelFlag= ones(1,n_chan);
     sOutput.Correction   = 'no';
     sOutput.Type         = 'data';
-    sOutput.Time         = 1;
+    sOutput.Time         = [1];
     sOutput.ColormapType = 'stat2';
     sOutput.DisplayUnits = 'F';
+    sOutput.Options.SensorTypes = 'NIRS';
 
     
     % Formating a readable comment such as -Rest +Task
