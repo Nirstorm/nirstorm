@@ -104,7 +104,7 @@ function OutputFiles = Run(sProcess, sInput)
     if isempty(sProcess.options.stim_events.Value)
          bst_error('No event selected');
     end
-    selected_event_names = cellfun(@strtrim, split(sProcess.options.stim_events.Value, ','),...
+    selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     all_event_names = {DataMat.Events.label};
     events_found = ismember(selected_event_names, all_event_names);
