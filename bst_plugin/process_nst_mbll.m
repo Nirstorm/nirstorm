@@ -407,6 +407,10 @@ dpf_ref_data = [ ...
     [832, 4.67, 0.062, 0.819]; ... % WL, y_0, a1, a2 
     ];
 
+if size(wavelengths, 2) > 1
+    wavelengths = wavelengths';
+end
+
 y0 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,2), wavelengths, ...
              'linear', 'extrap');
 a1 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,3), wavelengths, ...
@@ -425,7 +429,7 @@ dpf = y0 + a1 .* age.^a2;
 ppf = dpf / pvf;
 
 nb_samples = size(delta_od, 2);
-delta_od_fixed = delta_od ./ repmat(ppf', 1, nb_samples);
+delta_od_fixed = delta_od ./ repmat(ppf, 1, nb_samples);
 end
 
 function delta_od = normalize_nirs(nirs_sig, method, window)
