@@ -18,7 +18,7 @@ function varargout = process_nst_mbll( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2016)
+% Authors: Thomas Vincent (2015-2018)
 
 eval(macro_method);
 end
@@ -52,6 +52,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_baseline_method.Type    = 'combobox';
     sProcess.options.option_baseline_method.Value   = {1, {'mean', 'median'}};    % {Default index, {list of entries}}
 
+    % === Estimation time window
+    sProcess.options.timewindow.Comment = 'Baseline window:';
+    sProcess.options.timewindow.Type    = 'timewindow';
+    sProcess.options.timewindow.Value   = [];
+    
     sProcess.options.option_do_plp_corr.Comment = 'Light path length correction';
     sProcess.options.option_do_plp_corr.Type    = 'checkbox';
     sProcess.options.option_do_plp_corr.Value   = 1;
@@ -59,12 +64,26 @@ end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) %#ok<DEFNU>
-    Comment = sProcess.Comment;
+        % Get baseline
+    if isfield(sProcess.options, 'timewindow') && isfield(sProcess.options.timewindow, 'Value') && iscell(sProcess.options.timewindow.Value) && ~isempty(sProcess.options.timewindow.Value)
+        TimeBounds = sProcess.options.timewindow.Value{1};
+    else
+        TimeBounds = [];
+    end
+    % Comment: seconds or miliseconds
+    if isempty(TimeBounds)
+        Comment = [sProcess.Comment, ': All file'];
+    elseif any(abs(TimeBounds) > 2)
+        Comment = sprintf('%s: [%1.3fs,%1.3fs]', sProcess.Comment, TimeBounds(1), TimeBounds(2));
+    else
+        Comment = sprintf('%s: [%dms,%dms]', sProcess.Comment, round(TimeBounds(1)*1000), round(TimeBounds(2)*1000));
+    end
 end
 
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
-       
+    OutputFile = {};
+    
     % TODO: check for negative values
     % Get option values   
     age             = sProcess.options.option_age.Value{1};
@@ -73,6 +92,12 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
     pvf = sProcess.options.option_pvf.Value{1};
     
+    if isfield(sProcess.options, 'timewindow') && isfield(sProcess.options.timewindow, 'Value') && iscell(sProcess.options.timewindow.Value) && ~isempty(sProcess.options.timewindow.Value)
+        TimeBounds = sProcess.options.timewindow.Value{1};
+    else
+        TimeBounds = [];
+    end
+
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
     
@@ -84,6 +109,18 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
         sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
         events = sDataRaw.F.events;
+    end
+    
+        % Get inputs
+    if ~isempty(TimeBounds)
+        iTime = panel_time('GetTimeIndices', sDataIn.Time, TimeBounds);
+        if isempty(iTime)
+            bst_report('Error', sProcess, [], 'Invalid time definition.');
+            sInputs = [];
+            return;
+        end
+    else
+        iTime = [];
     end
     
     if any(any(sDataIn.F(sDataIn.ChannelFlag~=-1, :) < 0))
@@ -100,7 +137,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         filter_data_by_channel_type(good_nirs, good_channel_def, 'NIRS');
     
     % Apply MBLL
-    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, baseline_method, do_plp_corr, pvf); 
+    % TODO: add baseline window and expose it
+    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, baseline_method, iTime, do_plp_corr, pvf); 
     
     % Re-add other channels that were not changed during MBLL
     [final_nirs, ChannelMat] = concatenate_data(nirs_hb, channels_hb, nirs_other, channel_def_other);
@@ -197,7 +235,7 @@ end
 
 
 function [nirs_hb, channel_hb_def] = ...
-    Compute(nirs_sig, channel_def, age, normalize_method, do_plp_corr, pvf)
+    Compute(nirs_sig, channel_def, age, normalize_method, baseline_window, do_plp_corr, pvf)
 %% Apply MBLL to compute [HbO] & [HbR] from given nirs OD data
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
@@ -212,6 +250,9 @@ function [nirs_hb, channel_hb_def] = ...
 %    [- normalize_method]: str in {'mean','median'}, default: 'mean'
 %        Method to compute delta optical density values: how to compute the
 %        reference intensity against which to compute variations.
+%    [- baseline_window]: baseline temporal window on which to compute the
+%        reference signale for normalization.
+%        Take the whole signal by default.
 %    [- do_ppl_corr]: bool, default: 1
 %        Flag to enable partial light path correction (account for light
 %        scattering through head tissues)
@@ -263,7 +304,7 @@ for ipair=1:size(nirs_psig, 1)
     hb_extinctions = get_hb_extinctions(channel_def.Nirs.Wavelengths); % cm^-1.l.mol^-1
 
     delta_od = normalize_nirs(squeeze(nirs_psig(ipair, :, :)), ...
-                              normalize_method);
+                              normalize_method, baseline_window);
     if do_plp_corr
         %TODO: ppf can be computed only once before the loop over pairs
         delta_od_ppf_fixed = fix_ppf(delta_od, channel_def.Nirs.Wavelengths, age, pvf);
@@ -387,27 +428,38 @@ nb_samples = size(delta_od, 2);
 delta_od_fixed = delta_od ./ repmat(ppf', 1, nb_samples);
 end
 
-function delta_od = normalize_nirs(nirs_sig, method)
+function delta_od = normalize_nirs(nirs_sig, method, window)
 %% Normalize given nirs signal
 % Args:
 %    - nirs_sig: matrix of double, size:  nb_wavelengths x nb_samples
 %        NIRS signal to normalize
-%   [- method]: str, choices are: 'mean' and 'median', default is 'mean'
+%   [- method]: str , choices are: 'mean' and 'median', default is 'mean'
 %        Normalization method.
 %        * 'mean': divide given nirs signal by its mean, for each wavelength
 %        * 'median': divide given nirs signal by its median, for each wavelength
-% 
+%   [- window]: 1D array of int, of size <= nb_samples
+%        Mask to be applied on the temporal axis defining the window
+%        where to compute the reference signal.
+%
 % Output: matrix of double, size: nb_channels x nb_wavelengths
 %    Normalized NIRS signal.
 
-switch method
-    case 'mean'
-        od_ref = mean(nirs_sig, 2);
-    case 'median'
-        od_ref = median(nirs_sig, 2);
+nb_samples = size(nirs_sig, 2);
+
+if nargin < 2 || isempty(method)
+   method = 'mean'; 
 end
 
-nb_samples = size(nirs_sig, 2);
+if nargin < 3 || isempty(window)
+    window = 1:nb_samples;
+end
+
+switch method
+    case 'mean'
+        od_ref = mean(nirs_sig(:,window), 2);
+    case 'median'
+        od_ref = median(nirs_sig(:,window), 2);
+end
 
 delta_od = -log( nirs_sig ./ repmat(od_ref, 1, nb_samples) );
 end
