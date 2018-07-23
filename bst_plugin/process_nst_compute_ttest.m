@@ -128,15 +128,13 @@ function OutputFiles = Run(sProcess, sInputs)
             
             %Find the position of the regressor            
             ind=find(strcmp(B.Description,evt_name))
-            if( isempty(ind) )
+            if( isempty(ind) || ~isnumeric(evt_coef) )
                bst_report('Error', sProcess, sInputs, [ 'Event ' evt_name ' has not been found']);
                return;
             end
             
             C(ind)=evt_coef;
         end
-        
-        
 
         if isempty(C)
             bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
