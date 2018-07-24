@@ -85,6 +85,8 @@ function OutputFiles = Run(sProcess, sInputs)
     n_beta=0;
     n_covb=0;
     
+    % Todo add some verification on the channels, matrix... 
+    
     % parse input : 
     for i=1:length(sInputs) 
         name= strsplit(sInputs(i).Comment,' ');
@@ -179,13 +181,12 @@ function OutputFiles = Run(sProcess, sInputs)
     df=ones(n_chan,1)*df;
     
     
-    % Saving the output .
-    iStudy = sInputs.iStudy;
-
     % Change folder to inter study. 
-%     iInterStudy=bst_get('AnalysisInterStudy');
-%     db_set_channel(iChannelStudy, ChannelMat, 0, 0);
     
+    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [sStudyIntra, iStudyIntra] = bst_get('AnalysisInterStudy', iSubject);
+
+    iStudy = iStudyIntra;
     % === OUTPUT STRUCTURE ===
     % Initialize output structure
     
@@ -204,7 +205,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
     
     % Formating a readable comment such as -Rest +Task
-    comment=['Group Stat (' num2str(n_beta) ') subjects, '] ;
+    comment=['Group Stat (' num2str(n_beta) ' subjects), '] ;
     for i=1:n_cond
         if ( C(i) < 0)
             if( C(i) == -1 )
@@ -219,13 +220,22 @@ function OutputFiles = Run(sProcess, sInputs)
                 comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
             end 
         end     
-    end    
+    end
+    
+    switch sProcess.options.tail.Value 
+        case {'one-'}
+             comment=[ comment ' < 0 '];      
+        case {'two'}
+             comment=[ comment ' <> 0 ']; 
+        case { 'one+'}
+             comment=[ comment ' > 0 ']; 
+    end  
     
     sOutput.Comment=comment;
     sOutput = bst_history('add', sOutput, B.History, '');
 
     sOutput = bst_history('add', sOutput, 'ttest computation', comment);
-    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sInputs(1).FileName), 'pdata_ttest_matrix');
+    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
     save(OutputFiles{1}, '-struct', 'sOutput');
     db_add_data(iStudy, OutputFiles{1}, sOutput);
 
@@ -265,7 +275,7 @@ function p = ComputePvalues(t, df, TestDistrib, TestTail)
     end
     % Default: F-distribution
     if (nargin < 3) || isempty(TestDistrib)
-        TestDistrib = 'two';
+        TestDistrib = 'f';
     end
     % Nothing to test
     if strcmpi(TestTail, 'no')
