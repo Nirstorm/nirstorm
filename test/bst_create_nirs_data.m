@@ -87,7 +87,7 @@ end
 assert(length(chan_names)==nb_channels);
 
 if nargin < 5 || isempty(srcs_pos)
-    if nargin > 5 || ~isempty(dets_pos)
+    if nargin > 5 && ~isempty(dets_pos)
         error('"srcs_pos" must be defined when "dets_pos" is given');
     end
     [i_srcs, i_dets, measures, ctype] = nst_unformat_channels(chan_names);
@@ -106,7 +106,7 @@ if nargin < 5 || isempty(srcs_pos)
     end
 end
 
-if nargin>=5 && nargin < 6
+if nargin==5
     error('"dets_pos" must be defined when "srcs_pos" is given');
 end
 
