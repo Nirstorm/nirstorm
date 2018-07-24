@@ -224,7 +224,7 @@ function p = ComputePvalues(t, df, TestDistrib, TestTail)
     end
     % Default: F-distribution
     if (nargin < 3) || isempty(TestDistrib)
-        TestDistrib = 'two';
+        TestDistrib = 'f';
     end
     % Nothing to test
     if strcmpi(TestTail, 'no')
