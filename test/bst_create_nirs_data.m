@@ -19,9 +19,9 @@ function OutputFile = bst_create_nirs_data(condition_label, signals, time, chan_
 %               t: Hb type (O, R, T).
 %           Examples: S1D2WL685, S01D7WL830, S3D01HbR
 %           If not given of empty, default is {'S1D1WL685', 'S1D1WL830','S3D4WL685', 'S3D4WL830'}
-%       SRCS_POS (matrix of double): coordinates of channel sources, size: (3 x nb_channels)
+%       SRCS_POS (matrix of double): coordinates of channel sources in meters, size: (3 x nb_channels)
 %           Note: aligns with ChannelMat.Channel(:).Loc(:,1)
-%       DETS_POS (matrix of double): coordinates of channel detectors, size: (3 x nb_channels)
+%       DETS_POS (matrix of double): coordinates of channel detectors in meters, size: (3 x nb_channels)
 %           Note: aligns with ChannelMat.Channel(:).Loc(:,2)
 %
 %       OUTPUTFILE(struct): brainstorm data outputFile, see db_template('data').
@@ -50,7 +50,7 @@ if nargin < 2 || isempty(signals)
        if nargin < 6 || isempty(dets_pos)
            error('"dets_pos" must be defined when "srcs_pos" is given');
        end
-       nb_channels = size(src_pos, 2);
+       nb_channels = size(srcs_pos, 2);
    else
        nb_channels = length(DEFAULT_CHANNELS);
        chan_names = DEFAULT_CHANNELS;
