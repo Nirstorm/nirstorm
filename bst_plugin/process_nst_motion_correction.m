@@ -53,8 +53,8 @@ Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
-OutputFile = {};
+function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+OutputFiles = {};
 
 if ~license('test', 'Curve_Fitting_Toolbox')
     bst_error('Curve Fitting Toolbox not available');
@@ -91,6 +91,11 @@ for iInput=1:length(sInputs)
         continue;
     end
     
+    if isempty(event.times) % no marked event
+        OutputFiles{iInput} = sInputs(iInput).FileName;
+        continue;
+    end
+    
     data_corr = Compute(sDataIn.F', sDataIn.Time', event.samples');
     
     if 0
@@ -105,7 +110,7 @@ for iInput=1:length(sInputs)
             invalidate_paired_channels);
         
         % Add bad channels
-        OutputFiles = {sInputs(iInput).FileName};
+        % OutputFiles = {sInputs(iInput).FileName};
     end
     
     % Save time-series data
@@ -126,6 +131,7 @@ for iInput=1:length(sInputs)
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
     db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    OutputFiles{iInput} = OutputFile;
 end
 end
 
