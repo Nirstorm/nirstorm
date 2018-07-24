@@ -204,6 +204,14 @@ function OutputFiles = Run(sProcess, sInputs)
         end     
     end    
     
+    switch sProcess.options.tail.Value 
+        case {'one-'}
+             comment=[ comment ' < 0 '];      
+        case {'two'}
+             comment=[ comment ' <> 0 ']; 
+        case { 'one+'}
+             comment=[ comment ' > 0 ']; 
+    end    
     sOutput.Comment=comment;
     sOutput = bst_history('add', sOutput, B.History, '');
 
