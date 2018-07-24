@@ -166,50 +166,25 @@ function OutputFiles = Run(sProcess, sInputs)
     p = ComputePvalues(t, df, 't',   sProcess.options.tail.Value );
     df=ones(n_chan,1)*df;
     
-    
-    % Saving the output.
-    iStudy = sInputs.iStudy;
-    
-    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
-    [sStudyIntra, iStudyIntra] = bst_get('AnalysisIntraStudy', iSubject);
-    
-    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
-    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
-    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
-
-    % === OUTPUT STRUCTURE ===
-    % Initialize output structure
-    sOutput = db_template('statmat');
-    sOutput.pmap         = [p;p]';
-    sOutput.tmap         = [t;t]';
-    sOutput.df           = df;
-    sOutput.ChannelFlag= ones(1,n_chan);
-    sOutput.Correction   = 'no';
-    sOutput.Type         = 'data';
-    sOutput.Time         = [1];
-    sOutput.ColormapType = 'stat2';
-    sOutput.DisplayUnits = 't';
-    sOutput.Options.SensorTypes = 'NIRS';
-
-    
-    % Formating a readable comment such as -Rest +Task
+   % Formating a readable comment such as -Rest +Task
     comment='T-test : ';
+    contrast='';
     for i=1:n_cond
         if ( C(i) < 0)
             if( C(i) == -1 )
-                comment=[  comment  ' - ' cell2mat(B.Description(i)) ' '];
+                contrast=[  contrast  ' - ' cell2mat(B.Description(i)) ' '];
             else
-                comment=[  comment num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
+                contrast=[  contrast num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
             end
         elseif ( C(i) > 0 )
             if( C(i) == 1)
-                comment=[  comment  ' + ' cell2mat(B.Description(i)) ' '];  
+                contrast=[  contrast  ' + ' cell2mat(B.Description(i)) ' '];  
             else
-                comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
+                contrast=[  contrast  ' + ' num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
             end 
         end     
     end    
-    
+    comment=[comment contrast];
     switch sProcess.options.tail.Value 
         case {'one-'}
              comment=[ comment ' < 0 '];      
@@ -218,14 +193,54 @@ function OutputFiles = Run(sProcess, sInputs)
         case { 'one+'}
              comment=[ comment ' > 0 ']; 
     end    
-    sOutput.Comment=comment;
-    sOutput = bst_history('add', sOutput, B.History, '');
+    
 
+    % Saving the output.
+    iStudy = sInputs.iStudy;
+
+    % Saving the statmap
+    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [sStudyIntra, iStudyIntra] = bst_get('AnalysisIntraStudy', iSubject);
+    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
+    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
+    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
+
+
+    sOutput = db_template('statmat');
+    sOutput.pmap         = [p;p]';
+    sOutput.tmap         = [t;t]';
+    sOutput.df           = df;
+    sOutput.ChannelFlag= ones(1,n_chan);
+    sOutput.Correction   = 'no';
+    sOutput.Type         = 'pdata';
+    sOutput.Time         = [1];
+    sOutput.ColormapType = 'stat2';
+    sOutput.DisplayUnits = 't';
+    sOutput.Options.SensorTypes = 'NIRS';
+    sOutput.Comment=comment;
+    
+    sOutput = bst_history('add', sOutput, B.History, '');
     sOutput = bst_history('add', sOutput, 'ttest computation', comment);
+    
     OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
     save(OutputFiles{1}, '-struct', 'sOutput');
     db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
 
+%         % Saving the cB Matrix
+    sOutput_b = db_template('matrixmat');
+    sOutput_b.Value           = B.Value';
+    sOutput_b.Comment     = [contrast ' B' ];
+    sOutput_b.Description = B.Description;  
+    sOutput_b.ChannelFlag =  B.ChannelFlag;   
+    sOutput_b.Type         = 'data';
+    sOutput_b = bst_history('add', sOutput_b, B.History, '');
+    sOutput_b = bst_history('add', sOutput_b, 'Subject Stat ', comment);
+    
+    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'cB_matrix');
+    save(OutputFiles{2}, '-struct', 'sOutput_b');
+    db_add_data(iStudyIntra, OutputFiles{2}, sOutput_b);
+    
+    
 end
 
 
