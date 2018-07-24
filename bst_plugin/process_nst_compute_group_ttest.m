@@ -2,9 +2,9 @@ function varargout = process_nst_compute_group_ttest( varargin )
 % process_nst_compute_group_ttest
 % Compute a ttest on the mean of the B according to a constrast vector using 
 % t = cBm / sqrt( c Cov(B)m c^T )  
-% with Bm = sum(B)/n and Cov(B)m ! sum(Cov(B))/n^2 
+% with Bm = sum(B)/n and Cov(B)m =  sum(Cov(B))/n 
 %
-% B, cov(B) and the corresponding degrree of freedom are estimated inprocess_nst_compute_glm.
+% B, cov(B) and the corresponding degree of freedom are estimated inprocess_nst_compute_glm.
 % 
 % 
 % @=============================================================================
@@ -61,6 +61,14 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.Contrast.Type    = 'text';
     sProcess.options.Contrast.Value   = '[-1 1]';
     
+    
+    % === Method for the group analysis
+    sProcess.options.method.Comment  = {'Mean',''; ...
+                                      'mean', ''};
+    sProcess.options.method.Type     = 'radio_linelabel';
+    sProcess.options.method.Value    = 'mean';
+    
+    
     % === TAIL FOR THE TEST STATISTIC
     sProcess.options.tail.Comment  = {'One-tailed (-)', 'Two-tailed', 'One-tailed (+)', ''; ...
                                       'one-', 'two', 'one+', ''};
@@ -85,8 +93,6 @@ function OutputFiles = Run(sProcess, sInputs)
     n_beta=0;
     n_covb=0;
     
-    % Todo add some verification on the channels, matrix... 
-    
     % parse input : 
     for i=1:length(sInputs) 
         name= strsplit(sInputs(i).Comment,' ');
@@ -108,17 +114,78 @@ function OutputFiles = Run(sProcess, sInputs)
        bst_report('Error', sProcess, sInputs, 'This process require beta and its covariance ');
     end    
     
+    % Todo add some verification on the channels, matrix... 
 
-    [B,covB,df]=compute_mean(B,covB,df);
     
-    n_cond=size(B.Value',1);
-    n_chan=size(B.Value',2);
+    n_chan=size(B(1).Value',2);
+     
+    switch sProcess.options.method.Value 
+        case 'mean' 
+            [t,df,comment_stat]=compute_mean(sProcess.options.Contrast.Value,B,covB,df);
+    end    
+
+    % Calculate p-values from t-values
+    p = ComputePvalues(t, df, 't',   sProcess.options.tail.Value );
+   
+    % Change folder to inter study. 
+    iStudy = sInputs(1).iStudy;
+
+    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [sStudyIntra, iStudyIntra] = bst_get('AnalysisInterStudy', iSubject);
+    
+    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
+    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
+    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
+    
+    
+    % === OUTPUT STRUCTURE ===
+    % Initialize output structure
+
+    sOutput = db_template('statmat');
+    sOutput.pmap         = [p;p]';
+    sOutput.tmap         = [t;t]';
+    sOutput.df           = ones(n_chan,1)*df;
+    sOutput.ChannelFlag= ones(1,n_chan);
+    sOutput.Correction   = 'no';
+    sOutput.Type         = 'data';
+    sOutput.Time         = [1];
+    sOutput.ColormapType = 'stat2';
+    sOutput.DisplayUnits = 't';
+    sOutput.Options.SensorTypes = 'NIRS';
+
+    
+    % Formating a readable comment such as -Rest +Task
+    comment=['Group Stat (' num2str(n_beta) ' subjects), '] ;
+    comment=[comment comment_stat];
+
+    switch sProcess.options.tail.Value 
+        case {'one-'}
+             comment=[ comment ' < 0 '];      
+        case {'two'}
+             comment=[ comment ' <> 0 ']; 
+        case { 'one+'}
+             comment=[ comment ' > 0 ']; 
+    end  
+    
+    sOutput.Comment=comment;
+    sOutput = bst_history('add', sOutput, B(1).History, '');
+
+    sOutput = bst_history('add', sOutput, 'Group stat', comment);
+    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
+    save(OutputFiles{1}, '-struct', 'sOutput');
+    db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
+
+end
+
+function [t,df,comment]=compute_mean(contrast_vector,B,covB,df)
+    n_cond=size(B(1).Value',1);
+    n_chan=size(B(1).Value',2);
     
     % exctract the constrast vector. 
-    if( strcmp( sProcess.options.Contrast.Value(1),'[') && strcmp( sProcess.options.Contrast.Value(end),']') )
+    if( strcmp( contrast_vector(1),'[') && strcmp(contrast_vector(end),']') )
         % The constrast vector is in a SPM-format : 
         % sProcess.options.Contrast.Value = '[1,0,-1]'
-        C=strsplit( sProcess.options.Contrast.Value(2:end-1),',');
+        C=strsplit( contrast_vector(2:end-1),',');
         C=str2num(cell2mat(C));
     else 
         C=[];
@@ -129,10 +196,10 @@ function OutputFiles = Run(sProcess, sInputs)
         % A valid input can be '- rest + task' ( spaces are important)
         
         expression='[-+]((\d+.\d+)|((\d)+)|)\s+\w+';
-        [startIndex,endIndex] = regexp( sProcess.options.Contrast.Value , expression ); 
+        [startIndex,endIndex] = regexp( contrast_vector , expression ); 
 
         for(i=1:length(startIndex))
-            word=sProcess.options.Contrast.Value(startIndex(i):endIndex(i)); % can be '-rest','+rest'..
+            word=contrast_vector(startIndex(i):endIndex(i)); % can be '-rest','+rest'..
             
             [evt_ind_start,evt_ind_end]=regexp(word, '\s+\w+' );            
             evt_name=word(evt_ind_start+1:evt_ind_end);
@@ -149,7 +216,7 @@ function OutputFiles = Run(sProcess, sInputs)
             
             
             %Find the position of the regressor            
-            ind=find(strcmp(B.Description,evt_name))
+            ind=find(strcmp(B(1).Description,evt_name))
             if( isempty(ind) || ~isnumeric(evt_coef) )
                bst_report('Error', sProcess, sInputs, [ 'Event ' evt_name ' has not been found']);
                return;
@@ -162,111 +229,62 @@ function OutputFiles = Run(sProcess, sInputs)
             bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
             return
         end
-   end
+    end
     
     % Add zero padding for the trend regressor 
     if length(C) < n_cond
        C= [C zeros(1, n_cond - length(C)) ]; 
     end    
-     
-    B.Value=C*B.Value';
-    t=zeros(1,n_chan);
-    
-    for i = 1:n_chan
-        t(i)= B.Value(i) / sqrt( C*covB.Value(:,:,i)*transpose(C) ) ; 
-    end
-    
-    % Calculate p-values from t-values
-    p = ComputePvalues(t, df, 't',   sProcess.options.tail.Value );
-    df=ones(n_chan,1)*df;
     
     
-    % Change folder to inter study. 
-    iStudy = sInputs(1).iStudy;
-
-    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
-    [sStudyIntra, iStudyIntra] = bst_get('AnalysisInterStudy', iSubject);
-    
-    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
-    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
-    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
-    
-    
-    % === OUTPUT STRUCTURE ===
-    % Initialize output structure
-    
-    
-    sOutput = db_template('statmat');
-    sOutput.pmap         = [p;p]';
-    sOutput.tmap         = [t;t]';
-    sOutput.df           = df;
-    sOutput.ChannelFlag= ones(1,n_chan);
-    sOutput.Correction   = 'no';
-    sOutput.Type         = 'data';
-    sOutput.Time         = [1];
-    sOutput.ColormapType = 'stat2';
-    sOutput.DisplayUnits = 't';
-    sOutput.Options.SensorTypes = 'NIRS';
-
-    
-    % Formating a readable comment such as -Rest +Task
-    comment=['Group Stat (' num2str(n_beta) ' subjects), '] ;
-    for i=1:n_cond
-        if ( C(i) < 0)
-            if( C(i) == -1 )
-                comment=[  comment  ' - ' cell2mat(B.Description(i)) ' '];
-            else
-                comment=[  comment num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
-            end
-        elseif ( C(i) > 0 )
-            if( C(i) == 1)
-                comment=[  comment  ' + ' cell2mat(B.Description(i)) ' '];  
-            else
-                comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(B.Description(i)) ' '];
-            end 
-        end     
-    end
-    
-    switch sProcess.options.tail.Value 
-        case {'one-'}
-             comment=[ comment ' < 0 '];      
-        case {'two'}
-             comment=[ comment ' <> 0 ']; 
-        case { 'one+'}
-             comment=[ comment ' > 0 ']; 
-    end  
-    
-    sOutput.Comment=comment;
-    sOutput = bst_history('add', sOutput, B.History, '');
-
-    sOutput = bst_history('add', sOutput, 'ttest computation', comment);
-    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
-    save(OutputFiles{1}, '-struct', 'sOutput');
-    db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
-
-end
-
-function [meam_B,mean_covB,mean_df]=compute_mean(B,covB,df)
-   
     % Initialize the structure
-    meam_B=B(1);
-    mean_covB=covB(1);
+    meam_B=B(1).Value;
+    mean_covB=covB(1).Value;
     mean_df=df(1);
     
     n=numel(B);
     
     % Calculate the mean
     for i =2:n
-        meam_B.Value=meam_B.Value+B(i).Value;
-        mean_covB.Value=mean_covB.Value+covB(i).Value;
+        meam_B=meam_B+B(i).Value;
+        mean_covB=mean_covB+covB(i).Value;
         mean_df=mean_df+df(i);
     end
     
     
-    meam_B.F=meam_B.F/n;
-    mean_covB.F=mean_covB.F/n;
+    meam_B=meam_B/n;
+    mean_covB=mean_covB/n;
     mean_df=mean_df/n;
-   
+    
+    description=B(1).Description;
+    B =C*meam_B';
+    covB=mean_covB;
+    
+    df=mean_df;
+    t=zeros(1,n_chan);
+    
+    for i = 1:n_chan
+        t(i)= B(i) / sqrt( C*covB(:,:,i)*transpose(C) ) ; 
+    end
+    
+    comment='';
+    for i=1:n_cond
+        if ( C(i) < 0)
+            if( C(i) == -1 )
+                comment=[  comment  ' - ' cell2mat(description(i)) ' '];
+            else
+                comment=[  comment num2str(C(i)) ' ' cell2mat(descriptionn(i)) ' '];
+            end
+        elseif ( C(i) > 0 )
+            if( C(i) == 1)
+                comment=[  comment  ' + ' cell2mat(description(i)) ' '];  
+            else
+                comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(description(i)) ' '];
+            end 
+        end     
+    end
+    
+  
 end
 
 
