@@ -169,7 +169,13 @@ function OutputFiles = Run(sProcess, sInputs)
     
     % Saving the output.
     iStudy = sInputs.iStudy;
-
+    
+    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [sStudyIntra, iStudyIntra] = bst_get('AnalysisIntraStudy', iSubject);
+    
+    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
+    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
+    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
 
     % === OUTPUT STRUCTURE ===
     % Initialize output structure
@@ -216,9 +222,9 @@ function OutputFiles = Run(sProcess, sInputs)
     sOutput = bst_history('add', sOutput, B.History, '');
 
     sOutput = bst_history('add', sOutput, 'ttest computation', comment);
-    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sInputs(1).FileName), 'pdata_ttest_matrix');
+    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
     save(OutputFiles{1}, '-struct', 'sOutput');
-    db_add_data(iStudy, OutputFiles{1}, sOutput);
+    db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
 
 end
 
