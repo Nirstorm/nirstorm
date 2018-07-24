@@ -182,11 +182,16 @@ function OutputFiles = Run(sProcess, sInputs)
     
     
     % Change folder to inter study. 
-    
+    iStudy = sInputs(1).iStudy;
+
     [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
     [sStudyIntra, iStudyIntra] = bst_get('AnalysisInterStudy', iSubject);
-
-    iStudy = iStudyIntra;
+    
+    [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
+    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
+    db_set_channel(iChannelStudy, ChannelFile, 0, 0);
+    
+    
     % === OUTPUT STRUCTURE ===
     % Initialize output structure
     
@@ -237,7 +242,7 @@ function OutputFiles = Run(sProcess, sInputs)
     sOutput = bst_history('add', sOutput, 'ttest computation', comment);
     OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
     save(OutputFiles{1}, '-struct', 'sOutput');
-    db_add_data(iStudy, OutputFiles{1}, sOutput);
+    db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
 
 end
 
