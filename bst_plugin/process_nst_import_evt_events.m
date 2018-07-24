@@ -118,8 +118,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     for i = 1:(n-1)
 
-        key=int2str(bi2de( event_table(i,2:end),'right-msb' ));
-
+        key = int2str(b2d(event_table(i,end:-1:2)));
         if( isKey (events_index,key) ) 
             events_index(key)= [  events_index(key) ;  event_table(i,1)  event_table(i+1,1)  ];
         else
@@ -137,7 +136,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     % importing the last event
 
     if( sProcess.options.confirm_importation.Value )
-    	key=int2str(bi2de( event_table(end,2:end),'right-msb' ));
+        key = int2str(b2d(event_table(i,end:-1:2)));
+
         if( isKey (events_index,key) ) 
             evt=events_index(key);
             evt_duration=evt(end,2) - evt(end,1);
@@ -154,10 +154,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
        % Two or more events have the same name;
        events_index=containers.Map('KeyType','char','ValueType','any');
        for i = 1:(n-2)
-            key=int2str(bi2de( event_table(i,2:end),'right-msb' ));
+            key = int2str(b2d(event_table(i,end:-1:2)));
             key_name=events_names( key);
-            next_key=events_names( int2str(bi2de( event_table(i+1,2:end),'right-msb' )));
-
+            next_key = events_names( int2str(b2d( event_table(i+1,end:-1:2) )));
             %if two consecutive events have the same name, we can merge them
             if(  strcmp(key_name, next_key) )
                 event_table(i+1,1)=event_table(i,1);
@@ -307,4 +306,42 @@ if ~isempty(newEvents)
 else
     bst_report('Error', sProcess, sInput, 'No events read from file.');
 end
+end
+
+
+function y = b2d(x)
+% Convert a binary array to a decimal number
+% 
+% Similar to bin2dec but works with arrays instead of strings and is found to be 
+% rather faster
+%
+% From FileExchange: 
+% https://www.mathworks.com/matlabcentral/fileexchange/26447-efficient-convertors-between-binary-and-decimal-numbers
+%
+% Copyright (c) 2010, Zacharias Voulgaris
+% All rights reserved.
+% 
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided that the following conditions are met:
+% 
+% * Redistributions of source code must retain the above copyright notice, this
+%   list of conditions and the following disclaimer.
+% 
+% * Redistributions in binary form must reproduce the above copyright notice,
+%   this list of conditions and the following disclaimer in the documentation
+%   and/or other materials provided with the distribution
+% THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+% DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+% FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+% DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+% SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+% CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+% OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+% OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+z = 2.^(length(x)-1:-1:0);
+y = sum(x.*z);
+
 end
