@@ -55,13 +55,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 %     sProcess.options.subjects.Comment = 'Inclued Sujbets';
 %     sProcess.options.subjects.Type    = 'subjectname';
 %     sProcess.options.subjects.Value   = '';
-    
-    
-    sProcess.options.Contrast.Comment = 'Contrast vector';
-    sProcess.options.Contrast.Type    = 'text';
-    sProcess.options.Contrast.Value   = '[-1 1]';
-    
-    
+
     % === Method for the group analysis
     sProcess.options.method.Comment  = {'Mean',''; ...
                                       'mean', ''};
@@ -81,47 +75,25 @@ end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) 
-    Comment = sProcess.Comment;
-    Comment = [ Comment ' C = ' sProcess.options.Contrast.Value ]; 
+    Comment = sProcess.Comment; 
 end
 
 function OutputFiles = Run(sProcess, sInputs)
     OutputFiles={};
     
-
-    % Number of B, and Cov(B) 
-    n_beta=0;
-    n_covb=0;
-    
     % parse input : 
-    for i=1:length(sInputs) 
-        name= strsplit(sInputs(i).Comment,' ');
-        if( strcmp(name(1), 'covB') == 1)
-            n_covb= n_covb +1;
 
-            covB(n_covb)=in_bst_data(sInputs(i).FileName);
-            
-            name= strsplit(cell2mat(name(end)),'=');
-            name= strsplit(cell2mat(name(end)),'_');
+	for i=1:numel(sInputs)
+        s_B(i)=in_bst_data(sInputs(i).FileName);
+        B(:,i)=s_B(i).Value; % might need to transpose. Have to check how cB is registered 
+	end     
 
-            df(n_covb)=str2num(cell2mat(name(1)));
-        elseif ( strcmp(name(1), 'B') == 1)
-            n_beta= n_beta +1;
-            B(n_beta)=in_bst_data(sInputs(i).FileName);
-        end
-     end   
-    if( n_beta~=n_covb || n_beta < 2 ) 
-       bst_report('Error', sProcess, sInputs, 'This process require beta and its covariance ');
-    end    
+    n_chan=size(B,1);
+    n_subject=size(B,2);
     
-    % Todo add some verification on the channels, matrix... 
-
-    
-    n_chan=size(B(1).Value',2);
-     
     switch sProcess.options.method.Value 
         case 'mean' 
-            [t,df,comment_stat]=compute_mean(sProcess.options.Contrast.Value,B,covB,df);
+            [t,df]=compute_mean(B);
     end    
 
     % Calculate p-values from t-values
@@ -155,8 +127,8 @@ function OutputFiles = Run(sProcess, sInputs)
 
     
     % Formating a readable comment such as -Rest +Task
-    comment=['Group Stat (' num2str(n_beta) ' subjects), '] ;
-    comment=[comment comment_stat];
+    comment=['Group Stat (' num2str(n_subject) ' subjects), '] ;
+    comment=[comment  s_B(1).Comment(1:end-2) ];
 
     switch sProcess.options.tail.Value 
         case {'one-'}
@@ -168,7 +140,7 @@ function OutputFiles = Run(sProcess, sInputs)
     end  
     
     sOutput.Comment=comment;
-    sOutput = bst_history('add', sOutput, B(1).History, '');
+    sOutput = bst_history('add', sOutput, s_B(1).History, '');
 
     sOutput = bst_history('add', sOutput, 'Group stat', comment);
     OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
@@ -177,114 +149,21 @@ function OutputFiles = Run(sProcess, sInputs)
 
 end
 
-function [t,df,comment]=compute_mean(contrast_vector,B,covB,df)
-    n_cond=size(B(1).Value',1);
-    n_chan=size(B(1).Value',2);
-    
-    % exctract the constrast vector. 
-    if( strcmp( contrast_vector(1),'[') && strcmp(contrast_vector(end),']') )
-        % The constrast vector is in a SPM-format : 
-        % sProcess.options.Contrast.Value = '[1,0,-1]'
-        C=strsplit( contrast_vector(2:end-1),',');
-        C=str2num(cell2mat(C));
-    else 
-        C=[];
-        % Parse the input 
-        % Accepted form are : 'X event1 Y event2' 
-        % where X,Y is a sign(+,-), a signed number(-1,+1) or a decimal(+0.5,-0.5)
-        % event12 are the name of regressor present in the design matrix
-        % A valid input can be '- rest + task' ( spaces are important)
-        
-        expression='[-+]((\d+.\d+)|((\d)+)|)\s+\w+';
-        [startIndex,endIndex] = regexp( contrast_vector , expression ); 
+function [t,df]=compute_mean(B)
+  
+    n_chan=size(B,1);
+    n_subject=size(B,2);
 
-        for(i=1:length(startIndex))
-            word=contrast_vector(startIndex(i):endIndex(i)); % can be '-rest','+rest'..
-            
-            [evt_ind_start,evt_ind_end]=regexp(word, '\s+\w+' );            
-            evt_name=word(evt_ind_start+1:evt_ind_end);
+    mean_B= mean(B,2);
+    varB=  var(B,0,2) ;
 
-            
-            % Find the weight of the regressor 
-            if strcmp(word(1:evt_ind_start-1),'+')
-                evt_coef=1;
-            elseif strcmp(word(1:evt_ind_start-1),'-')
-                evt_coef=-1;
-            else
-                evt_coef=str2double(word(1:evt_ind_start));
-            end
-            
-            
-            %Find the position of the regressor            
-            ind=find(strcmp(B(1).Description,evt_name))
-            if( isempty(ind) || ~isnumeric(evt_coef) )
-               bst_report('Error', sProcess, sInputs, [ 'Event ' evt_name ' has not been found']);
-               return;
-            end
-            
-            C(ind)=evt_coef;
-        end
-
-        if isempty(C)
-            bst_report('Error', sProcess, sInputs, 'The format of the constrast vector (eg [-1 1] ) is not recognized');
-            return
-        end
-    end
-    
-    % Add zero padding for the trend regressor 
-    if length(C) < n_cond
-       C= [C zeros(1, n_cond - length(C)) ]; 
-    end    
-    
-    
-    % Initialize the structure
-    meam_B=B(1).Value;
-    mean_covB=covB(1).Value;
-    mean_df=df(1);
-    
-    n=numel(B);
-    
-    % Calculate the mean
-    for i =2:n
-        meam_B=meam_B+B(i).Value;
-        mean_covB=mean_covB+covB(i).Value;
-        mean_df=mean_df+df(i);
-    end
-    
-    
-    meam_B=meam_B/n;
-    mean_covB=mean_covB/n;
-    mean_df=mean_df/n;
-    
-    description=B(1).Description;
-    B =C*meam_B';
-    covB=mean_covB;
-    
-    df=mean_df;
+    df=n_subject-1;
     t=zeros(1,n_chan);
     
     for i = 1:n_chan
-        t(i)= B(i) / sqrt( C*covB(:,:,i)*transpose(C) ) ; 
+        t(i)= mean_B(i) / sqrt(varB(i)) ; 
     end
-    
-    comment='';
-    for i=1:n_cond
-        if ( C(i) < 0)
-            if( C(i) == -1 )
-                comment=[  comment  ' - ' cell2mat(description(i)) ' '];
-            else
-                comment=[  comment num2str(C(i)) ' ' cell2mat(descriptionn(i)) ' '];
-            end
-        elseif ( C(i) > 0 )
-            if( C(i) == 1)
-                comment=[  comment  ' + ' cell2mat(description(i)) ' '];  
-            else
-                comment=[  comment  ' + ' num2str(C(i)) ' ' cell2mat(description(i)) ' '];
-            end 
-        end     
-    end
-    
-  
+
 end
 
 
