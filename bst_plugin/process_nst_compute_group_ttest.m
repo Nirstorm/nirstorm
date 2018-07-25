@@ -1,12 +1,10 @@
 function varargout = process_nst_compute_group_ttest( varargin )
 % process_nst_compute_group_ttest
-% Compute a ttest on the mean of the B according to a constrast vector using 
-% t = cBm / sqrt( c Cov(B)m c^T )  
-% with Bm = sum(B)/n and Cov(B)m =  sum(Cov(B))/n 
+% Compute a ttest on cB. 
+% Mean computiation do the following process : 
+% compute mean and covariance of the cB to calculate the following ttest :  
+% mean(cB)/ sqrt(var(cB)) with n_subject-1 degree of freedom
 %
-% B, cov(B) and the corresponding degree of freedom are estimated inprocess_nst_compute_glm.
-% 
-% 
 % @=============================================================================
 % This function is part of the Brainstorm software:
 % http://neuroimage.usc.edu/brainstorm
