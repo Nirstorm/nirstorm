@@ -64,7 +64,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.label_cols.Type    = 'text';
     sProcess.options.label_cols.Value    = '';
     
-    sProcess.options.last_event.Comment = 'Assume last event have the same duration than previus one';
+    sProcess.options.last_event.Comment = 'Assume that last event has the same duration as the previous one';
     sProcess.options.last_event.Type = 'checkbox';
     sProcess.options.last_event.Value = 1; 
     

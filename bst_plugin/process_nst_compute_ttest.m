@@ -199,7 +199,7 @@ function OutputFiles = Run(sProcess, sInputs)
     iStudy = sInputs.iStudy;
 
     % Saving the statmap
-    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [tmp, iSubject] = bst_get('Subject', sInputs(1).SubjectName);
     [sStudyIntra, iStudyIntra] = bst_get('AnalysisIntraStudy', iSubject);
     [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
@@ -228,15 +228,19 @@ function OutputFiles = Run(sProcess, sInputs)
 
 %         % Saving the cB Matrix
     sOutput_b = db_template('matrixmat');
-    sOutput_b.Value           = B.Value';
+    sOutput_b.F           = B.Value';
     sOutput_b.Comment     = [contrast ' B' ];
-    sOutput_b.Description = B.Description;  
-    sOutput_b.ChannelFlag =  B.ChannelFlag;   
-    sOutput_b.Type         = 'data';
+    sOutput_b.Description = contrast;  
+    sOutput_b.ChannelFlag =  B.ChannelFlag;
+    sOutput_b.Time         = [1];
+    sOutput_b.DataType     = 'recordings';
+    sOutput_b.nAvg         = 1;
+    sOutput_b.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
+
     sOutput_b = bst_history('add', sOutput_b, B.History, '');
     sOutput_b = bst_history('add', sOutput_b, 'Subject Stat ', comment);
     
-    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'cB_matrix');
+    OutputFiles{2} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'data_cbeta_matrix');
     save(OutputFiles{2}, '-struct', 'sOutput_b');
     db_add_data(iStudyIntra, OutputFiles{2}, sOutput_b);
     
