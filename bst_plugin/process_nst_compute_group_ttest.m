@@ -42,7 +42,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'matrix'};
+    sProcess.InputTypes  = {'data'};
     sProcess.OutputTypes = {'data','raw'};
     
     sProcess.nInputs     = 1;
@@ -83,7 +83,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
 	for i=1:numel(sInputs)
         s_B(i)=in_bst_data(sInputs(i).FileName);
-        B(:,i)=s_B(i).Value; % might need to transpose. Have to check how cB is registered 
+        B(:,i)=s_B(i).F; % might need to transpose. Have to check how cB is registered 
 	end     
 
     n_chan=size(B,1);
