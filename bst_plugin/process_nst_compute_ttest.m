@@ -199,7 +199,7 @@ function OutputFiles = Run(sProcess, sInputs)
     iStudy = sInputs.iStudy;
 
     % Saving the statmap
-    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [tmp, iSubject] = bst_get('Subject', sInputs(1).SubjectName);
     [sStudyIntra, iStudyIntra] = bst_get('AnalysisIntraStudy', iSubject);
     [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);

@@ -100,7 +100,7 @@ function OutputFiles = Run(sProcess, sInputs)
     % Change folder to inter study. 
     iStudy = sInputs(1).iStudy;
 
-    [tmp, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    [tmp, iSubject] = bst_get('Subject', sInputs(1).SubjectName);
     [sStudyIntra, iStudyIntra] = bst_get('AnalysisInterStudy', iSubject);
     
     [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
