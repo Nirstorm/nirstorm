@@ -81,7 +81,7 @@ function OutputFiles = Run(sProcess, sInputs)
     % parse input : 
     for i=1:length(sInputs) 
         name= cell2mat(strsplit(sInputs(i).Comment,' '));
-        if strcmp(name(1:8), 'GLM_covB')
+        if ~isempty( strfind(name, 'GLM_covB'))
             covB=in_bst_data(sInputs(i).FileName);
             
             name= strsplit(name ,'=');
@@ -89,7 +89,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
             df=str2num(cell2mat(name(1)));
             check_covb=1;
-        elseif strcmp(name(1:15), 'GLM_beta_matrix')
+        elseif ~isempty( strfind(name, 'GLM_beta_matrix'))
             B=in_bst_data(sInputs(i).FileName);
             check_beta=1;
         end
