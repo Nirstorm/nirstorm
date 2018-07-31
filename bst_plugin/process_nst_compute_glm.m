@@ -186,12 +186,13 @@ function OutputFiles = Run(sProcess, sInput)
          [B,covB,dfe]=ols_fit( Y, X );
     elseif( fitting_choice == 2 ) % Use AR-IRLS 
         method_name='AR-IRLS_fit';
-        [B,covB,dfe]=ar_irls_fit( Y, X, 4*12.5 ); 
+        [B,covB,dfe]=ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
     else
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
     
-    residual=Y - X*B ;     
+    residual=Y - X*B ;
+    
    
     %% Save results
     
@@ -201,7 +202,10 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
+
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
     save(OutputFiles{end}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
@@ -231,7 +235,8 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = covB;
     Out_DataMat.Comment     = [ 'GLM_covB_' method_name '_df=' int2str(dfe) ];
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
     save(OutputFiles{end}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);    
@@ -246,7 +251,9 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
     Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
     Out_DataMat.nAvg         = 1; 
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
     Out_DataMat.FileName = file_short(OutputFiles{end});
     bst_save(OutputFiles{end}, Out_DataMat, 'v7');
