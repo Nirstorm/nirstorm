@@ -179,22 +179,13 @@ function OutputFiles = Run(sProcess, sInput)
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)  
-         B=ols_fit( Y, X );
+         [B,covB,dfe]=ols_fit( Y, X );
     else
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
     
-        
-    x_hat=X*B;
-    residual=Y - x_hat ;     
-    covE=cov(residual);
-    
-    for i=1:size(residual,2)     
-        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
-    end
-    dfe = size(Y,1) - rank(X);
-
-    
+    residual=Y - X*B ;     
+   
     %% Save results
     
     % Saving the B Matrix
@@ -256,8 +247,17 @@ function OutputFiles = Run(sProcess, sInput)
 end
 
 
-function B=ols_fit(y,X)
+function [B,covB,dfe]=ols_fit(y,X)
     B= pinv(X'*X)* X'*y; % or B=X\y; 
+    
+    residual=y - X*B ;     
+    covE=cov(residual);
+    
+    for i=1:size(residual,2)     
+        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
+    end
+    dfe = size(y,1) - rank(X);
+    
 end
 
 
