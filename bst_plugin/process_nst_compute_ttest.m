@@ -80,16 +80,16 @@ function OutputFiles = Run(sProcess, sInputs)
     
     % parse input : 
     for i=1:length(sInputs) 
-        name= strsplit(sInputs(i).Comment,' ');
-        if( strcmp(name(1), 'covB') == 1)
+        name= cell2mat(strsplit(sInputs(i).Comment,' '));
+        if ~isempty( strfind(name, 'GLM_covB'))
             covB=in_bst_data(sInputs(i).FileName);
             
-            name= strsplit(cell2mat(name(end)),'=');
+            name= strsplit(name ,'=');
             name= strsplit(cell2mat(name(end)),'_');
 
             df=str2num(cell2mat(name(1)));
             check_covb=1;
-        elseif ( strcmp(name(1), 'B') == 1)
+        elseif ~isempty( strfind(name, 'GLM_beta_matrix'))
             B=in_bst_data(sInputs(i).FileName);
             check_beta=1;
         end
