@@ -74,7 +74,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.confirm_importation.Hidden  = 1;
     
     
-    sProcess.options.preview.Comment =  {'process_nst_import_evt_events(''preview_importation'',iProcess);' , '', 'Preview importation'} ;
+    sProcess.options.preview.Comment =  {'process_nst_import_evt_events(''preview_importation'',iProcess,sfreq);' , '', 'Preview importation'} ;
     sProcess.options.preview.Type = 'button';
     sProcess.options.display.Value   = [];
 end
@@ -356,7 +356,7 @@ function y=vect_b2d(x)
     end
 end
 
-function preview_importation(iProcess)
+function preview_importation(iProcess,sfreq)
         % Get current process options
     global GlobalData;
     sProcess = GlobalData.Processes.Current(iProcess);
@@ -385,10 +385,9 @@ function preview_importation(iProcess)
             
         message = ['<html> The following events have been detected : <br />' ];
         for ievt=length(newEvents):-1:1
-            duration_info = sprintf(', avg duration=%1.3f sec.', mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/12.5);
-            tmp= sprintf(' - %s : %d trials. 1st trial at %1.3f sec.%s <br />', ...
+            tmp= sprintf(' - %s : %d trials. 1st trial at %1.3f sec , avg duration=%1.3f sec. <br />', ...
                                  newEvents(ievt).label, length(newEvents(ievt).epochs), ...
-                                 newEvents(ievt).samples(1,1)/12.5, duration_info);
+                                 newEvents(ievt).samples(1,1)/12.5,  mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/sfreq);
             message=[message tmp];                 
         end
         message=[message '</html>'];
