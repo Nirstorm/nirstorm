@@ -70,10 +70,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.confirm_importation.Comment = 'Confirm importation';
     sProcess.options.confirm_importation.Type = 'checkbox';
-    sProcess.options.confirm_importation.Value = 1; 
+    sProcess.options.confirm_importation.Value = 0; 
+    sProcess.options.confirm_importation.Hidden  = 1;
     
     
-    sProcess.options.preview.Comment =  {'process_nst_import_evt_events(''preview_importation'',iProcess);' , '<BR>', 'Preview importation'} ;
+    sProcess.options.preview.Comment =  {'process_nst_import_evt_events(''preview_importation'',iProcess);' , '', 'Preview importation'} ;
     sProcess.options.preview.Type = 'button';
     sProcess.options.display.Value   = [];
 end
@@ -108,7 +109,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     event_table = load(event_file);
 
-    newEvents=compute(event_table,raw_events_name,sProcess.options.confirm_importation.Value,sProcess.options.confirm_importation.Value );
+    newEvents=compute(event_table,raw_events_name, sProcess.options.last_event.Value);
     output_file = import_events(sProcess, sInputs(1), newEvents);
 
      if ~isempty(output_file)
@@ -118,7 +119,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
 end
 
-function newEvents =compute(event_table,raw_events_name,confirm_import,import_last)
+function newEvents =compute(event_table,raw_events_name,import_last)
 
     % we create a map for each events events_index(evt) will cointain every
     % time marker related to evt 
@@ -131,9 +132,12 @@ function newEvents =compute(event_table,raw_events_name,confirm_import,import_la
     k=1;
     
     
+    event_table= [ event_table(:,1) vect_b2d(event_table(:,2:end)) ];
+    
     for i = 1:(n-1)
 
-        key = int2str(b2d(event_table(i,end:-1:2)));
+        key = int2str(event_table(i,2));
+        
         if( isKey (events_index,key) ) 
             events_index(key)= [  events_index(key) ;  event_table(i,1)  event_table(i+1,1)  ];
         else
@@ -155,11 +159,10 @@ function newEvents =compute(event_table,raw_events_name,confirm_import,import_la
     end
     
     % importing the last event
-
     if import_last
-        key = int2str(b2d(event_table(i,end:-1:2)));
+        key = int2str(event_table(n,2));
 
-        if( isKey (events_index,key) ) 
+        if( isKey(events_index,key) ) 
             evt=events_index(key);
             evt_duration=evt(end,2) - evt(end,1);
             events_index(key)= [  events_index(key) ;  event_table(end,1)  event_table(end,1)+evt_duration];
@@ -175,9 +178,10 @@ function newEvents =compute(event_table,raw_events_name,confirm_import,import_la
        % Two or more events have the same name;
        events_index=containers.Map('KeyType','char','ValueType','any');
        for i = 1:(n-2)
-            key = int2str(b2d(event_table(i,end:-1:2)));
+            key = int2str(event_table(i,2)); %(i,end:-1:2)
             key_name=events_names( key);
-            next_key = events_names( int2str(b2d( event_table(i+1,end:-1:2) )));
+            next_key = events_names( int2str( event_table(i+1,2)));
+            
             %if two consecutive events have the same name, we can merge them
             if(  strcmp(key_name, next_key) )
                 event_table(i+1,1)=event_table(i,1);
@@ -188,10 +192,10 @@ function newEvents =compute(event_table,raw_events_name,confirm_import,import_la
                     events_index(key)=[ event_table(i,1)  event_table(i+1,1) ];
                 end
             end
-        end
-       i=n-1;
+       end
+        
        % adding the last event
-       
+       i=n-1;
        if( isKey (events_index,key) ) 
            events_index(key)=[  events_index(key) ;  event_table(i,1) event_table(i+1,1)  ];
        else
@@ -213,20 +217,7 @@ function newEvents =compute(event_table,raw_events_name,confirm_import,import_la
         
     end
     
-    if confirm_import
-        message = {'The following events will be imported:'};
-        for ievt=1:length(newEvents)
-            duration_info = sprintf(', avg duration=%1.3f sec.', mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/12.5);
-            message{end+1} = sprintf(' - %s : %d trials. 1st trial at %1.3f sec.%s', ...
-                                 newEvents(ievt).label, length(newEvents(ievt).epochs), ...
-                                 newEvents(ievt).samples(1,1)/12.5, duration_info);
-        end
-    
-        [res, isCancel] = java_dialog('question', strjoin(message, ['' 10]));
-        if strcmp(res, 'No') || isCancel==1
-            return;
-        end
-    end
+
 end
 
 function OutputFile = import_events(sProcess, sInput, newEvents)
@@ -310,12 +301,13 @@ if ~isempty(newEvents)
     bst_save(file_fullpath(sInput.FileName), DataMat, 'v6', 1);
     % Report number of detected events
     bst_report('Info', sProcess, sInput, ...
-        sprintf('Added to file: %d events in %d different categories', ...
-        size([newEvents.epochs],2), length(newEvents)));
+    sprintf('Added to file: %d events in %d different categories', ...
+    size([newEvents.epochs],2), length(newEvents)));
     OutputFile = sInput.FileName;
 else
     bst_report('Error', sProcess, sInput, 'No events read from file.');
 end
+
 end
 
 
@@ -356,9 +348,15 @@ y = sum(x.*z);
 
 end
 
-function preview_importation(iProcess)
-    disp('a');
+function y=vect_b2d(x)
+    y=zeros(size(x,1),1);
     
+    for i=1:size(x,1)
+        y(i)=b2d(x(i,:));
+    end
+end
+
+function preview_importation(iProcess)
         % Get current process options
     global GlobalData;
     sProcess = GlobalData.Processes.Current(iProcess);
@@ -366,6 +364,42 @@ function preview_importation(iProcess)
      file=sProcess.options.evtfile.Value;
      if ~isempty(file{1}) && exist(  file{1} ) 
         event_table = load(file{1});
-        compute(event_table,[],1,1);
-     end  
-end
+        newEvents=compute(event_table,[],1);
+  
+        % Get existing specification figure
+        hFig = findobj(0, 'Type', 'Figure', 'Tag', 'EventImport');
+        % If the figure doesn't exist yet: create it
+        if isempty(hFig)
+        	hFig = figure(...
+                'MenuBar',     'none', ...
+                 'Toolbar',     'none', ...
+                'NumberTitle', 'off', ...
+                'Name',        sprintf('Preview of events importation'), ...
+                'Tag',         'EventImport', ...
+                'Units',       'Pixels');
+        
+        else
+            clf(hFig);
+            figure(hFig);
+        end
+            
+        message = ['<html> The following events have been detected : <br />' ];
+        for ievt=length(newEvents):-1:1
+            duration_info = sprintf(', avg duration=%1.3f sec.', mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/12.5);
+            tmp= sprintf(' - %s : %d trials. 1st trial at %1.3f sec.%s <br />', ...
+                                 newEvents(ievt).label, length(newEvents(ievt).epochs), ...
+                                 newEvents(ievt).samples(1,1)/12.5, duration_info);
+            message=[message tmp];                 
+        end
+        message=[message '</html>'];
+        
+        
+        jLabel = javaObjectEDT('javax.swing.JLabel',message);
+        [hcomponent,hcontainer] = javacomponent(jLabel,[0,0,600,80],hFig);
+
+
+
+
+    end
+        
+end  
