@@ -185,6 +185,12 @@ function OutputFiles = Run(sProcess, sInput)
          method_name='OLS_fit';
          [B,covB,dfe]=ols_fit( Y, X );
     elseif( fitting_choice == 2 ) % Use AR-IRLS 
+        analyzIR_url='https://bitbucket.org/huppertt/nirs-toolbox/';
+        
+        if ~exist('nirs.core.ChannelStats','class')
+        	bst_error(['AnalyzIR toolbox required. See ' analyzIR_url]);
+            return
+        end
         method_name='AR-IRLS_fit';
         [B,covB,dfe]=ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
     else
@@ -275,7 +281,7 @@ function [B,covB,dfe]=ols_fit(y,X)
 end
 
 function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
-	stat=ar_irls(y,X, pmax );
+	stat=nirs.math.ar_irls(y,X, pmax );
     
     B=stat.beta;
     
