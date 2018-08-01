@@ -382,12 +382,12 @@ function preview_importation(iProcess,sfreq)
             clf(hFig);
             figure(hFig);
         end
-            
-        message = ['<html> The following events have been detected : <br />' ];
+        [path name ext]=fileparts(file{1});    
+        message = ['<html> ' num2str( numel(newEvents))  ' events have been detected in  : ' name  ext  '<br />' ];
         for ievt=length(newEvents):-1:1
             tmp= sprintf(' - %s : %d trials. 1st trial at %1.3f sec , avg duration=%1.3f sec. <br />', ...
                                  newEvents(ievt).label, length(newEvents(ievt).epochs), ...
-                                 newEvents(ievt).samples(1,1)/12.5,  mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/sfreq);
+                                 newEvents(ievt).samples(1,1)/sfreq,  mean((newEvents(ievt).samples(2, :) - newEvents(ievt).samples(1, :)))/sfreq);
             message=[message tmp];                 
         end
         message=[message '</html>'];
