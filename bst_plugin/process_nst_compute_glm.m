@@ -1,8 +1,9 @@
 function varargout = process_nst_compute_glm( varargin )
 % process_compute_glm: compute the glm : find B such as Y = XB +e with X
-% the design matrix of the experimentation. 
-% This process uses OLS to fit the data.
-%
+% 
+% OlS_fit use an ordinary least square algorithm to find B : B= ( X^{T}X)^{-1} X^{T} Y 
+% AR-IRLS : Details about AR-IRLS algorithm can be found here :
+%   http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3756568/ 
 % 
 % 
 % Further update : use more sophisticated method to fit the B
@@ -76,7 +77,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.fitting.Comment = 'Fitting method';
     sProcess.options.fitting.Type    = 'combobox';
-    sProcess.options.fitting.Value   = {1, {'OLS'}};
+    sProcess.options.fitting.Value   = {1, {'OLS','AR-IRLS(AnalizIR toolbox)' }};
 
 end
 
@@ -88,6 +89,8 @@ function Comment = FormatComment(sProcess)
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 )
         Comment=[ Comment ' OLS fit'];
+    elseif( fitting_choice == 2)
+        Comment=[ Comment ' AR-IRLS fit'];
     end    
 end
 
@@ -178,32 +181,37 @@ function OutputFiles = Run(sProcess, sInput)
     Y = DataMat.F(nirs_ichans,:)';
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
-    if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)  
-         B=ols_fit( Y, X );
+    if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
+         method_name='OLS_fit';
+         [B,covB,dfe]=ols_fit( Y, X );
+    elseif( fitting_choice == 2 ) % Use AR-IRLS 
+        analyzIR_url='https://bitbucket.org/huppertt/nirs-toolbox/';
+        
+        if ~exist('nirs.core.ChannelStats','class')
+        	bst_error(['AnalyzIR toolbox required. See ' analyzIR_url]);
+            return
+        end
+        method_name='AR-IRLS_fit';
+        [B,covB,dfe]=ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
     else
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
     
-        
-    x_hat=X*B;
-    residual=Y - x_hat ;     
-    covE=cov(residual);
+    residual=Y - X*B ;
     
-    for i=1:size(residual,2)     
-        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
-    end
-    dfe = size(Y,1) - rank(X);
-
-    
+   
     %% Save results
     
     % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = B';
-    Out_DataMat.Comment     = 'B Matrix';
+    Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
+
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
     save(OutputFiles{end}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
@@ -214,7 +222,7 @@ function OutputFiles = Run(sProcess, sInput)
         data_out(nirs_ichans,:) = B(i_reg_name,:);
         sDataOut = db_template('data');
         sDataOut.F            = data_out;
-        sDataOut.Comment      = ['GLM_beta_' names{i_reg_name}];
+        sDataOut.Comment      = ['GLM_beta_' method_name '_' names{i_reg_name}];
         sDataOut.ChannelFlag  = DataMat.ChannelFlag;
         sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
@@ -232,8 +240,9 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving the covB Matrix.
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = covB;
-    Out_DataMat.Comment     = [ 'covB Matrix, df=' int2str(dfe) ];
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    Out_DataMat.Comment     = [ 'GLM_covB_' method_name '_df=' int2str(dfe) ];
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
     save(OutputFiles{end}, '-struct', 'Out_DataMat');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);    
@@ -241,14 +250,16 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving the residual matrix.
     Out_DataMat = db_template('data');
     Out_DataMat.F           = residual' ;
-    Out_DataMat.Comment     = 'Residual Matrix';
+    Out_DataMat.Comment     = ['GLM_' method_name '_Residual Matrix'];
     Out_DataMat.DataType     = 'recordings'; 
     Out_DataMat.Time        =  DataMat.Time;
     Out_DataMat.Events      =  DataMat.Events;
     Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
     Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
-    Out_DataMat.nAvg         = 1;
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM computation', FormatComment(sProcess));
+    Out_DataMat.nAvg         = 1; 
+    
+    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
     Out_DataMat.FileName = file_short(OutputFiles{end});
     bst_save(OutputFiles{end}, Out_DataMat, 'v7');
@@ -256,10 +267,30 @@ function OutputFiles = Run(sProcess, sInput)
 end
 
 
-function B=ols_fit(y,X)
+function [B,covB,dfe]=ols_fit(y,X)
     B= pinv(X'*X)* X'*y; % or B=X\y; 
+    
+    residual=y - X*B ;     
+    covE=cov(residual);
+    
+    for i=1:size(residual,2)     
+        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
+    end
+    dfe = size(y,1) - rank(X);
+    
 end
 
+function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
+	stat=nirs.math.ar_irls(y,X, pmax );
+    
+    B=stat.beta;
+    
+    covB=zeros( size(stat.covb,1), size(stat.covb,2),size(stat.covb,3));
+    for i=1:size(stat.covb,3)
+       covB(:,:,i)= stat.covb(:,:,i,i);
+    end    
+    dfe=stat.dfe;
+end
 
 function [X,names]=getX(time,events,basis_choice)
 	n_event=length(events);
@@ -325,7 +356,7 @@ function signal= Gamma(t,peakTime,peakDisp)
     
     %signal=zeros( size(t_vect) );  
     if nargin <  3, peakDisp = 1; end
-    if nargin <  2, peakTime = 6; end
+    if nargin <  2, peakTime = 4; end
 
     signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime);
     signal = signal / sum(signal);
