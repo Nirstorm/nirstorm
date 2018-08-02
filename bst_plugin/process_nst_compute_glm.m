@@ -156,7 +156,7 @@ function OutputFiles = Run(sProcess, sInput)
                              'doesn''t match design matrix dimension']);
                 return;
             end
-            if ~(size(C,2) == size(name,1))
+            if ~(size(C,2) == length(name))
                 bst_error([external_function_names ' have to return one name for each regressor']);    
                 return;
             end
