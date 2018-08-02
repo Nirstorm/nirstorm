@@ -1,3 +1,5 @@
 process_nst_compute_glm.m
 process_nst_compute_ttest.m
 process_nst_compute_group_ttest.m
+nst_ols_fit.m
+nst_ar_irls_fit.m
