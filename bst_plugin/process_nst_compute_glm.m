@@ -67,6 +67,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trend.Type    = 'checkbox';
     sProcess.options.trend.Value   =  1;
     
+    sProcess.options.external.Comment = 'Call external function to define external regressor';
+    sProcess.options.external.Type    = 'text';
+    sProcess.options.external.Value   =  '';    
+    
+    
     sProcess.options.save.Comment = 'Save the design matrix';
     sProcess.options.save.Type    = 'checkbox';
     sProcess.options.save.Value   =  1;
@@ -141,6 +146,28 @@ function OutputFiles = Run(sProcess, sInput)
         names=[names name];
     end
     
+    if ~strcmp(sProcess.options.external.Value,'')
+        external_function_names = sProcess.options.external.Value;
+       try
+           [C,name]=feval( str2func(external_function_names),sProcess, sInput);
+
+            if ~(size(C,1) == size(X,1))
+                bst_error([ 'Dimension of the external regressor returned by ' external_function_names ...
+                             'doesn''t match design matrix dimension']);
+                return;
+            end
+            if ~(size(C,2) == size(name,1))
+                bst_error([external_function_names ' have to return one name for each regressor']);    
+                return;
+            end
+            X=[X C];
+            names=[names name];   
+       catch
+           bst_error([ 'Error during the call of ' external_function_names ]);  
+
+       end             
+    end   
+    
     
     % Check the rank of the matrix
     n_regressor=size(X,2);
@@ -183,7 +210,7 @@ function OutputFiles = Run(sProcess, sInput)
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
          method_name='OLS_fit';
-         [B,covB,dfe]=ols_fit( Y, X );
+         [B,covB,dfe]=nst_ols_fit( Y, X );
     elseif( fitting_choice == 2 ) % Use AR-IRLS 
         analyzIR_url='https://bitbucket.org/huppertt/nirs-toolbox/';
         
@@ -192,7 +219,7 @@ function OutputFiles = Run(sProcess, sInput)
             return
         end
         method_name='AR-IRLS_fit';
-        [B,covB,dfe]=ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
+        [B,covB,dfe]=nst_ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
     else
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
@@ -266,31 +293,6 @@ function OutputFiles = Run(sProcess, sInput)
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
 end
 
-
-function [B,covB,dfe]=ols_fit(y,X)
-    B= pinv(X'*X)* X'*y; % or B=X\y; 
-    
-    residual=y - X*B ;     
-    covE=cov(residual);
-    
-    for i=1:size(residual,2)     
-        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
-    end
-    dfe = size(y,1) - rank(X);
-    
-end
-
-function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
-	stat=nirs.math.ar_irls(y,X, pmax );
-    
-    B=stat.beta;
-    
-    covB=zeros( size(stat.covb,1), size(stat.covb,2),size(stat.covb,3));
-    for i=1:size(stat.covb,3)
-       covB(:,:,i)= stat.covb(:,:,i,i);
-    end    
-    dfe=stat.dfe;
-end
 
 function [X,names]=getX(time,events,basis_choice)
 	n_event=length(events);
