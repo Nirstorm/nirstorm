@@ -145,29 +145,29 @@ function OutputFiles = Run(sProcess, sInput)
         X=[X C];
         names=[names name];
     end
-    
-    if ~strcmp(sProcess.options.external.Value,'')
-        external_function_names = sProcess.options.external.Value;
-       try
-           [C,name]=feval( str2func(external_function_names),sProcess, sInput);
+    if exist(sProcess.options.external.Value)
+        if ~strcmp(sProcess.options.external.Value,'')
+            external_function_names = sProcess.options.external.Value;
+           try
+               [C,name]=feval( str2func(external_function_names),sProcess, sInput);
 
-            if ~(size(C,1) == size(X,1))
-                bst_error([ 'Dimension of the external regressor returned by ' external_function_names ...
-                             'doesn''t match design matrix dimension']);
-                return;
-            end
-            if ~(size(C,2) == length(name))
-                bst_error([external_function_names ' have to return one name for each regressor']);    
-                return;
-            end
-            X=[X C];
-            names=[names name];   
-       catch
-           bst_error([ 'Error during the call of ' external_function_names ]);  
+                if ~(size(C,1) == size(X,1))
+                    bst_error([ 'Dimension of the external regressor returned by ' external_function_names ...
+                                 'doesn''t match design matrix dimension']);
+                    return;
+                end
+                if ~(size(C,2) == length(name))
+                    bst_error([external_function_names ' have to return one name for each regressor']);    
+                    return;
+                end
+                X=[X C];
+                names=[names name];   
+           catch
+               bst_error([ 'Error during the call of ' external_function_names ]);  
 
-       end             
-    end   
-    
+           end             
+        end   
+    end
     
     % Check the rank of the matrix
     n_regressor=size(X,2);
