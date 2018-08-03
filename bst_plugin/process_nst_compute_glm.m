@@ -145,28 +145,46 @@ function OutputFiles = Run(sProcess, sInput)
         X=[X C];
         names=[names name];
     end
-    if exist(sProcess.options.external.Value)
-        if ~strcmp(sProcess.options.external.Value,'')
+    if isfield(sProcess.options,'external') && ~strcmp(sProcess.options.external.Value,'')
+        if strcmp(sProcess.options.external.Value(1),'@') % this is a function 
             external_function_names = sProcess.options.external.Value;
            try
                [C,name]=feval( str2func(external_function_names),sProcess, sInput);
 
-                if ~(size(C,1) == size(X,1))
-                    bst_error([ 'Dimension of the external regressor returned by ' external_function_names ...
-                                 'doesn''t match design matrix dimension']);
-                    return;
-                end
-                if ~(size(C,2) == length(name))
-                    bst_error([external_function_names ' have to return one name for each regressor']);    
-                    return;
-                end
-                X=[X C];
-                names=[names name];   
+ 
            catch
                bst_error([ 'Error during the call of ' external_function_names ]);  
-
-           end             
-        end   
+               return;
+           end
+        else % this is a .mat  file
+            if exist(sProcess.options.external.Value,'file')
+                data=load(sProcess.options.external.Value);
+                if isfield(data,'C') &&  isfield(data,'name')
+                    C=data.C;
+                    name=data.name;
+                else
+                    bst_error([ 'Can''t find structues C and names in ' external_function_names ]);  
+                    return;
+                end
+                
+            else
+                bst_error([ external_function_names 'not found']);  
+                return;    
+            end
+            
+        end
+        
+        if ~(size(C,1) == size(X,1))
+            bst_error([ 'Dimension of the external regressor returned by ' external_function_names ...
+                         'doesn''t match design matrix dimension']);
+            return;
+        end
+        if ~(size(C,2) == length(name))
+            bst_error([external_function_names ' have to return one name for each regressor']);    
+            return;
+        end
+        X=[X C];
+        names=[names name];             
     end
     
     % Check the rank of the matrix
