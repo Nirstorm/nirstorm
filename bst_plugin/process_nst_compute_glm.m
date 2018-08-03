@@ -82,7 +82,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.fitting.Comment = 'Fitting method';
     sProcess.options.fitting.Type    = 'combobox';
-    sProcess.options.fitting.Value   = {1, {'OLS','AR-IRLS(AnalizIR toolbox)' }};
+    sProcess.options.fitting.Value   = {1, {'OLS','AR-IRLS(AnalyzIR toolbox)' }};
 
 end
 
@@ -192,11 +192,11 @@ function OutputFiles = Run(sProcess, sInput)
         Out_DataMat.Description = names'; % Names of the regressors 
         Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
         Out_DataMat.Time        =  DataMat.Time;
+        Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
         Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
+        
         OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
-        % Save on disk
-        save(OutputFiles{end}, '-struct', 'Out_DataMat');
-        % Register in database
+        bst_save(OutputFiles{end}, Out_DataMat, 'v6');
         db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
     end 
     
@@ -235,13 +235,13 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
-    
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
 
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
-    save(OutputFiles{end}, '-struct', 'Out_DataMat');
+    bst_save(OutputFiles{end}, Out_DataMat, 'v6');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+    
     
     % Saving B as maps
     for i_reg_name=1:length(names)
@@ -254,14 +254,11 @@ function OutputFiles = Run(sProcess, sInput)
         sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
-        sDataOut.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
+        sDataOut.DisplayUnits = 'U.A.'; %TODO: check scaling
         
-        sStudy = bst_get('Study', sInput.iStudy);
-        OutputFiles{end+1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
-        sDataOut.FileName = file_short(OutputFiles{end});
-        bst_save(OutputFiles{end}, sDataOut, 'v7');
-        % Register in database
-        db_add_data(sInput.iStudy, OutputFiles{end}, sDataOut);
+        OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), ['data_beta_' names{i_reg_name}]);
+        bst_save(OutputFiles{end}, sDataOut, 'v6');
+        db_add_data(iStudy, OutputFiles{end}, sDataOut);
     end
     
     % Saving the covB Matrix.
@@ -270,9 +267,12 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.Comment     = [ 'GLM_covB_' method_name '_df=' int2str(dfe) ];
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
+    
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
-    save(OutputFiles{end}, '-struct', 'Out_DataMat');
-    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);    
+    bst_save(OutputFiles{end}, Out_DataMat, 'v6');
+    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+        
+   
     
     % Saving the residual matrix.
     Out_DataMat = db_template('data');
@@ -287,10 +287,12 @@ function OutputFiles = Run(sProcess, sInput)
     
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
+    
     OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
-    Out_DataMat.FileName = file_short(OutputFiles{end});
-    bst_save(OutputFiles{end}, Out_DataMat, 'v7');
+    bst_save(OutputFiles{end}, Out_DataMat, 'v6');
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+    
+
 end
 
 
