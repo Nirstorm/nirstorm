@@ -145,7 +145,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
     % Create new condition because channel definition is different from original one
     cond_name = sInputs.Condition;
-    if strcmp(cond_name(1:4), '@raw')
+    if length(cond_name)>=4 && strcmp(cond_name(1:4), '@raw')
         cond_name = cond_name(5:end);
     end
     iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_Hb']);
