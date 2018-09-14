@@ -100,9 +100,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.fwhm.Value   = {0.5, 'mm', 2};
     
     
-%     sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
-%     sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
-%     sProcess.options.do_export_fluence_vol.Value   = 1;    
+      sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
+      sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
+      sProcess.options.do_export_fluence_vol.Hidden = 1;
+      sProcess.options.do_export_fluence_vol.Value   = 0;    
 %     SelectOptions = {...
 %         '', ...                            % Filename
 %         '', ...                            % FileFormat
@@ -119,6 +120,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
 %     sProcess.options.outputdir.Type    = 'filename';
 %     sProcess.options.outputdir.Value   = SelectOptions;
     
+      sProcess.options.outputdir.Comment = 'Output folder for fluence nifti volumes';
+      sProcess.options.outputdir.Type = 'text';
+      sProcess.options.outputdir.Hidden = 1;
+      sProcess.options.outputdir.Value = '';
+      
 end
 
 %% ===== FORMAT COMMENT =====
@@ -141,7 +147,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {};
 
-%do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
+do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
 do_smoothing = sProcess.options.do_smoothing.Value;
 
 do_grey_mask = sProcess.options.do_grey_mask.Value;
@@ -161,8 +167,6 @@ ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
 % Load head mesh
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
-sHead = in_tess_bst(head_mesh_fn);
 
 % Load anat mri
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
@@ -178,12 +182,11 @@ nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
-det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
-src_hvidx = knnsearch(head_vertices_mri, src_locs_mri);
-det_hvidx = knnsearch(head_vertices_mri, det_locs_mri);
+head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
+sHead = in_tess_bst(head_mesh_fn);
 %TODO: compute projection errors -> if too large, yell at user
+
+[src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
 
 %% Load fluence data from local .brainstorm folder (download if not available)
 % TODO: delay actual downloading after evaluating all download requests
@@ -198,8 +201,8 @@ anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
 mri_zeros = zeros(size(sMri.Cube));
 for ivertex=1:length([src_hvidx ; det_hvidx])
     for iwl = 1:nb_wavelengths
-all_fluences{ivertex}{iwl} = mri_zeros;
-all_fluences{ivertex}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
+        all_fluences{ivertex}{iwl} = mri_zeros;
+        all_fluences{ivertex}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
     end
 end
 if isempty(all_fluences)
@@ -213,43 +216,43 @@ det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sourc
 
 
 %% Export fluences
-% if do_export_fluences
-%     output_dir = sProcess.options.outputdir.Value{1};
-%     sVol = sMri;
-%     bst_progress('start', 'Export fluences','Exporting volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
-%     for isrc=1:nb_sources
-%         for iwl=1:nb_wavelengths
-%             wl = ChannelMat.Nirs.Wavelengths(iwl);
-%             sVol.Comment = [sprintf('Fluence for S%02d and %dnm, aligned to ', ...
-%                                     src_ids(isrc), wl) ...
-%                             'aligned to ' sMri.Comment];
-%             sVol.Cube = src_fluences{isrc}{iwl};
-%             sVol.Histogram = [];
-%             out_bfn = sprintf('fluence_S%02d_%dnm_%s.nii', src_ids(isrc), wl, ...
-%                               protect_fn_str(sMri.Comment));
-%             out_fn = fullfile(output_dir, out_bfn);
-%             out_mri_nii(sVol, out_fn, 'float32');
-%             bst_progress('inc',1);
-%         end
-%     end
-%     for idet=1:nb_dets
-%         for iwl=1:nb_wavelengths
-%             wl = ChannelMat.Nirs.Wavelengths(iwl);
-%             sVol.Comment = [sprintf('Fluence for D%02d and %dnm, aligned to ', ...
-%                                     det_ids(idet), wl) ...
-%                             'aligned to ' sMri.Comment];
-%             sVol.Cube = det_fluences{idet}{iwl};
-%             sVol.Histogram = [];
-%             out_bfn = sprintf('fluence_D%02d_%dnm_%s.nii', det_ids(idet), wl, ...
-%                               protect_fn_str(sMri.Comment));
-%             out_fn = fullfile(output_dir, out_bfn);
-%             out_mri_nii(sVol, out_fn, 'float32');
-%             bst_progress('inc',1);
-%         end
-%     end
-%     bst_progress('stop');
-% 
-% end
+if do_export_fluences
+    output_dir = sProcess.options.outputdir.Value;
+    assert(exist(output_dir,'dir')~=0);
+    sVol = sMri;
+    bst_progress('start', 'Export fluences','Exporting volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
+    for isrc=1:nb_sources
+        for iwl=1:nb_wavelengths
+            wl = ChannelMat.Nirs.Wavelengths(iwl);
+            sVol.Comment = [sprintf('Fluence for S%02d and %dnm, aligned to ', ...
+                                    src_ids(isrc), wl) ...
+                            'aligned to ' sMri.Comment];
+            sVol.Cube = src_fluences{isrc}{iwl};
+            sVol.Histogram = [];
+            out_bfn = sprintf('fluence_S%02d_%dnm_%s.nii', src_ids(isrc), wl, ...
+                              protect_fn_str(sMri.Comment));
+            out_fn = fullfile(output_dir, out_bfn);
+            out_mri_nii(sVol, out_fn, 'float32');
+            bst_progress('inc',1);
+        end
+    end
+    for idet=1:nb_dets
+        for iwl=1:nb_wavelengths
+            wl = ChannelMat.Nirs.Wavelengths(iwl);
+            sVol.Comment = [sprintf('Fluence for D%02d and %dnm, aligned to ', ...
+                                    det_ids(idet), wl) ...
+                            'aligned to ' sMri.Comment];
+            sVol.Cube = det_fluences{idet}{iwl};
+            sVol.Histogram = [];
+            out_bfn = sprintf('fluence_D%02d_%dnm_%s.nii', det_ids(idet), wl, ...
+                              protect_fn_str(sMri.Comment));
+            out_fn = fullfile(output_dir, out_bfn);
+            out_mri_nii(sVol, out_fn, 'float32');
+            bst_progress('inc',1);
+        end
+    end
+    bst_progress('stop');
+end
 
 %% Compute sensitivity matrix (volume) and interpolate on cortical surface
 %% using Voronoi partitionning
@@ -384,6 +387,18 @@ OutputFiles{1} = sInputs.FileName;
 
 % Save database
 db_save();
+end
+
+
+function [src_head_vertex_ids det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
+
+head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
+src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
+det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
+src_head_vertex_ids = knnsearch(head_vertices_mri, src_locs_mri);
+det_head_vertex_ids = knnsearch(head_vertices_mri, det_locs_mri);
+
+
 end
 
 function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir)
