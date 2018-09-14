@@ -21,6 +21,8 @@ head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000; % m t
 all_coords = [xx(:) yy(:) zz(:)] .* repmat(sMri.Voxsize, dimx*dimy*dimz, 1);
 fluence_vol = zeros(dimy, dimx, dimz); %TODO: weird order ... to check
 
+
+
 % Save MRI to nifti:
 % sVol = sMri;
 % out_fn =  fullfile(fluence_dir, 't1.nii');
@@ -35,16 +37,23 @@ for ivertex=1:length(head_scout_vertices)
         cp = rv - all_coords;
         fluence_flat = max(0, 1 - sqrt(sum(cp .* cp, 2)) / dcut);
         fluence_vol(:) = fluence_flat;
-        to_save = permute(fluence_vol, [2 3 1]);
-        if 0
-            vertex_vox = round(vertex ./ sMri.Voxsize);
+        to_save = permute(fluence_vol, [2 1 3]);
+        
+        [vmax, imax] = max(to_save(:));
+        [vvox_i, vvox_j, vvox_k] = ind2sub([dimx, dimy, dimz], imax);
+        vertex_vox = round(vertex ./ sMri.Voxsize);
+        assert(all([vvox_i, vvox_j, vvox_k] == vertex_vox));
+
+        if 0 
             figure(); 
             subplot(2,2,1); hold on; 
-            imagesc(squeeze(sMri.Cube(:,:,vertex_vox(3)))); 
-            ii = imagesc(squeeze(fluence_vol(:,:,vertex_vox(3))));
-            set(ii, 'AlphaData', 0.75);
-            subplot(2,2,2); imagesc(squeeze(fluence_vol(:,vertex_vox(1),:)));
-            subplot(2,2,3); imagesc(squeeze(fluence_vol(vertex_vox(2),:,:)));
+            imagesc(double(squeeze(sMri.Cube(:,:,vertex_vox(3)))) .* (squeeze(to_save(:,:,vertex_vox(3)))*10+1)); 
+            
+            subplot(2,2,2); imagesc(double(squeeze(sMri.Cube(:,vertex_vox(2),:))) .* (squeeze(to_save(:,vertex_vox(2),:))*10+1));
+            subplot(2,2,3); imagesc(double(squeeze(sMri.Cube(vertex_vox(1),:,:))) .* (squeeze(to_save(vertex_vox(1),:,:))*10+1));
+            colormap gray;
+            
+            sVol = sMri;
             sVol.Comment = '';
             sVol.Cube = to_save;
             sVol.Histogram = [];
