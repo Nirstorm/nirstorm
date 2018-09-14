@@ -73,50 +73,52 @@ if ndims(head_model.Gain) ~= 3
    return;
 end
 
+sDataIn = in_bst_data(sInputs(1).FileName);
+
+% Separate NIRS channels from others (NIRS_AUX etc.)
+[fnirs, fchannel_def, nirs_other, channel_def_other] = ...
+    process_nst_mbll('filter_data_by_channel_type', sDataIn, ChanneMat, 'NIRS');
+    
 [pair_names, pair_loc, pair_ichans, pair_sd_indexes, ...
           src_coords, src_ids, src_ichans, ...
-          det_coords, det_ids, det_ichans] = explode_channels(ChanneMat);
+          det_coords, det_ids, det_ichans] = process_nst_import_head_model('explode_channels', fchannel_def);
 nb_sources = size(src_coords, 1);
 nb_dets = size(det_coords, 1);
 sensitivity_surf = head_model.Gain;
 nb_nodes = size(sensitivity_surf, 3);
-pp
+nb_pairs = size(pair_ichans, 1);
+
+HB = 0;
+WL = 1;
+if isfield(ChanneMat.Nirs, 'Wavelengths')
+    measure_type = WL;
+else
+    measure_type = HB;    
+end
 % Save sensitivities
-for iwl=1:size(sensitivity_surf, 2)
+for imeasure=1:size(sensitivity_surf, 2)
+    mixing_mat = squeeze(sensitivity_surf(:, imeasure, :));
+    nz = all(mixing_mat ~= 0, 2);
+    mixing_mat(nz,:) = mixing_mat(nz,:) ./ repmat(sum(mixing_mat(nz,:), 2), 1, nb_pairs);
+    projected_fnirs = mixing_mat * sDataIn.F(pair_ichans(:,imeasure), :);
+    % TODO: comment name including measure tag
     
-    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum), [1,2]), [0 1], ...
-                                         head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
+    if measure_type == WL
+        comment_measure = sprintf('wl%d', ChanneMat.Nirs.Wavelengths(imeasure));
+    else
+        comment_measure = ChanneMat.Nirs.Hb{imeasure};
+    end
+    
+    % label = [sDataIn.Comment '_' comment_measure '_projected'];
+    label = [comment_measure '_projected'];
+    [sStudy, ResultFile] = add_surf_data(projected_fnirs, sDataIn.Time, ...
+                                         head_model, label , ...
                                          sInputs.iStudy, sStudy,  ...
-                                        'sensitivity imported from MCXlab');
+                                        'Projected fNIRS signals');
     
     OutputFiles{end+1} = ResultFile;
 
 end
-
-if nb_dets < 100
-    time = 1:(nb_sources*100 + nb_dets);
-    for iwl=1:size(sensitivity_surf, 2)
-        %sens_tmp = zeros(nb_nodes, length(time)) - 1;
-        sens_tmp = zeros(nb_nodes, length(time));
-        for ipair=1:size(sensitivity_surf, 1)
-            [src_id, det_id] = split_pair_name(pair_names{ipair});
-            sens_tmp(:, det_id + src_id*100) = squeeze(sensitivity_surf(ipair, iwl, :)); %source id will be minutes, det_it will be seconds
-        end
-        [sStudy, ResultFile] = add_surf_data(sens_tmp, time, ...
-            head_model, ['Sensitivities - WL' num2str(iwl)], ...
-            sInputs.iStudy, sStudy, 'Sensitivity import from template'); %TODO better denomitation
-        OutputFiles{end+1} = ResultFile;
-    end
-end
-
-% for iwl=1:size(sensitivity_surf, 2)
-%     for ipair=1:size(sensitivity_surf, 1)
-%         [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf(ipair, iwl, :)), [1,2]), [0 1], ...
-%                                              newHeadModel, ['Sensitivity - WL' num2str(iwl) ' ' pair_names{ipair}], ...
-%                                              iStudy, sStudy, 'pair sensitivity imported from MCXlab');
-%         OutputFiles{end+1} = ResultFile;
-%     end
-% end
 
 end
 
