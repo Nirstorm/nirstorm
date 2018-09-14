@@ -54,6 +54,11 @@ OutputFiles = {};
 % Save the new head model
 sStudy = bst_get('Study', sInputs.iStudy);
 
+if isempty(sStudy.iHeadModel)
+    bst_error('No head model found. Consider process "Compute head model from fluence"');
+    return;
+end
+
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
 
