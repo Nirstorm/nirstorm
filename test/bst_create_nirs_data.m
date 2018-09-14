@@ -137,13 +137,14 @@ end
 
 % Save channel definition
 [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-db_set_channel(iChannelStudy, ChannelMat, 0, 0);
+channel_file = db_set_channel(iChannelStudy, ChannelMat, 0, 0);
 
 % Save time-series data
 sDataOut = db_template('data');
 sDataOut.F            = signals;
 sDataOut.Comment      = 'data';
 sDataOut.ChannelFlag  = ones(nb_channels, 1);
+sDataOut.ChannelFile = channel_file;
 sDataOut.Time         = time;
 sDataOut.DataType     = 'recordings';
 sDataOut.nAvg         = 1;
