@@ -1,3 +1,5 @@
+![splash illustration](https://raw.githubusercontent.com/wiki/Nirstorm/nirstorm/images/splash_illustration.png)
+
 # nirstorm
 Brainstorm plugin for fNIRS data analysis. 
 
