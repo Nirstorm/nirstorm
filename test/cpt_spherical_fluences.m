@@ -46,12 +46,15 @@ for ivertex=1:length(head_scout_vertices)
 
         if 0 
             figure(); 
+            
             subplot(2,2,1); hold on; 
             imagesc(double(squeeze(sMri.Cube(:,:,vertex_vox(3)))) .* (squeeze(to_save(:,:,vertex_vox(3)))*10+1)); 
             
             subplot(2,2,2); imagesc(double(squeeze(sMri.Cube(:,vertex_vox(2),:))) .* (squeeze(to_save(:,vertex_vox(2),:))*10+1));
             subplot(2,2,3); imagesc(double(squeeze(sMri.Cube(vertex_vox(1),:,:))) .* (squeeze(to_save(vertex_vox(1),:,:))*10+1));
             colormap gray;
+            
+            title(sprintf('vertex %d', vertex_id));
             
             sVol = sMri;
             sVol.Comment = '';
@@ -64,12 +67,12 @@ for ivertex=1:length(head_scout_vertices)
         fluence_flat_sparse_vol = sparse(double(to_save(:)));
         reference_voxel_index = round(vertex ./ sMri.Voxsize);
         save(fluence_wl1_fn, 'fluence_flat_sparse_vol','reference_voxel_index');
-        for iwl=2:length(wavelengths)
-            wl = wavelengths(iwl);
-            fluence_fn = fullfile(fluence_dir, process_nst_import_head_model('get_fluence_fn', vertex_id, wl));
-            if ~exist(fluence_fn, 'file')
-                copyfile(fluence_wl1_fn, fluence_fn);
-            end
+    end
+    for iwl=2:length(wavelengths)
+        wl = wavelengths(iwl);
+        fluence_fn = fullfile(fluence_dir, process_nst_import_head_model('get_fluence_fn', vertex_id, wl));
+        if ~exist(fluence_fn, 'file')
+            copyfile(fluence_wl1_fn, fluence_fn);
         end
     end
 end
