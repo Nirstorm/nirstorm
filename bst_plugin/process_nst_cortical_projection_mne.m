@@ -1,0 +1,451 @@
+function varargout = process_nst_cortical_projection( varargin )
+
+% @=============================================================================
+% This software is part of the Brainstorm software:
+% http://neuroimage.usc.edu/brainstorm
+%
+% Copyright (c)2000-2013 Brainstorm by the University of Southern California
+% This software is distributed under the terms of the GNU General Public License
+% as published by the Free Software Foundation. Further details on the GPL
+% license can be found at http://www.gnu.org/copyleft/gpl.html.
+%
+% FOR RESEARCH PURPOSES ONLY. THE SOFTWARE IS PROVIDED "AS IS," AND THE
+% UNIVERSITY OF SOUTHERN CALIFORNIA AND ITS COLLABORATORS DO NOT MAKE ANY
+% WARRANTY, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+% MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, NOR DO THEY ASSUME ANY
+% LIABILITY OR RESPONSIBILITY FOR THE USE OF THIS SOFTWARE.
+%
+% For more information type "brainstorm license" at command prompt.
+% =============================================================================@
+%
+% Authors: Thomas Vincent, Alexis Machado (2018)
+
+eval(macro_method);
+end
+
+function sProcess = GetDescription() %#ok<DEFNU>
+% Description the process
+sProcess.Comment     = 'Cortical projection - MNE';
+sProcess.FileTag     = '';
+sProcess.Category    = 'File';
+sProcess.SubGroup    = 'NIRS';
+sProcess.Index       = 1206;
+sProcess.Description = '';
+% Definition of the input accepted by this process
+sProcess.InputTypes  = {'data', 'raw'};
+% Definition of the outputs of this process
+sProcess.OutputTypes = {'results', 'results'};
+sProcess.nInputs     = 1;
+sProcess.nMinFiles   = 1;
+sProcess.isSeparator = 1;
+    
+end
+
+%% ===== FORMAT COMMENT =====
+function Comment = FormatComment(sProcess) %#ok<DEFNU>
+Comment = sProcess.Comment;
+end
+
+
+%% ===== RUN =====
+function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+
+OutputFiles = {};
+
+% Save the new head model
+sStudy = bst_get('Study', sInputs.iStudy);
+
+if isempty(sStudy.iHeadModel)
+    bst_error('No head model found. Consider process "Compute head model from fluence"');
+    return;
+end
+
+head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
+ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
+
+if ~strcmp(head_model.HeadModelType, 'surface')
+    bst_error('Extraction only works for surface head model');
+    return;
+end
+
+if ndims(head_model.Gain) ~= 3
+    % TODO: better test shape consistency
+    bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
+    return;
+end
+
+sDataIn = in_bst_data(sInputs(1).FileName);
+
+% Separate NIRS channels from others (NIRS_AUX etc.)
+[fnirs, fchannel_def, nirs_other, channel_def_other] = ...
+    process_nst_mbll('filter_data_by_channel_type', sDataIn.F', ChanneMat, 'NIRS');
+
+[nirs_psig, pair_names, pair_loc, pair_indexes] = process_nst_mbll('group_paired_channels', fnirs, fchannel_def);
+sensitivity_surf = head_model.Gain;
+% nirs_psig (nb_pairs x nb_wavelengths x nb_samples
+% nb_nodes = size(sensitivity_surf, 3);
+% nb_pairs = size(pair_ichans, 1);
+
+% nb_wavelengths x [HbO, HbR] 
+ext_coeffs = process_nst_mbll('get_hb_extinctions', ChanneMat.Nirs.Wavelengths);
+
+param.sensors.cov.flag_cov = 1;
+param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];
+[pdata_hbo, pdata_hbr] = mfip_inverse_problem(squeeze(nirs_psig(:,1,:)), ...
+                                              squeeze(nirs_psig(:,2,:)), ...
+                                              sDataIn.Time, sensitivity_surf, ...
+                                              ext_coeffs, param);
+
+
+[sStudy, ResultFile] = add_surf_data(pdata_hbo, sDataIn.Time, ...
+        head_model, 'hbo_projected' , ...
+        sInputs.iStudy, sStudy,  ...
+        'Projected HbO signals');
+OutputFiles{end+1} = ResultFile;
+
+[sStudy, ResultFile] = add_surf_data(pdata_hbr, sDataIn.Time, ...
+        head_model, 'hbr_projected' , ...
+        sInputs.iStudy, sStudy,  ...
+        'Projected HbR signals');
+OutputFiles{end+1} = ResultFile;
+
+clear pdata_hbo pdata_hbr;
+
+%     OutputFiles{end+1} = ResultFile;
+% for iw=1:size(sensitivity_surf, 2)
+%     mixing_mat = squeeze(sensitivity_surf(:, iw, :));
+%     nz = all(mixing_mat ~= 0, 2);
+%     mixing_mat(nz,:) = mixing_mat(nz,:) ./ repmat(sum(mixing_mat(nz,:), 2), 1, nb_pairs);
+%     projected_fnirs = mixing_mat * sDataIn.F(pair_ichans(:,iw), :);
+%     % TODO: comment name including measure tag
+%     
+%     comment_measure = sprintf('wl%d', ChanneMat.Nirs.Wavelengths(iw));
+%     
+%     
+%     % label = [sDataIn.Comment '_' comment_measure '_projected'];
+%     label = [comment_measure '_projected'];
+%     [sStudy, ResultFile] = add_surf_data(projected_fnirs, sDataIn.Time, ...
+%         head_model, label , ...
+%         sInputs.iStudy, sStudy,  ...
+%         'Projected fNIRS signals');
+%     
+%     OutputFiles{end+1} = ResultFile;
+%     
+% end
+
+end
+
+function [pdata_hbo, pdata_hbr] = mfip_inverse_problem(data_w1, data_w2, t, mat_A, ex, param)
+% data_wX contains signals (nb_pairs x nb_samples)
+% mat_A is lead field matrix (nb_channels x nb_wavelengths x nb_voxels)
+% ex contains the extinction coeffs nb_wavelength x [HbO HbR]
+
+% A_wX -> (nb_pairs x nb_voxels)
+A_w1 = squeeze(mat_A(:,1,:));
+A_w2 = squeeze(mat_A(:,2,:));
+
+nPairs = size(data_w1, 1);
+nSamples = length(t);
+fs = 1/abs(t(2)-t(1));
+
+nVox = size(mat_A, 3);
+
+%==================================================================
+% calculate sensor covariance
+%-=================================================================
+if  param.sensors.cov.flag_cov
+    display('Calculate sensor covariance')
+    winSamples = [(param.sensors.cov.window(1)*fs+1):1:(param.sensors.cov.window(2)*fs+2)]-t(1)*fs;
+    sensor_covariance_w1=sparse(cov(data_w1(:,winSamples)));
+    sensor_covariance_w2=sparse(cov(data_w2(:,winSamples)));
+    clear winSamples
+else
+    sensor_covariance_w1=speye(nPairs,nPairs);
+    sensor_covariance_w2=speye(nPairs,nPairs);
+end
+
+%=======================================================================
+% Inverse problem
+%=======================================================================
+% data_w1=data_w1'; % nSensors by nSamples
+% data_w2=data_w2';
+data_topo = [data_w1 ; data_w2]; % nb_pairs*2 x nSamples
+t=t'; % 1 x nSamples
+
+param.inverse.meth = 'Tikkonov';
+flag_show_l_curve = 0;
+param.inverse.Tikkonov.lambda{1} = 0.5;
+
+switch param.inverse.meth
+    case 'REML'
+        %--------------------------------------------------------------
+        % priors covariance on sensors
+        %--------------------------------------------------------------
+        Q1{1}=0*speye(nPairs*2);
+        Q1{1}(1:nPairs,1:nPairs)=sensor_covariance_w1;
+        
+        Q1{2}=0*speye(nPairs*2);
+        Q1{2}(nPairs+1:end,nPairs+1:end)=sensor_covariance_w2;
+        
+        N1    = length(Q1);
+        %--------------------------------------------------------------
+        % priors covariance on parameters
+        %--------------------------------------------------------------
+        % Prior 1 : IID
+        Q2{1}=0*speye(nVox*2,nVox*2);
+        Q2{2}=0*speye(nVox*2,nVox*2);
+        
+        Q2{1}(1:nVox,1:nVox)=speye(nVox);
+        Q2{2}(nVox+1:end,nVox+1:end)=speye(nVox);
+        
+        N2    = length(Q2);
+        
+        %--------------------------------------------------------------
+        % option for the spm reml function
+        %--------------------------------------------------------------
+        opt.inverse.Q1=Q1;
+        opt.inverse.Q2=Q2;
+        
+        opt.g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)];
+        opt.signal = data_topo; % nPairs*2 x nSamples
+        opt.time=t; % 1 by nSamples
+        
+        display('Launch REML estimation')
+        [M, h, F] = mfip_spm_nirs_reml(opt);
+        % M should be nb_nodes*2 x nb_channels*nb_wl
+        display('Kernel estimation terminated')
+    case 'Tikkonov'
+        g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)];
+        %g=blkdiag(A_w1,A_w2);
+        I=speye(size(g,1));
+        S=svd(g); %[U,S,V] = svd(g);
+        if flag_show_l_curve & numel(param.inverse.Tikkonov.lambda{1}>1)
+            % L curve
+            %---------------------
+            blocks=1:100:nSamples+1; % +1 because we substract one in the next block of code for the upper limit
+            if ~(blocks(end)==nSamples+1)
+                blocks(end+1)=nSamples+1;
+            end
+            
+            for iL=1:numel(param.inverse.Tikkonov.lambda{1})
+                % M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*I);
+                M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*max(S)*I);
+                
+                J=zeros(nVox*2,nSamples);
+                for iB=1:numel(blocks)-1
+                    fprintf('block %g\n',iB)
+                    J(:,blocks(iB):blocks(iB+1)-1)= M*data_topo(:,blocks(iB):blocks(iB+1)-1);
+                end
+                
+                norm_res(iL)=norm(data_topo-g*J,2);
+                norm_sol(iL)=norm(J,2);
+                
+            end
+            clear M blocks J; % M cleared??
+            
+            ismonotonic = ismonotonic(norm_res, 1);
+            ismonotonic = ismonotonic(norm_sol, 1);
+            
+            subplot(1,1,1)
+            % plot(log10(norm_res),log10(norm_sol),'o');
+            plot(norm_res,norm_sol,'o');
+            xlabel('||J||2');
+            ylabel('||d-gJ||2');
+            axis('tight')
+            [k_corner,info] = corner(norm_res,norm_sol);
+            hold on
+            plot(log10(norm_res(k_corner)),log10(norm_sol(k_corner)),'+');
+            param.inverse.Tikkonov.lambda{1}(k_corner)
+            
+        else
+            M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(1)*max(S)*I);
+        end
+end
+
+%TODO: recommand small amount of vertices
+%TODO: use sparse storage?
+pdata_hb = M * data_topo;
+pdata_hbo = pdata_hb(1:nVox, :);
+pdata_hbr = pdata_hb((nVox+1):(2*nVox), :);
+
+clear pdata_hb;
+end
+
+
+function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
+    iStudy, sStudy, history_comment)
+
+%% Save a cortical map to brainstorm with given data
+
+ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
+    ['results_' protect_fn_str(name)]);
+
+% ===== CREATE FILE STRUCTURE =====
+ResultsMat = db_template('resultsmat');
+ResultsMat.Comment       = name;
+ResultsMat.Function      = '';
+ResultsMat.ImageGridAmp = data;
+ResultsMat.Time          = time;
+ResultsMat.DataFile      = [];
+ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+ResultsMat.HeadModelType = head_model.HeadModelType;
+ResultsMat.ChannelFlag   = [];
+ResultsMat.GoodChannel   = [];
+ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
+ResultsMat.GridLoc    = [];
+ResultsMat.GridOrient = [];
+ResultsMat.nAvg      = 1;
+% History
+ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
+% Save new file structure
+bst_save(ResultFile, ResultsMat, 'v6');
+% ===== REGISTER NEW FILE =====
+% Create new results structure
+newResult = db_template('results');
+newResult.Comment       = name;
+newResult.FileName      = file_short(ResultFile);
+newResult.DataFile      = ''; %sInputs.FileName;
+newResult.isLink        = 0;
+newResult.HeadModelType = ResultsMat.HeadModelType;
+% Add new entry to the database
+iResult = length(sStudy.Result) + 1;
+sStudy.Result(iResult) = newResult;
+% Update Brainstorm database
+bst_set('Study', iStudy, sStudy);
+end
+
+
+
+function [pair_names, pair_loc, pair_ichans, pair_sd_indexes, ...
+    src_coords, src_ids, src_ichans, ...
+    det_coords, det_ids, det_ichans] = explode_channels(channel_def)
+%% Explode channel data according to pairs, sources and detectors
+% Args
+%    - channel_def: struct
+%        Definition of channels as given by brainstorm
+%        Used fields: Channel
+%
+% TOCHECK WARNING: uses containers.Map which is available with matlab > v2008
+%
+%  Outputs:
+%     - pair_names: cell array of str, size: nb_pairs
+%         Pair names, format: SXDX
+%     - pair_loc: array of double, size: nb_pairs x 3 x 2
+%         Pair localization (coordinates of source and detector)
+%     - pair_ichans: matrix of double, size: nb_pairs x nb_wavelengths
+%         Input channel indexes grouped by pairs
+%     - pair_sd_indexes: matrix of double, size: nb_pairs x 2
+%         1-based continuours indexes of sources and detectors for each
+%         sources.
+%     - src_coords:   nb_sources x 3
+%         Source coordinates, indexed by 1-based continuous index
+%         To access via source ID, as read from pair name:
+%             src_coords(src_id2idx(src_ID),:)
+%     - src_ids: 1d array of double, size: nb_sources
+%         vector of source ids (as used in pair name)
+%     - src_chans: cellarray of 1d array of double, size: nb_sources
+%         Channel indexes to which the source belongs (indexed by 1-based
+%         continuous index).
+%     - det_coords:   nb_detectors x 3
+%         Detector coordinates, indexed by 1-based continuous index
+%         To access via detector ID, as used in pair name:
+%             det_coords(det_id2idx(det_ID),:)
+%     - det_ids: 1d array of double, size: max_detector_id (hashing vector)
+%         vector of detector ids (as used in pair name)
+%     - det_chans: cellarray of 1d array of double, size: nb_sources
+%         Channel indexes to which the detector belongs (indexed by 1-based
+%         continuous index).
+
+MT_OD = 1;
+MT_HB = 2;
+
+if isfield(channel_def.Nirs, 'Wavelengths')
+    nb_measures = length(channel_def.Nirs.Wavelengths);
+    measure_type = MT_OD;
+else
+    nb_measures = length(channel_def.Nirs.Hb);
+    measure_type = MT_HB;
+end
+
+pair_to_chans = containers.Map();
+pair_to_sd = containers.Map();
+src_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
+src_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
+det_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
+det_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
+for ichan=1:length(channel_def.Channel)
+    if strcmp(channel_def.Channel(ichan).Type, 'NIRS')
+        chan_name = channel_def.Channel(ichan).Name;
+        if measure_type == MT_OD
+            iwl = strfind(chan_name, 'WL');
+            pair_name = chan_name(1:iwl-1);
+            wl = str2double(chan_name(iwl+2:end));
+            imeasure = channel_def.Nirs.Wavelengths==wl;
+        else
+            ihb = strfind(chan_name, 'Hb');
+            pair_name = chan_name(1:ihb-1);
+            imeasure = strcmp(chan_name(ihb:end), channel_def.Nirs.Hb);
+        end
+        
+        if pair_to_chans.isKey(pair_name)
+            measures = pair_to_chans(pair_name);
+        else
+            measures = zeros(1, nb_measures);
+        end
+        measures(imeasure) = ichan;
+        pair_to_chans(pair_name) = measures;
+        
+        
+        [src_id, det_id] = split_pair_name(pair_name);
+        pair_to_sd(pair_name) = [src_id, det_id];
+        if src_to_chans.isKey(src_id)
+            src_to_chans(src_id) = [src_to_chans(src_id) ichan];
+        else
+            src_to_chans(src_id) = ichan;
+            src_coords_map(src_id) = channel_def.Channel(ichan).Loc(:, 1);
+        end
+        if det_to_chans.isKey(det_id)
+            det_to_chans(det_id) = [det_to_chans(det_id) ichan];
+        else
+            det_to_chans(det_id) = ichan;
+            det_coords_map(det_id) = channel_def.Channel(ichan).Loc(:, 2);
+        end
+        
+    end
+end
+
+src_coords = cell2mat(src_coords_map.values)';
+src_ichans = src_to_chans.values;
+src_ids = cell2mat(src_coords_map.keys);
+
+det_coords = cell2mat(det_coords_map.values)';
+det_ichans = det_to_chans.values;
+det_ids = cell2mat(det_coords_map.keys);
+
+nb_pairs = pair_to_chans.size(1);
+pair_names = pair_to_chans.keys;
+pair_ichans = zeros(nb_pairs, nb_measures);
+pair_loc = zeros(nb_pairs, 3, 2);
+pair_sd_indexes = zeros(nb_pairs, 2);
+for ipair=1:nb_pairs
+    p_indexes = pair_to_chans(pair_names{ipair});
+    pair_ichans(ipair, :) = p_indexes;
+    pair_loc(ipair, : , :) = channel_def.Channel(pair_ichans(ipair, 1)).Loc;
+    sdi = pair_to_sd(pair_names{ipair});
+    pair_sd_indexes(ipair, 1) = find(src_ids==sdi(1));
+    pair_sd_indexes(ipair, 2) = find(det_ids==sdi(2));
+end
+
+end
+
+function [isrc, idet] = split_pair_name(pair_name)
+pair_re = 'S([0-9]{1,2})D([0-9]{1,2})';
+toks = regexp(pair_name, pair_re , 'tokens');
+isrc = str2double(toks{1}{1});
+idet = str2double(toks{1}{2});
+end
+
+
+function sfn = protect_fn_str(s)
+sfn = strrep(s, ' ', '_');
+end

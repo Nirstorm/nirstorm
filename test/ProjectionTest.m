@@ -7,7 +7,7 @@ classdef ProjectionTest < matlab.unittest.TestCase
     methods(TestMethodSetup)
         function setup(testCase)
             tmpd = tempname;
-            mkdir(tmpd);
+            mkdir(tmpd);o
             testCase.tmp_dir = tmpd;
             utest_bst_setup();
         end
