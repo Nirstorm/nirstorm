@@ -224,7 +224,7 @@ if do_export_fluences
     for isrc=1:nb_sources
         for iwl=1:nb_wavelengths
             wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Fluence for S%02d and %dnm, aligned to ', ...
+            sVol.Comment = [sprintf('Fluence for S%02d and %dnm ', ...
                                     src_ids(isrc), wl) ...
                             'aligned to ' sMri.Comment];
             sVol.Cube = src_fluences{isrc}{iwl};
@@ -290,7 +290,23 @@ for ipair=1:nb_pairs
         if src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
             det_reference_voxels_index{idet}{iwl}(2),...
             det_reference_voxels_index{idet}{iwl}(3))==0
-        sensitivity_vol = mri_zeros;
+            sensitivity_vol = mri_zeros;
+            
+            
+            if do_export_fluences
+                sVol.Comment = '';
+                cube_data = src_fluences{isrc}{iwl};
+                cube_data(det_reference_voxels_index{idet}{iwl}(1),...
+                    det_reference_voxels_index{idet}{iwl}(2),...
+                    det_reference_voxels_index{idet}{iwl}(3)) = idet+10;
+                sVol.Cube = cube_data;
+                sVol.Histogram = [];
+                out_bfn = sprintf('fluence_sref_%s_%dnm_%s.nii', pair_names{ipair}, ChannelMat.Nirs.Wavelengths(iwl), ...
+                    protect_fn_str(sMri.Comment));
+                out_fn = fullfile(output_dir, out_bfn);
+                out_mri_nii(sVol, out_fn, 'float32');
+            end
+
         else
         sensitivity_vol = src_fluences{isrc}{iwl} .* ...
             det_fluences{idet}{iwl}./...
@@ -302,20 +318,20 @@ for ipair=1:nb_pairs
         % modified by zhengchen to normalize the sensitivity
         %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
         
-%         if do_export_fluences
-%             output_dir = sProcess.options.outputdir.Value{1};
-%             sVol = sMri;
-%             wl = ChannelMat.Nirs.Wavelengths(iwl);
-%             sVol.Comment = [sprintf('Sensitivity for %s and %dnm, aligned to ', ...
-%                                     pair_names{ipair}, wl) ...
-%                             'aligned to ' sMri.Comment];
-%             sVol.Cube = sensitivity_vol;
-%             sVol.Histogram = [];
-%             out_bfn = sprintf('sensitivity_%s_%dnm_%s.nii', pair_names{ipair}, wl, ...
-%                               protect_fn_str(sMri.Comment));
-%             out_fn = fullfile(output_dir, out_bfn);
-%             out_mri_nii(sVol, out_fn, 'float32');
-%         end
+        if do_export_fluences
+            output_dir = sProcess.options.outputdir.Value;
+            sVol = sMri;
+            wl = ChannelMat.Nirs.Wavelengths(iwl);
+            sVol.Comment = [sprintf('Sensitivity for %s and %dnm, aligned to ', ...
+                                    pair_names{ipair}, wl) ...
+                            'aligned to ' sMri.Comment];
+            sVol.Cube = sensitivity_vol;
+            sVol.Histogram = [];
+            out_bfn = sprintf('sensitivity_%s_%dnm_%s.nii', pair_names{ipair}, wl, ...
+                              protect_fn_str(sMri.Comment));
+            out_fn = fullfile(output_dir, out_bfn);
+            out_mri_nii(sVol, out_fn, 'float32');
+        end
          sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
              [nb_nodes+1 1],@(x)sum(x)/numel(x)); % http://www.mathworks.com/help/matlab/ref/accumarray.html#bt40_mn-1 % TODO: maybe not divide by number of voxels in VORO cell
 %         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
