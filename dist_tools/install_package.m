@@ -361,9 +361,9 @@ end
 
 function toks = strsplit_(s, delimiter)
 % For compatibility
-if ~verLessThan('matlab', '8.2')
+try
     toks = strsplit(s, delimiter);
-else
+catch
     d = strtrim(delimiter);
     p = strfind(s, d);
     if ~isempty(p)                
