@@ -102,8 +102,8 @@ if nargin < 5 || isempty(srcs_pos)
     dets_pos = zeros(3, nb_channels);
     ref_point =  [-0.0789 ; -0.0263 ; 0.0655]; % meter, somewhere at the back of the head when using Colin27_4NIRS
     for ichan=1:nb_channels
-       srcs_pos(:, ichan) = ref_point + [(i_srcs(ichan)-1) * 0.03; 0; 0]; %meter
-       dets_pos(:, ichan) = ref_point + [(i_dets(ichan)-1) * 0.03; 0.03; 0]; %meter
+       srcs_pos(:, ichan) = ref_point + [0; (i_srcs(ichan)-1) * 0.03; 0]; %meter
+       dets_pos(:, ichan) = ref_point + [0; (i_dets(ichan)-1) * 0.03; 0.03]; %meter
     end
 end
 
