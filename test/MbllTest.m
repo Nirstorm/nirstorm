@@ -24,8 +24,8 @@ classdef MbllTest < matlab.unittest.TestCase
         
         function test_mbll_with_simulations(testCase)
            
-            delta_hb = [ 0.1;... %HbO (mmol.l-1)
-                        -0.05];  %HbR (mmol.l-1)
+            delta_hb = [ 0.01;... %HbO (mmol.l-1)
+                        -0.005];  %HbR (mmol.l-1)
             delta_hb = delta_hb / 1000; % mol.l-1
             
             age = 25;
@@ -63,34 +63,21 @@ classdef MbllTest < matlab.unittest.TestCase
                                   'timewindow', [0 (activ_window_samples(1)-1)*dt], ...
                                   'option_do_plp_corr',     1);
             sDataOut = in_bst_data(sOutput.FileName);
-%             figure();
-%             plot(time,sDataOut.F);
             
-            assert(all(all(abs(sDataOut.F(:,1:(activ_window_samples(1)-1))) < 1.37e-6))); %baseline goes close to 0
+            dhb_signal = zeros(3, nb_samples);
+            dhb_signal(1:2, activ_window_samples) = repmat(delta_hb, 1, length(activ_window_samples));
+            dhb_signal(3,:) = sum(dhb_signal(1:2, :));
             
-            % assert values are constant in activation window:
-            assert(all(all(sDataOut.F(:,activ_window_samples) == sDataOut.F(:,activ_window_samples(1)))));
-            
-            % Check Hb values in activation window:
-            hb_simu = hb_0 + delta_hb;
-            baseline_mbll = sDataOut.F(1:2,1);
-            hb_mbll = sDataOut.F(1:2,activ_window_samples(1)) - baseline_mbll;
-            
-            % non-regression test:
-            non_reg_error = [0.6026e-4;0.9513e-4]; % quite high error...
-            error = abs(hb_mbll - hb_simu);
-            format short e;
-            if all(error > non_reg_error)
-                hb_table = table(hb_simu, hb_mbll, error);
-                msg = sprintf(['Hb values from MBLL not consistent with simulated values:\n%s',...
-                               evalc('disp(hb_table)')]);
-                testCase.assertTrue(0, msg);
-            elseif all( (error < non_reg_error) & (error > 1e-7) )
-                hb_table = table(hb_simu, hb_mbll, error);
-                msg = 'Hb values from MBLL not consistent with simulated values:\n%s';
-                warning('Nirstorm:InaccurateResult', msg, evalc('disp(hb_table)'));
+            if 0
+                figure(); hold on; 
+                plot(time,dhb_signal(1,:), 'r');
+                plot(time,dhb_signal(2,:), 'b');
+                
+                plot(time, sDataOut.F(1,:), 'r--');
+                plot(time, sDataOut.F(2,:), 'b--');
             end
-            format short; % assume defatul short format was used
+            
+            assert(all_close(dhb_signal, sDataOut.F));            
         end
         
         function test_mbll_on_tapping_data(testCase)
@@ -119,6 +106,15 @@ classdef MbllTest < matlab.unittest.TestCase
             expected_mbll_fn = data_fns{end};
             expected_mbll = load(expected_mbll_fn);
             expected_mbll = expected_mbll.mbll_motor;
+            
+            if 0
+                figure(); hold on; 
+                plot(sDataOut.Time,expected_mbll(1,:), 'r');
+                plot(sDataOut.Time,expected_mbll(2,:), 'b');
+                
+                plot(sDataOut.Time, sDataOut.F(1,:), 'r--');
+                plot(sDataOut.Time, sDataOut.F(2,:), 'b--');
+            end
             
             testCase.assertTrue(all_close(sDataOut.F, expected_mbll));
         end
