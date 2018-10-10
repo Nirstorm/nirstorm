@@ -465,7 +465,7 @@ switch method
         od_ref = median(nirs_sig(:,window), 2);
 end
 
-delta_od = -log( nirs_sig ./ repmat(od_ref, 1, nb_samples) );
+delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, nb_samples) );
 end
 
 function distances = cpt_distances(channels, pair_indexes)
