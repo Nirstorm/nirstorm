@@ -7,7 +7,7 @@ classdef ProjectionTest < matlab.unittest.TestCase
     methods(TestMethodSetup)
         function setup(testCase)
             tmpd = tempname;
-            mkdir(tmpd);o
+            mkdir(tmpd);
             testCase.tmp_dir = tmpd;
             utest_bst_setup();
         end
@@ -19,10 +19,10 @@ classdef ProjectionTest < matlab.unittest.TestCase
             utest_clean_bst();
         end
     end
-
+    
     methods(Test)
         
-        function test_single_channel(testCase)
+        function test_two_channels(testCase)
             global GlobalData;
             [subject_name, sSubject] = bst_create_test_subject();
             
@@ -30,10 +30,43 @@ classdef ProjectionTest < matlab.unittest.TestCase
             time = (0:8000) * dt; %sec
             nb_samples = length(time);
             
-            % simulate single-channel dummy signal 
-            signals = randn(1, nb_samples);
-            nirs_input_mat_fn = bst_create_nirs_data('test_single_channel', signals, time);
             
+            % simulate activation signal
+            delta_hb = [ 0.01;... %HbO (mmol.l-1)
+                -0.005];  %HbR (mmol.l-1)
+            delta_hb = delta_hb / 1000; % mol.l-1
+            
+            age = 25;
+            % HbT_0 = 1.7 / 1000; % (mol.l-1) -> blood concentration
+            HbT_0 = 100*10^-6; % (mol.l-1) -> tissue concentration
+            sat = 0.7;
+            hb_0 = [HbT_0 * sat;
+                HbT_0 * (1-sat)];
+            
+            separation = 3; %cm
+            wavelengths = [690, 832];
+            pvf = 1;
+            hb_extinctions = process_nst_mbll('get_hb_extinctions', wavelengths);
+            i_light_ref = 1e6;
+            
+            y_baseline = mbll_fwd(i_light_ref, hb_0, hb_extinctions, age, separation, pvf);
+            y_activ = mbll_fwd(i_light_ref, hb_0 + delta_hb, hb_extinctions, age, separation, pvf);
+            
+            dt = 0.1; %sec
+            nb_samples = 1000;
+            time = (0:(nb_samples-1))*dt;
+            
+            y = zeros(2, nb_samples) + repmat(y_baseline, 1, nb_samples);
+            activ_window_samples = 300:500;
+            y(:, activ_window_samples) = repmat(y_activ, 1, length(activ_window_samples));
+            
+            y_dhb = zeros(2, nb_samples);
+            y_dhb(:, activ_window_samples) = repmat(delta_hb, 1, length(activ_window_samples));
+            
+            signals = [y;y];
+            nirs_input_mat_fn = bst_create_nirs_data('test_2_pairs', signals, time, ...
+                {'S1D1WL690','S1D1WL832', ...
+                'S1D2WL690','S1D2WL832'});
             
             % Generate fluences
             head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
@@ -43,10 +76,17 @@ classdef ProjectionTest < matlab.unittest.TestCase
             ChannelMat = in_bst_channel(nirs_input.ChannelFile);
             [tt, tt, tt, tt, src_coords, tt, tt, det_coords, tt, tt] = process_nst_import_head_model('explode_channels', ChannelMat);
             [src_hv_idx det_hv_idx] = process_nst_import_head_model('get_head_vertices_closest_to_optodes', ...
-                                                                    sMri, sHead, src_coords, det_coords);
-            fluence_dir = cpt_spherical_fluences(sSubject, [src_hv_idx det_hv_idx], ChannelMat.Nirs.Wavelengths);
+                sMri, sHead, src_coords, det_coords);
+            fluence_dir = cpt_spherical_fluences(sSubject, [src_hv_idx;det_hv_idx], ChannelMat.Nirs.Wavelengths, 50);
             
-            % compute head model
+            for isrc=1:size(src_coords, 1)
+                fprintf('S%d -> vertex #%d\n', isrc, src_hv_idx(isrc));
+            end
+            for idet=1:size(det_coords, 1)
+                fprintf('D%d -> vertex #%d\n', idet, det_hv_idx(idet));
+            end
+            
+            % Compute head model
             bst_process('CallProcess', ...
                 'process_nst_import_head_model', nirs_input_mat_fn, [], ...
                 'data_source', fluence_dir, ...
@@ -54,91 +94,53 @@ classdef ProjectionTest < matlab.unittest.TestCase
                 'outputdir', fluence_dir);
             
             % Do projection
+            nirs_dOD = bst_process('CallProcess', ...
+                'process_nst_dOD', nirs_input_mat_fn, [], ...
+                'option_baseline_method', 1, ...  % mean
+                'timewindow', [0 (activ_window_samples(1)-1)*dt]);
             
-            % Test that projected signals == channel signal up to amplitude
-            % factor
+            % Do projection
+            result = bst_process('CallProcess', ...
+                'process_nst_cortical_projection_mne', nirs_dOD, []);
             
-               
+            r1 = in_bst_results(result(1).FileName);
+            head_model_1 = in_bst_headmodel(r1.HeadModelFile);
+            [se_max, pos_max2] = max(squeeze(head_model_1.Gain(1,1,:)));
+            r_hbo = r1.ImageGridAmp(pos_max2, :);
+            
+            r2 = in_bst_results(result(2).FileName);
+            head_model_2 = in_bst_headmodel(r2.HeadModelFile);
+            [se_max, pos_max2] = max(squeeze(head_model_1.Gain(1,1,:)));
+            r_hbr = r2.ImageGridAmp(pos_max2, :);
+            
             if 0
-            stg_vertex_id = 19552;
-            roi_scout_selection = bst_create_scout(subject_name, 'cortex', 'roi_temporal', ...
-                                                   stg_vertex_id, 2, 'User scouts');
-
-            extent_cm = 3; % centimeter
-            head_vertices = process_nst_cpt_fluences_from_cortex('proj_cortex_scout_to_scalp', ...
-                                                                 roi_scout_selection, extent_cm * 0.01);
-            wavelengths = 685;
-            fluence_dir = cpt_spherical_fluences(roi_scout_selection.sSubject, head_vertices, wavelengths);
-            bst_process('CallProcess', ...
-                'process_nst_OM_from_cortex', [], [], ...
-                'scout_sel_roi', roi_scout_selection, ...
-                'cortex_to_scalp_extent', extent_cm, ...
-                'condition_name', 'OM_test', ...
-                'wavelengths', strjoin(arrayfun(@num2str, wavelengths, 'UniformOutput', false), ','), ...
-                'data_source', fluence_dir, ...
-                'nb_sources', 1, ...
-                'nb_detectors', 2, ...
-                'nAdjacentDet', 0, ...
-                'exist_weight', 0, ...
-                'sep_optode', {[0 55],'mm', 0});
-            
-            testCase.assertEmpty(GlobalData.lastestFullErrMsg);
-            % TODO add checks on nb optodes + separations
+                % figure; hold on; plot(signals(1,:), 'k'); plot(signals(2,:), 'g');
+                figure; hold on; plot(y_dhb(1,:), 'r'); plot(y_dhb(2,:), 'b');
+                plot(r_hbo, 'r--');
+                plot(r_hbr, 'b--');
+                
             end
+            
+            % Non-regression tests
+            % TODO: use tomographic forward model to generate input data and 
+            % properly test results
+            
+            assert(abs(max(r_hbo) / max(abs(r_hbr)) - max(y_dhb(1,:)) / max(abs(y_dhb(2,:)))) < 1);
+            
+            assert(r_hbo(1) < 1e-6);
+            assert(r_hbr(1) < 1e-7);
+            
+            assert(max(r_hbo) > 0);
+            assert(min(r_hbr) < 0);
+
         end
     end
 end
 
-
-
-% function fluence = load_fluence_spherical(vertex_id, sInputs)
-% 
-% ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-% wavelengths = ChannelMat.Nirs.Wavelengths;
-% 
-% fluence_bfn =  sprintf('fluence_spherical_%d.mat', vertex_id); 
-% fluence_fn = bst_fullfile(bst_get('BrainstormUserDir'), 'defaults', ...
-%                               'nirstorm', fluence_bfn);
-% if ~file_exist(fluence_fn)
-%     % Create folder
-%     if ~file_exist(bst_fileparts(fluence_fn))
-%         mkdir(bst_fileparts(fluence_fn));
-%     end
-%     
-%     [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-%     anatomy_file = sSubject.Anatomy(sSubject.iAnatomy).FileName;    
-%     head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
-%     
-%     % Obtain the head mesh
-%     sHead = in_tess_bst(head_mesh_fn);
-%     
-%     % Obtain the anatomical MRI
-%     sMri = in_mri_bst(anatomy_file);
-%     [dimx, dimy, dimz] = size(sMri.Cube);
-%     
-%     vertex = sHead.Vertices(vertex_id, :);
-%     % Vertices: SCS->MRI, MRI(MM)->MRI(Voxels)
-%     vertex = round(cs_convert(sMri, 'scs', 'mri', vertex) * 1000 ./ sMri.Voxsize);
-%     
-%     dcut = 30; %mm
-%     svox = sMri.Voxsize;
-%     fluence_vol = zeros(dimx, dimy, dimz);
-%     for i=1:dimx
-%         for j=1:dimy
-%             for k=1:dimz
-%                 cp = (vertex - [i,j,k]) .* svox;
-%                 fluence_vol(i,j,k) = max(0, 1 - sqrt(sum(cp .* cp)) / dcut);
-%             end
-%         end
-%     end
-%     save(fluence_fn, 'fluence_vol');
-% else
-%     load(fluence_fn, 'fluence_vol');
-% end
-% 
-% for iwl=1:length(wavelengths)
-%     fluence{iwl}.fluence.data = fluence_vol;
-% end
-%     
-% end
-% 
+function i_light_output = mbll_fwd(i_light_ref, concentrations, extinctions, age, separation, pvf)
+y0 = [5.38;4.67];
+a1 = [0.049;0.062];
+a2 = [0.877;0.819];
+dpf = y0 + a1 .* age.^a2; %checked that dfp was OK
+i_light_output = i_light_ref * power(repmat(10,2,1), -separation .* extinctions * concentrations .* dpf / pvf);
+end

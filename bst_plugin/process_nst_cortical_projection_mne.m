@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Cortical projection - MNE';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = 'NIRS - wip';
 sProcess.Index       = 1206;
 sProcess.Description = '';
 % Definition of the input accepted by this process
@@ -38,7 +38,7 @@ sProcess.OutputTypes = {'results', 'results'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.isSeparator = 1;
-    
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -86,27 +86,27 @@ sensitivity_surf = head_model.Gain;
 % nb_nodes = size(sensitivity_surf, 3);
 % nb_pairs = size(pair_ichans, 1);
 
-% nb_wavelengths x [HbO, HbR] 
+% nb_wavelengths x [HbO, HbR]
 ext_coeffs = process_nst_mbll('get_hb_extinctions', ChanneMat.Nirs.Wavelengths);
 
 param.sensors.cov.flag_cov = 1;
 param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];
 [pdata_hbo, pdata_hbr] = mfip_inverse_problem(squeeze(nirs_psig(:,1,:)), ...
-                                              squeeze(nirs_psig(:,2,:)), ...
-                                              sDataIn.Time, sensitivity_surf, ...
-                                              ext_coeffs, param);
+    squeeze(nirs_psig(:,2,:)), ...
+    sDataIn.Time, sensitivity_surf, ...
+    ext_coeffs, param);
 
 
 [sStudy, ResultFile] = add_surf_data(pdata_hbo, sDataIn.Time, ...
-        head_model, 'hbo_projected' , ...
-        sInputs.iStudy, sStudy,  ...
-        'Projected HbO signals');
+    head_model, 'hbo_projected' , ...
+    sInputs.iStudy, sStudy,  ...
+    'Projected HbO signals');
 OutputFiles{end+1} = ResultFile;
 
 [sStudy, ResultFile] = add_surf_data(pdata_hbr, sDataIn.Time, ...
-        head_model, 'hbr_projected' , ...
-        sInputs.iStudy, sStudy,  ...
-        'Projected HbR signals');
+    head_model, 'hbr_projected' , ...
+    sInputs.iStudy, sStudy,  ...
+    'Projected HbR signals');
 OutputFiles{end+1} = ResultFile;
 
 clear pdata_hbo pdata_hbr;
@@ -118,19 +118,19 @@ clear pdata_hbo pdata_hbr;
 %     mixing_mat(nz,:) = mixing_mat(nz,:) ./ repmat(sum(mixing_mat(nz,:), 2), 1, nb_pairs);
 %     projected_fnirs = mixing_mat * sDataIn.F(pair_ichans(:,iw), :);
 %     % TODO: comment name including measure tag
-%     
+%
 %     comment_measure = sprintf('wl%d', ChanneMat.Nirs.Wavelengths(iw));
-%     
-%     
+%
+%
 %     % label = [sDataIn.Comment '_' comment_measure '_projected'];
 %     label = [comment_measure '_projected'];
 %     [sStudy, ResultFile] = add_surf_data(projected_fnirs, sDataIn.Time, ...
 %         head_model, label , ...
 %         sInputs.iStudy, sStudy,  ...
 %         'Projected fNIRS signals');
-%     
+%
 %     OutputFiles{end+1} = ResultFile;
-%     
+%
 % end
 
 end
@@ -144,122 +144,61 @@ function [pdata_hbo, pdata_hbr] = mfip_inverse_problem(data_w1, data_w2, t, mat_
 A_w1 = squeeze(mat_A(:,1,:));
 A_w2 = squeeze(mat_A(:,2,:));
 
-nPairs = size(data_w1, 1);
 nSamples = length(t);
-fs = 1/abs(t(2)-t(1));
 
 nVox = size(mat_A, 3);
 
-%==================================================================
-% calculate sensor covariance
-%-=================================================================
-if  param.sensors.cov.flag_cov
-    display('Calculate sensor covariance')
-    winSamples = [(param.sensors.cov.window(1)*fs+1):1:(param.sensors.cov.window(2)*fs+2)]-t(1)*fs;
-    sensor_covariance_w1=sparse(cov(data_w1(:,winSamples)));
-    sensor_covariance_w2=sparse(cov(data_w2(:,winSamples)));
-    clear winSamples
-else
-    sensor_covariance_w1=speye(nPairs,nPairs);
-    sensor_covariance_w2=speye(nPairs,nPairs);
-end
-
-%=======================================================================
-% Inverse problem
-%=======================================================================
 % data_w1=data_w1'; % nSensors by nSamples
 % data_w2=data_w2';
 data_topo = [data_w1 ; data_w2]; % nb_pairs*2 x nSamples
-t=t'; % 1 x nSamples
 
-param.inverse.meth = 'Tikkonov';
 flag_show_l_curve = 0;
 param.inverse.Tikkonov.lambda{1} = 0.5;
 
-switch param.inverse.meth
-    case 'REML'
-        %--------------------------------------------------------------
-        % priors covariance on sensors
-        %--------------------------------------------------------------
-        Q1{1}=0*speye(nPairs*2);
-        Q1{1}(1:nPairs,1:nPairs)=sensor_covariance_w1;
+g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)];
+%g=blkdiag(A_w1,A_w2);
+I=speye(size(g,1));
+S=svd(g); %[U,S,V] = svd(g);
+if flag_show_l_curve & numel(param.inverse.Tikkonov.lambda{1}>1)
+    % L curve
+    %---------------------
+    blocks=1:100:nSamples+1; % +1 because we substract one in the next block of code for the upper limit
+    if ~(blocks(end)==nSamples+1)
+        blocks(end+1)=nSamples+1;
+    end
+    
+    for iL=1:numel(param.inverse.Tikkonov.lambda{1})
+        % M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*I);
+        M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*max(S)*I);
         
-        Q1{2}=0*speye(nPairs*2);
-        Q1{2}(nPairs+1:end,nPairs+1:end)=sensor_covariance_w2;
-        
-        N1    = length(Q1);
-        %--------------------------------------------------------------
-        % priors covariance on parameters
-        %--------------------------------------------------------------
-        % Prior 1 : IID
-        Q2{1}=0*speye(nVox*2,nVox*2);
-        Q2{2}=0*speye(nVox*2,nVox*2);
-        
-        Q2{1}(1:nVox,1:nVox)=speye(nVox);
-        Q2{2}(nVox+1:end,nVox+1:end)=speye(nVox);
-        
-        N2    = length(Q2);
-        
-        %--------------------------------------------------------------
-        % option for the spm reml function
-        %--------------------------------------------------------------
-        opt.inverse.Q1=Q1;
-        opt.inverse.Q2=Q2;
-        
-        opt.g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)];
-        opt.signal = data_topo; % nPairs*2 x nSamples
-        opt.time=t; % 1 by nSamples
-        
-        display('Launch REML estimation')
-        [M, h, F] = mfip_spm_nirs_reml(opt);
-        % M should be nb_nodes*2 x nb_channels*nb_wl
-        display('Kernel estimation terminated')
-    case 'Tikkonov'
-        g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)];
-        %g=blkdiag(A_w1,A_w2);
-        I=speye(size(g,1));
-        S=svd(g); %[U,S,V] = svd(g);
-        if flag_show_l_curve & numel(param.inverse.Tikkonov.lambda{1}>1)
-            % L curve
-            %---------------------
-            blocks=1:100:nSamples+1; % +1 because we substract one in the next block of code for the upper limit
-            if ~(blocks(end)==nSamples+1)
-                blocks(end+1)=nSamples+1;
-            end
-            
-            for iL=1:numel(param.inverse.Tikkonov.lambda{1})
-                % M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*I);
-                M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(iL)*max(S)*I);
-                
-                J=zeros(nVox*2,nSamples);
-                for iB=1:numel(blocks)-1
-                    fprintf('block %g\n',iB)
-                    J(:,blocks(iB):blocks(iB+1)-1)= M*data_topo(:,blocks(iB):blocks(iB+1)-1);
-                end
-                
-                norm_res(iL)=norm(data_topo-g*J,2);
-                norm_sol(iL)=norm(J,2);
-                
-            end
-            clear M blocks J; % M cleared??
-            
-            ismonotonic = ismonotonic(norm_res, 1);
-            ismonotonic = ismonotonic(norm_sol, 1);
-            
-            subplot(1,1,1)
-            % plot(log10(norm_res),log10(norm_sol),'o');
-            plot(norm_res,norm_sol,'o');
-            xlabel('||J||2');
-            ylabel('||d-gJ||2');
-            axis('tight')
-            [k_corner,info] = corner(norm_res,norm_sol);
-            hold on
-            plot(log10(norm_res(k_corner)),log10(norm_sol(k_corner)),'+');
-            param.inverse.Tikkonov.lambda{1}(k_corner)
-            
-        else
-            M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(1)*max(S)*I);
+        J=zeros(nVox*2,nSamples);
+        for iB=1:numel(blocks)-1
+            fprintf('block %g\n',iB)
+            J(:,blocks(iB):blocks(iB+1)-1)= M*data_topo(:,blocks(iB):blocks(iB+1)-1);
         end
+        
+        norm_res(iL)=norm(data_topo-g*J,2);
+        norm_sol(iL)=norm(J,2);
+        
+    end
+    clear M blocks J; % M cleared??
+    
+    ismonotonic = ismonotonic(norm_res, 1);
+    ismonotonic = ismonotonic(norm_sol, 1);
+    
+    subplot(1,1,1)
+    % plot(log10(norm_res),log10(norm_sol),'o');
+    plot(norm_res,norm_sol,'o');
+    xlabel('||J||2');
+    ylabel('||d-gJ||2');
+    axis('tight')
+    [k_corner,info] = corner(norm_res,norm_sol);
+    hold on
+    plot(log10(norm_res(k_corner)),log10(norm_sol(k_corner)),'+');
+    param.inverse.Tikkonov.lambda{1}(k_corner)
+    
+else
+    M=g'/(g*g'+param.inverse.Tikkonov.lambda{1}(1)*max(S)*I);
 end
 
 %TODO: recommand small amount of vertices
