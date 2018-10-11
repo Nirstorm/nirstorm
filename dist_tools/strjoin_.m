@@ -1,8 +1,8 @@
 function joined = strjoin_(toks, delimiter)
 % For compatibility
-if ~verLessThan('matlab', '8.2')
+try
     joined = strjoin(toks, delimiter);
-else
+catch
     d = delimiter;
     n = numel(toks);
     if n == 0
