@@ -27,7 +27,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'MBLL - OD to delta [HbO], [HbR] & [HbT]';
+    sProcess.Comment     = 'MBLL - raw to delta [HbO], [HbR] & [HbT]';
     sProcess.FileTag     = '_Hb';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
