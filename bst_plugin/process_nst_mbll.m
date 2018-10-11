@@ -27,7 +27,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'MBLL - OD to delta [HbO], [HbR] & [HbT]';
+    sProcess.Comment     = 'MBLL - raw to delta [HbO], [HbR] & [HbT]';
     sProcess.FileTag     = '_Hb';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
@@ -48,36 +48,17 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_pvf.Type    = 'value';
     sProcess.options.option_pvf.Value   = {50, '', 0};
     
-    sProcess.options.option_baseline_method.Comment = 'Baseline method';
-    sProcess.options.option_baseline_method.Type    = 'combobox';
-    sProcess.options.option_baseline_method.Value   = {1, {'mean', 'median'}};    % {Default index, {list of entries}}
-
-    % === Estimation time window
-    sProcess.options.timewindow.Comment = 'Baseline window:';
-    sProcess.options.timewindow.Type    = 'timewindow';
-    sProcess.options.timewindow.Value   = [];
-    
     sProcess.options.option_do_plp_corr.Comment = 'Light path length correction';
     sProcess.options.option_do_plp_corr.Type    = 'checkbox';
     sProcess.options.option_do_plp_corr.Value   = 1;
+    
+    sProcess.options = process_nst_dOD('get_options', sProcess.options);
+    
 end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) %#ok<DEFNU>
-        % Get baseline
-    if isfield(sProcess.options, 'timewindow') && isfield(sProcess.options.timewindow, 'Value') && iscell(sProcess.options.timewindow.Value) && ~isempty(sProcess.options.timewindow.Value)
-        TimeBounds = sProcess.options.timewindow.Value{1};
-    else
-        TimeBounds = [];
-    end
-    % Comment: seconds or miliseconds
-    if isempty(TimeBounds)
-        Comment = [sProcess.Comment, ': All file'];
-    elseif any(abs(TimeBounds) > 2)
-        Comment = sprintf('%s: [%1.3fs,%1.3fs]', sProcess.Comment, TimeBounds(1), TimeBounds(2));
-    else
-        Comment = sprintf('%s: [%dms,%dms]', sProcess.Comment, round(TimeBounds(1)*1000), round(TimeBounds(2)*1000));
-    end
+    Comment =  process_nst_dOD('FormatComment', sProcess);
 end
 
 %% ===== RUN =====
@@ -87,16 +68,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % TODO: check for negative values
     % Get option values   
     age             = sProcess.options.option_age.Value{1};
-    blm_idx         = sProcess.options.option_baseline_method.Value{1};
-    baseline_method = sProcess.options.option_baseline_method.Value{2}{blm_idx};
+
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
     pvf = sProcess.options.option_pvf.Value{1};
-    
-    if isfield(sProcess.options, 'timewindow') && isfield(sProcess.options.timewindow, 'Value') && iscell(sProcess.options.timewindow.Value) && ~isempty(sProcess.options.timewindow.Value)
-        TimeBounds = sProcess.options.timewindow.Value{1};
-    else
-        TimeBounds = [];
-    end
 
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -111,16 +85,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         events = sDataRaw.F.events;
     end
     
-        % Get inputs
-    if ~isempty(TimeBounds)
-        iTime = panel_time('GetTimeIndices', sDataIn.Time, TimeBounds);
-        if isempty(iTime)
-            bst_report('Error', sProcess, [], 'Invalid time definition.');
-            sInputs = [];
-            return;
-        end
-    else
-        iTime = [];
+    dOD_params = process_nst_dOD('parse_options', sProcess, sDataIn);
+    if isempty(dOD_params)
+        return;
     end
     
     if any(any(sDataIn.F(sDataIn.ChannelFlag~=-1, :) < 0))
@@ -138,7 +105,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Apply MBLL
     % TODO: add baseline window and expose it
-    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, baseline_method, iTime, do_plp_corr, pvf); 
+    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, dOD_params, do_plp_corr, pvf); 
     
     % Re-add other channels that were not changed during MBLL
     [final_nirs, ChannelMat] = concatenate_data(nirs_hb, channels_hb, nirs_other, channel_def_other);
@@ -235,7 +202,7 @@ end
 
 
 function [nirs_hb, channel_hb_def] = ...
-    Compute(nirs_sig, channel_def, age, normalize_method, baseline_window, do_plp_corr, pvf)
+    Compute(nirs_sig, channel_def, age, dOD_params, do_plp_corr, pvf)
 %% Apply MBLL to compute [HbO] & [HbR] from given nirs OD data
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
@@ -303,8 +270,8 @@ nirs_hb_p = zeros(nb_pairs, 3, nb_samples);
 for ipair=1:size(nirs_psig, 1)
     hb_extinctions = get_hb_extinctions(channel_def.Nirs.Wavelengths); % cm^-1.l.mol^-1
 
-    delta_od = normalize_nirs(squeeze(nirs_psig(ipair, :, :)), ...
-                              normalize_method, baseline_window);
+    delta_od = process_nst_dOD('Compute', squeeze(nirs_psig(ipair, :, :)), ...
+                               dOD_params);
     if do_plp_corr
         %TODO: ppf can be computed only once before the loop over pairs
         delta_od_ppf_fixed = fix_ppf(delta_od, channel_def.Nirs.Wavelengths, age, pvf);
@@ -430,42 +397,6 @@ ppf = dpf / pvf;
 
 nb_samples = size(delta_od, 2);
 delta_od_fixed = delta_od ./ repmat(ppf, 1, nb_samples);
-end
-
-function delta_od = normalize_nirs(nirs_sig, method, window)
-%% Normalize given nirs signal
-% Args:
-%    - nirs_sig: matrix of double, size:  nb_wavelengths x nb_samples
-%        NIRS signal to normalize
-%   [- method]: str , choices are: 'mean' and 'median', default is 'mean'
-%        Normalization method.
-%        * 'mean': divide given nirs signal by its mean, for each wavelength
-%        * 'median': divide given nirs signal by its median, for each wavelength
-%   [- window]: 1D array of int, of size <= nb_samples
-%        Mask to be applied on the temporal axis defining the window
-%        where to compute the reference signal.
-%
-% Output: matrix of double, size: nb_channels x nb_wavelengths
-%    Normalized NIRS signal.
-
-nb_samples = size(nirs_sig, 2);
-
-if nargin < 2 || isempty(method)
-   method = 'mean'; 
-end
-
-if nargin < 3 || isempty(window)
-    window = 1:nb_samples;
-end
-
-switch method
-    case 'mean'
-        od_ref = mean(nirs_sig(:,window), 2);
-    case 'median'
-        od_ref = median(nirs_sig(:,window), 2);
-end
-
-delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, nb_samples) );
 end
 
 function distances = cpt_distances(channels, pair_indexes)
