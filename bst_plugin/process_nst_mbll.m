@@ -48,10 +48,14 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_pvf.Type    = 'value';
     sProcess.options.option_pvf.Value   = {50, '', 0};
     
-    sProcess.options.option_do_plp_corr.Comment = 'Light path length correction';
+    sProcess.options.option_do_plp_corr.Comment = 'DPF correction';
     sProcess.options.option_do_plp_corr.Type    = 'checkbox';
     sProcess.options.option_do_plp_corr.Value   = 1;
     
+    sProcess.options.option_dpf_method.Comment = 'DPF method';
+    sProcess.options.option_dpf_method.Type    = 'combobox';
+    sProcess.options.option_dpf_method.Value   = {1, {'Scholkmann2013', 'Duncan interpolation'}};    % {Default index, {list of entries}}
+
     sProcess.options = process_nst_dOD('get_options', sProcess.options);
     
 end
