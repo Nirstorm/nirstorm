@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
     sProcess.Index       = 1200;
-    sProcess.Description = '';
+    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Compute-head-model';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
@@ -41,61 +41,30 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
-    sProcess.options.data_source.Value = [nst_get_repository_url(), 'fluence/MRI__Colin27_4NIRS/'];
+    sProcess.options.data_source.Value = [nst_get_repository_url(), '/fluence/MRI__Colin27_4NIRS/'];
+    
+    sProcess.options.use_closest_wl.Comment = 'Use closest available wavelength';
+    sProcess.options.use_closest_wl.Type    = 'checkbox';
+    sProcess.options.use_closest_wl.Value   = 0;
     
 %     %TODO: complete file selection window for segmentation 
-    sProcess.options.do_grey_mask.Comment = 'Mask sensitivity projection in grey matter';
+    sProcess.options.do_grey_mask.Comment = 'Grey matter masking';
     sProcess.options.do_grey_mask.Type    = 'checkbox';
-    sProcess.options.do_grey_mask.Value   = 1;
-    
-    %TODO: add option to get segmentation
-
-%     SelectOptions_segmentation = {...
-%         '', ...                            % Filename
-%         '', ...                            % FileFormat
-%         'open', ...                        % Dialog type: {open,save}
-%         'Import segemeation folder...', ...    % Window title
-%         'ImportAnat', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-%         'single', ...                      % Selection mode: {single,multiple}
-%         'files', ...                        % Selection mode: {files,dirs,files_and_dirs}
-%         bst_get('FileFilters', 'mri'), ... % Available file formats
-%         'MriIn'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-%     % Option: MRI file
-%     sProcess.options.segmentation.Comment = 'Folder to import segemeation .nift file:';
-%     sProcess.options.segmentation.Type    = 'filename';
-%     sProcess.options.segmentation.Value   = SelectOptions_segmentation;
- 
-%     SelectOptions_do_grey_mask = {...
-%         '', ...                            % Filename
-%         '.nii', ...                            % FileFormat
-%         'open', ...                        % Dialog type: {open,save}
-%         'Select input folder...', ...     % Window title
-%         'ImportData', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-%         'single', ...                      % Selection mode: {single,multiple}
-%         'files', ...                        % Selection mode: {files,dirs,files_and_dirs}
-%          {}, ... % Available file formats
-%         'DataIn'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-%     sProcess.options.segmentation.Comment = 'Select segmentation nifti volume:';
-%     sProcess.options.segmentation.Type    = 'filename';
-    %sProcess.options.segmentation.Value   = SelectOptions_do_grey_mask;
-%     sProcess.options.data_source.Comment = 'Data source (URL or path)';
-%     sProcess.options.data_source.Type    = 'text';
-%     sProcess.options.segmentation.Value   = '/NAS/home/zhe_cai/zhengchen/Analyses/AcquisitionColodion/BST_DEMO/LR/FSBET_5tissue.nii';
-%         
+    sProcess.options.do_grey_mask.Value   = 1;       
     
     % Smoothing options
-    sProcess.options.do_smoothing.Comment = 'Smooth the surface based sensitivity map';
+    sProcess.options.do_smoothing.Comment = 'Spatial smoothing';
     sProcess.options.do_smoothing.Type    = 'checkbox';
     sProcess.options.do_smoothing.Value   = 1;
     % === DESCRIPTION   copied from process_ssmooth_surfstat
-    sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
-                                     'The smoothing is based only on the surface topography, <BR>' ...
-                                     'not the real geodesic distance between two vertices.<BR>', ...
-                                     'The input in mm is converted to a number of edges based<BR>', ...
-                                     'on the average distance between two vertices in the surface.<BR><BR>'];
-    sProcess.options.help.Type    = 'label';
+%     sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
+%                                      'The smoothing is based only on the surface topography, <BR>' ...
+%                                      'not the real geodesic distance between two vertices.<BR>', ...
+%                                      'The input in mm is converted to a number of edges based<BR>', ...
+%                                      'on the average distance between two vertices in the surface.<BR><BR>'];
+%     sProcess.options.help.Type    = 'label';
     % === FWHM (kernel size)
-    sProcess.options.fwhm.Comment = '<B>FWHM</B> (Full width at half maximum):  ';
+    sProcess.options.fwhm.Comment = 'Smoothing FWHM:  ';
     sProcess.options.fwhm.Type    = 'value';
     sProcess.options.fwhm.Value   = {0.5, 'mm', 2};
     
@@ -149,8 +118,8 @@ OutputFiles = {};
 
 do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
 do_smoothing = sProcess.options.do_smoothing.Value;
-
 do_grey_mask = sProcess.options.do_grey_mask.Value;
+use_closest_wl = sProcess.options.use_closest_wl.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -196,7 +165,8 @@ sHead = in_tess_bst(head_mesh_fn);
 anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
         
 [all_fluences_flat_sparse all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], anat_name, ...
-                                ChannelMat.Nirs.Wavelengths, data_source);
+                                                                         ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
+                                                                         use_closest_wl);
 %TODO: loop over all_fluences and create full volumes
 mri_zeros = zeros(size(sMri.Cube));
 for ivertex=1:length([src_hvidx ; det_hvidx])
@@ -417,12 +387,12 @@ det_head_vertex_ids = knnsearch(head_vertices_mri, det_locs_mri);
 
 end
 
-function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir)
+function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir, use_closest_wl)
 
 if nargin < 5
     sparse_threshold = nan;
 end
-
+ 
 if nargin < 6
     voi_mask = nan;
 end
@@ -431,11 +401,15 @@ if nargin < 7
     cube_size = [];
 end
 
-if nargin < 8
+if nargin < 8 || isempty(local_cache_dir)
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(), ...
                                    'fluence', protect_fn_str(anat_name));
 end
+%TODO: assert local cache directory exists
 
+if nargin < 9 
+   use_closest_wl = 0; 
+end
 
 fluence_fns = {};
 fluences = {};
@@ -451,6 +425,13 @@ if ~isempty(strfind(data_source, 'http'))
     if ~exist(local_cache_dir, 'dir')
         mkdir(local_cache_dir);
     end
+    
+    if use_closest_wl
+        wavelengths_for_dl = get_template_closest_wl(wavelengths);
+    else
+        wavelengths_for_dl = wavelengths;
+    end
+    
     to_download_urls = {};
     to_download_spec = {};
     dest_fns = {};
@@ -464,7 +445,7 @@ if ~isempty(strfind(data_source, 'http'))
         vertex_id = head_vertices(ivertex);
         for iwl=1:length(wavelengths)
             wl = wavelengths(iwl);
-            fluence_bfn =  get_fluence_fn(vertex_id, wl);
+            fluence_bfn =  get_fluence_fn(vertex_id, wavelengths_for_dl(iwl));
             fluence_fn = fullfile(local_cache_dir, fluence_bfn);
             fluence_fns{ivertex}{iwl} = fluence_fn;
             
@@ -592,6 +573,31 @@ end
 
 function fluence_fn = get_fluence_fn(vertex_id, wl)
    fluence_fn = sprintf('fluence_%dnm_v%06d.mat', wl, vertex_id);
+end
+
+
+function closest_wavelengths = get_template_closest_wl(wavelengths)
+
+template_wls = [685];
+
+closest_wavelengths = template_wls(arrayfun(@(wl) iclosest(template_wls, wl), wavelengths));
+
+diff = (closest_wavelengths ~= wavelengths);
+if any(diff)
+    ndiffs = sum(diff);
+    diff_idx = find(diff);
+    repl = '';
+    for ii=1:ndiffs
+        iwl = diff_idx(ii);
+        repl = [repl sprintf('  - %dnm -> %dnm\n', wavelengths(iwl), closest_wavelengths(iwl))];
+    end
+    warning(sprintf('Some wavelengths do not have precomputed fluence data.\nReplacing them with the closest available:\n%s', repl))
+end
+
+end
+
+function ic = iclosest(catalog, value)
+[v,ic] = min(abs(catalog-value));
 end
 
 function str_size = format_file_size(size)
