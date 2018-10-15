@@ -249,9 +249,6 @@ if nargin < 3
     age = 25;
 end
 
-if nargin < 4
-    normalize_method = 'mean';
-end
 
 if nargin < 5
    do_plp_corr = 1; 
@@ -366,25 +363,26 @@ function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf)
 
 
 % Duncan et al 1996:
-% dpf = y_0 + a1 * age^a2
-dpf_ref_data = [ ...
-    [690, 5.38, 0.049, 0.877]; ... % WL, y_0, a1, a2 
-    [744, 5.11, 0.106, 0.723]; ... % WL, y_0, a1, a2 
-    [807, 4.99, 0.067, 0.814]; ... % WL, y_0, a1, a2 
-    [832, 4.67, 0.062, 0.819]; ... % WL, y_0, a1, a2 
-    ];
+% dpf = y0 + a1 * age^a2
+% dpf_ref_data = [ ...
+%    [690, 5.38, 0.049, 0.877]; ... % WL, y0, a1, a2 
+%    [744, 5.11, 0.106, 0.723]; ... % WL, y0, a1, a2 
+%    [807, 4.99, 0.067, 0.814]; ... % WL, y0, a1, a2 
+%    [832, 4.67, 0.062, 0.819]; ... % WL, y0, a1, a2 
+%    ];
 
-if size(wavelengths, 2) > 1
-    wavelengths = wavelengths';
-end
+%if size(wavelengths, 2) > 1
+%    wavelengths = wavelengths';
+%end
 
-y0 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,2), wavelengths, ...
-             'linear', 'extrap');
-a1 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,3), wavelengths, ...
-             'linear', 'extrap');
-a2 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,4), wavelengths, ...
-             'linear', 'extrap');
-dpf = y0 + a1 .* age.^a2;
+% y0 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,2), wavelengths, ...
+%             'linear', 'extrap');
+% a1 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,3), wavelengths, ...
+%             'linear', 'extrap');
+% a2 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,4), wavelengths, ...
+%             'linear', 'extrap');
+% dpf = y0 + a1 .* age.^a2;
+
 
 % ages = 10:50;
 % for ia=1:length(ages)
@@ -392,12 +390,31 @@ dpf = y0 + a1 .* age.^a2;
 % end
 % plot(ages, dpfs(1, :), 'r'); hold on;
 % plot(ages, dpfs(2, :), 'b');
+%
+%
+%
+% Scholkmann et al. (2013):
+% General equation as cubic function for computing DPFs for all wavelengths
+% and ages.
+% Based on empirical data of six independent studies (Bonnery, 2012; Cooper, 1996; Duncan,
+% 1996; Essenpreis, 1993; van der Zee, 1992; Zhao, 2002)
+% Adjusted R^2 = 0.9983; RMSE = 0.0221
+%
+% dpf = a + b*i^c + d*wl^3 + e*wl^2 + f*wl
+
+% fixed values obtained by LAR and LMA models (p.2)
+a = 223.3; b = 0.05624; c = 0.8493; d = -5.723e-07; e = 0.001245; f = -0.9025;
+ 
+dpf = [a + b*age^c + d*wavelengths(1)^3 + e*wavelengths(1)^2 + f*wavelengths(1); 
+a + b*age^c + d*wavelengths(2)^3 + e*wavelengths(2)^2 + f*wavelengths(2)];
+
 
 ppf = dpf / pvf;
 
 nb_samples = size(delta_od, 2);
 delta_od_fixed = delta_od ./ repmat(ppf, 1, nb_samples);
 end
+
 
 function distances = cpt_distances(channels, pair_indexes)
 % Distance unit is the one of brainstorm (from Channel Loc fields)
