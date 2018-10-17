@@ -109,7 +109,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     event_table = load(event_file);
 
-    newEvents=compute(event_table,raw_events_name, sProcess.options.last_event.Value);
+    newEvents=compute(event_table,raw_events_name, sProcess.options.last_event.Value, sInputs(1));
     output_file = import_events(sProcess, sInputs(1), newEvents);
 
      if ~isempty(output_file)
@@ -119,7 +119,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
 end
 
-function newEvents =compute(event_table,raw_events_name,import_last)
+function newEvents =compute(event_table,raw_events_name,import_last, sInputs)
+
+if nargin < 4
+    sInputs = [];
+end
 
     % we create a map for each events events_index(evt) will cointain every
     % time marker related to evt 
@@ -167,7 +171,7 @@ function newEvents =compute(event_table,raw_events_name,import_last)
             evt_duration=evt(end,2) - evt(end,1);
             events_index(key)= [  events_index(key) ;  event_table(end,1)  event_table(end,1)+evt_duration];
         else
-        	bst_warning('Not able to import last event');
+            bst_report('Warning', 'process_nst_import_evt_events', sInputs, 'Not able to import last event');
         end
    end    
     
