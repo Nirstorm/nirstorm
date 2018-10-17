@@ -67,6 +67,10 @@ for iInput=1:length(sInputs)
 
     separations = Compute(ChannelMat.Channel(nirs_ichans)) * 100; %convert to cm
     
+    if isempty(separations)
+        return;
+    end
+    
     % Save time-series data
     data_out = zeros(size(sDataIn.F, 1), 1);
     data_out(nirs_ichans,:) = separations;
@@ -103,8 +107,12 @@ function separations = Compute(channels)
 
 separations = zeros(length(channels), 1);
 for ichan=1:length(channels)
-    separations(ichan) = euc_dist(channels(ichan).Loc(:,1), ...
-                                  channels(ichan).Loc(:,2));
+    if strcmp(channels(ichan).Type, 'NIRS')
+        separations(ichan) = euc_dist(channels(ichan).Loc(:,1), ...
+                                      channels(ichan).Loc(:,2));
+    else
+        separations(ichan) = nan;
+    end
 end
 
 end
