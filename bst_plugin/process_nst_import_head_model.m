@@ -41,7 +41,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
-    sProcess.options.data_source.Value = [nst_get_repository_url(), '/fluence/MRI__Colin27_4NIRS/'];
+    sProcess.options.data_source.Value = [nst_get_repository_url(), '/fluence/'];
     
     sProcess.options.use_closest_wl.Comment = 'Use closest available wavelength';
     sProcess.options.use_closest_wl.Type    = 'checkbox';
