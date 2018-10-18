@@ -151,8 +151,9 @@ if ~isempty(remote_files_not_found)
     throw(exception);
 end
 
-if all(~isnan(to_download_sizes))
-    total_download_size = nansum(to_download_sizes);
+nans = isnan(to_download_sizes);
+if any(~nans)
+    total_download_size = sum(to_download_sizes(~nans));
 else
     total_download_size = nan;
 end
