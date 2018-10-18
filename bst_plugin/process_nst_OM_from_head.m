@@ -149,6 +149,11 @@ catch
     return
 end
 
+if ~license('test', 'statistics_toolbox')
+    bst_error('Stats Toolbox not available');
+    return;
+end
+
 condition_name = sProcess.options.condition_name.Value;
 if isempty(condition_name)
     condition_name = 'planning_optimal_montage';
