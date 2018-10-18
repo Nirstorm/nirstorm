@@ -5,13 +5,14 @@ Parse all matlab functions used in all .m files in the nirstorm directory
 (recursive) and query matlab reference document to know when the function 
 was released. 
 """
+import os
 import os.path as op
 import re
 import requests
 import subprocess
 from collections import namedtuple, defaultdict
 
-DEBUG = False
+DEBUG = True
 
 func_re = re.compile('.*?([a-zA-Z]\w+)\([^)]*\)[^.,].*?')
 release_re = re.compile('Introduced (in|before) (\w+) *<')
@@ -36,41 +37,67 @@ if 0:
     MATLAB_ROOT = doc_re_result[0]
     if not op.exists(MATLAB_ROOT):
         raise Exception('Retrieved matlab root path does not exist: ' + MATLAB_ROOT)
-    MATLAB_REF_PATH = op.join(MATLAB_ROOT, 'help/matlab/ref/')
+    MATLAB_HELP_PATH = op.join(MATLAB_ROOT, 'help')
 else:
-    MATLAB_REF_PATH = '/home/tom/Projects/Software/matlab_official_2017a/help/matlab/ref/'
+    MATLAB_HELP_PATH = '/home/tom/Projects/Software/matlab_official_2017a/help'
+    
+print 'Parsing matlab doc path ',  MATLAB_HELP_PATH, '...'
 
-print 'Using matlab ref doc path:',  MATLAB_REF_PATH
+matlab_help_fns = defaultdict(list)
+for root, dirs, fns in os.walk(MATLAB_HELP_PATH):
+    for fn in fns:
+        if fn.endswith('.html'):
+            matlab_help_fns[op.splitext(op.basename(fn))[0]].append(op.join(root, fn))
 
-LocalFileResponse = namedtuple('LocalFileResponse', 'ok text')
 
-def get_matlab_ref_doc(func_name):
+LocalFileResponse = namedtuple('LocalFileResponse', 'ok text toolbox')
 
-    doc_fn = op.join(MATLAB_REF_PATH, '%s.html' % func_name)
-    if DEBUG:
-        print 'Trying local file:', doc_fn
-    if op.exists(doc_fn):
+def get_matlab_help_doc(func_name):
+
+    if matlab_help_fns.has_key(func_name):
+        doc_fns = matlab_help_fns[func_name]
+        if len(doc_fns) > 1:
+            print 'Warning, more than one version of ', func_name, 'found:'
+            print '\n'.join(['  - %s' %d for d in doc_fns])
+
+        # Pick core version if exists: 
+        doc_fn = None
+        for dfn in doc_fns:
+            if 'ref' in dfn:
+                doc_fn = dfn
+                toolbox = 'core'
+                break
+        if doc_fn is None:
+            doc_fn = doc_fns[0]
+            toolbox = op.relpath(doc_fn, MATLAB_HELP_PATH).split(op.sep)[0]
+                
+        print 'Using local doc file:', doc_fn, '(tbx:', toolbox ,')'
         with open(doc_fn) as fdoc:
-            return LocalFileResponse(True, fdoc.read())
+            return LocalFileResponse(True, fdoc.read(), toolbox)
     else:
-        return LocalFileResponse(False, '')
+        return LocalFileResponse(False, '', None)
         # To get doc from mathworks website:
         # url = matlab_doc_url_pat % func_name
         # print 'Trying URL:', url
         # return requests.get(url, timeout=1)
 
-def get_matlab_func_release(func_name, searched):
+def describe_matlab_func(func_name, searched):
     searched.add(func_name)
-    #print 'Checking doc of %s ...' % func_name
+    date_tag = None
+    toolbox = None
+    if DEBUG:
+        print 'Checking doc of %s ...' % func_name
     try:
-        resp = get_matlab_ref_doc(func_name) 
+        resp = get_matlab_help_doc(func_name)
+        toolbox = resp.toolbox
         if resp.ok:
+            # Extract release date
             rr = release_re.search(resp.text)
             if rr is not None:
                 if rr.group(1) == 'in':
-                    return rr.group(2)
+                    date_tag = rr.group(2)
                 else: #before
-                    return 'b4_' + rr.group(2)
+                    date_tag = 'b4_' + rr.group(2)
             else:
                 if DEBUG:
                     print func_name, ': rdate not found in doc'
@@ -84,7 +111,7 @@ def get_matlab_func_release(func_name, searched):
         if DEBUG:
             print func_name, ': func doc not found online (time out)'
     
-    return None
+    return date_tag, toolbox
 
 def can_be_mat_func(func_name):
     """
@@ -100,20 +127,30 @@ def can_be_mat_func(func_name):
     
 from glob import glob
 rdates = defaultdict(set)
+toolboxes = defaultdict(set)
 ignore = set()
 
 for mat_fn in glob(op.join(op.dirname(op.realpath(__file__)), '../**/*.m')):
     print 'Parsing %s...' % mat_fn
     with open(mat_fn) as fmat:
         func_names = func_re.findall(fmat.read())
-        crdates = [(f,get_matlab_func_release(f,ignore)) for f in func_names
+        func_info = [(f,describe_matlab_func(f,ignore)) for f in func_names
                    if f not in ignore and can_be_mat_func(f)]
-        for f,rdate in crdates:
+        for f,(rdate, tbx) in func_info:
             if rdate is not None:
                 rdates[rdate].add(f)
+            if tbx is not None:
+                toolboxes[tbx].add(f)
 
 print '\n-- Functions sorted by release date --\n'
 for rdate, funcs in rdates.items():
     print rdate
     print ', '.join(sorted(funcs))
     print ''
+
+print '\n-- Functions sorted by toolbox --\n'
+for tbx, funcs in toolboxes.items():
+    print tbx
+    print ', '.join(sorted(funcs))
+    print ''
+    

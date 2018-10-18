@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
     sProcess.Index       = 1200;
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Compute-head-model';
+    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Compute-head-model-from-fluence';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
@@ -407,8 +407,8 @@ function [src_head_vertex_ids det_head_vertex_ids] = get_head_vertices_closest_t
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
 src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
 det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
-src_head_vertex_ids = knnsearch(head_vertices_mri, src_locs_mri);
-det_head_vertex_ids = knnsearch(head_vertices_mri, det_locs_mri);
+src_head_vertex_ids = nst_knnsearch(head_vertices_mri, src_locs_mri);
+det_head_vertex_ids = nst_knnsearch(head_vertices_mri, det_locs_mri);
 
 
 end
@@ -445,6 +445,17 @@ fluence_fns = {};
 fluences = {};
 reference = {};
 if ~isempty(strfind(data_source, 'http'))
+    
+    % Checking if URL repository can be found
+    jurl = java.net.URL(data_source);
+    conn = openConnection(jurl);
+    status = getResponseCode(conn);
+    if status == 404
+        default = [nst_get_repository_url(), '/fluence/'];
+        msg = sprintf('Fluence repository not found at %s.\n Switching to default: %s', data_source, default);
+        bst_report('Warning', 'process_nst_import_head_model', sInput, msg);
+    end
+    
     if ~fluence_is_available(anat_name)
         bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
         return;
@@ -643,6 +654,7 @@ end
 end
 
 function flag = fluence_is_available(anat_name)
+% TODO: check online
 flag = any(strcmp(strtrim(anat_name), {'MRI: Colin27 4NIRS'}));
 end
 

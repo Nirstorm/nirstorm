@@ -71,6 +71,12 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
+
+if ~license('test', 'statistics_toolbox')
+    bst_error('Stats Toolbox not available');
+    return;
+end
+
 be_install(); %ensure brainentropy is installed.
 
 sStudy = bst_get('Study', sInputs.iStudy);
