@@ -149,6 +149,11 @@ catch
     return
 end
 
+if ~license('test', 'statistics_toolbox')
+    bst_error('Stats Toolbox not available');
+    return;
+end
+
 condition_name = sProcess.options.condition_name.Value;
 if isempty(condition_name)
     condition_name = 'planning_optimal_montage';
@@ -710,7 +715,7 @@ end
 
 if 0
     %% Dummy positioning
-    sources = knnsearch(head_vertices_coords, mean(head_vertices_coords,1));
+    sources = nst_knnsearch(head_vertices_coords, mean(head_vertices_coords,1));
     nb_dets = 2;
     detectors = randsample(size(head_vertices_coords, 1), nb_dets);
     

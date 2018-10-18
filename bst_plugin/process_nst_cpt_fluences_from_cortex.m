@@ -44,6 +44,7 @@ sProcess.options.cortex_to_scalp_extent.Value = {4.0, 'cm', 1};
 sProcess.options = nst_add_scout_sel_options(sProcess.options, 'roi', 'Cortical scout (target ROI):', ...
                                              'cortex', {'User scouts'}, 0);
 sProcess.options = process_nst_cpt_fluences_from_head('append_mcxlab_options', sProcess.options);
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -92,6 +93,13 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+
+if ~license('test', 'statistics_toolbox')
+    bst_error('Stats Toolbox not available');
+    return;
+end
+
+
 % Get scout vertices
 cortex_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
 

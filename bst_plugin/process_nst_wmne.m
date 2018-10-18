@@ -84,6 +84,11 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 
+if ~license('test', 'statistics_toolbox')
+    bst_error('Stats Toolbox not available');
+    return;
+end
+
 sStudy = bst_get('Study', sInputs.iStudy);
 
 %% Load head model
