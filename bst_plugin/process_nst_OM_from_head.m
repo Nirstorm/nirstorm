@@ -710,7 +710,7 @@ end
 
 if 0
     %% Dummy positioning
-    sources = knnsearch(head_vertices_coords, mean(head_vertices_coords,1));
+    sources = nst_knnsearch(head_vertices_coords, mean(head_vertices_coords,1));
     nb_dets = 2;
     detectors = randsample(size(head_vertices_coords, 1), nb_dets);
     

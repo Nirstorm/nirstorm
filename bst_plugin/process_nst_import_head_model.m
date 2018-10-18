@@ -411,8 +411,8 @@ function [src_head_vertex_ids det_head_vertex_ids] = get_head_vertices_closest_t
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
 src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
 det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
-src_head_vertex_ids = knnsearch(head_vertices_mri, src_locs_mri);
-det_head_vertex_ids = knnsearch(head_vertices_mri, det_locs_mri);
+src_head_vertex_ids = nst_knnsearch(head_vertices_mri, src_locs_mri);
+det_head_vertex_ids = nst_knnsearch(head_vertices_mri, det_locs_mri);
 
 
 end
