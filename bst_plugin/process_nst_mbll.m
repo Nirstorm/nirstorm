@@ -48,10 +48,14 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_pvf.Type    = 'value';
     sProcess.options.option_pvf.Value   = {50, '', 0};
     
-    sProcess.options.option_do_plp_corr.Comment = 'Light path length correction';
+    sProcess.options.option_do_plp_corr.Comment = 'DPF correction';
     sProcess.options.option_do_plp_corr.Type    = 'checkbox';
     sProcess.options.option_do_plp_corr.Value   = 1;
     
+    sProcess.options.option_dpf_method.Comment = 'DPF method';
+    sProcess.options.option_dpf_method.Type    = 'combobox';
+    sProcess.options.option_dpf_method.Value   = {1, {'Scholkmann2013', 'Duncan interpolation'}};    % {Default index, {list of entries}}
+
     sProcess.options = process_nst_dOD('get_options', sProcess.options);
     
 end
@@ -71,6 +75,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
     pvf = sProcess.options.option_pvf.Value{1};
+    dpf_method = sProcess.options.option_dpf_method.Value{1};
 
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -105,7 +110,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Apply MBLL
     % TODO: add baseline window and expose it
-    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, dOD_params, do_plp_corr, pvf); 
+    [nirs_hb, channels_hb] = Compute(fnirs, fchannel_def, age, dOD_params, do_plp_corr, pvf, dpf_method); 
     
     % Re-add other channels that were not changed during MBLL
     [final_nirs, ChannelMat] = concatenate_data(nirs_hb, channels_hb, nirs_other, channel_def_other);
@@ -202,7 +207,7 @@ end
 
 
 function [nirs_hb, channel_hb_def] = ...
-    Compute(nirs_sig, channel_def, age, dOD_params, do_plp_corr, pvf)
+    Compute(nirs_sig, channel_def, age, dOD_params, do_plp_corr, pvf, dpf_method)
 %% Apply MBLL to compute [HbO] & [HbR] from given nirs OD data
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
@@ -223,6 +228,9 @@ function [nirs_hb, channel_hb_def] = ...
 %    [- do_ppl_corr]: bool, default: 1
 %        Flag to enable partial light path correction (account for light
 %        scattering through head tissues)
+%    [- dpf_method]: integer, default: 1
+%        Select the method to compute dpf, which is either Scholkman2013 {1} or
+%        Duncan interpolation {2}
 % 
 % Output: 
 %   - nirs_hb: matrix of double, size: nb_samples x (nb_channels/nb_wavelengths)*2
@@ -258,6 +266,10 @@ if nargin < 6
     pvf = 50;
 end
 
+if nargin < 7
+    dpf_method = 1; % for Scholkmann2013
+end
+
 [nirs_psig, pair_names, pair_loc, pair_indexes] = group_paired_channels(nirs_sig, channel_def);
 pair_distances = cpt_distances(channel_def.Channel, pair_indexes) .* 100; %convert to cm
 
@@ -271,7 +283,7 @@ for ipair=1:size(nirs_psig, 1)
                                dOD_params);
     if do_plp_corr
         %TODO: ppf can be computed only once before the loop over pairs
-        delta_od_ppf_fixed = fix_ppf(delta_od, channel_def.Nirs.Wavelengths, age, pvf);
+        delta_od_ppf_fixed = fix_ppf(delta_od, channel_def.Nirs.Wavelengths, age, pvf, dpf_method);
     else
         delta_od_ppf_fixed = delta_od;
     end
@@ -346,7 +358,7 @@ channel_hb_def.Channel = Channel;
 channel_hb_def.Comment = ['NIRS-BRS sensors (' num2str(length(Channel)) ')'];
 end
 
-function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf)
+function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf, dpf_method)
 %% Fix given optival density measurements to correct for the differential light path 
 %% length: account for light scattering within head tissues
 %
@@ -357,42 +369,44 @@ function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf)
 %         Wavelengths of the NIRS OD measurements
 %    [- age]: double, default is 25
 %         The subject's age
+%     - dpf_method: method used to calculate DPF factor for respective
+%         wavelengths ({1} Scholkmann2013 or {2} Duncan interpolation
 %
 % Output: matrix of double, size: nb_wavelengths x time
 %     Corrected NIRS OD measurements
 
+   
+if size(wavelengths, 2) > 1
+    wavelengths = wavelengths';
+end    
 
 % Duncan et al 1996:
 % dpf = y0 + a1 * age^a2
-% dpf_ref_data = [ ...
-%    [690, 5.38, 0.049, 0.877]; ... % WL, y0, a1, a2 
-%    [744, 5.11, 0.106, 0.723]; ... % WL, y0, a1, a2 
-%    [807, 4.99, 0.067, 0.814]; ... % WL, y0, a1, a2 
-%    [832, 4.67, 0.062, 0.819]; ... % WL, y0, a1, a2 
-%    ];
-
-%if size(wavelengths, 2) > 1
-%    wavelengths = wavelengths';
-%end
-
-% y0 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,2), wavelengths, ...
-%             'linear', 'extrap');
-% a1 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,3), wavelengths, ...
-%             'linear', 'extrap');
-% a2 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,4), wavelengths, ...
-%             'linear', 'extrap');
-% dpf = y0 + a1 .* age.^a2;
+ dpf_ref_data = [ ...
+    [690, 5.38, 0.049, 0.877]; ... % WL, y0, a1, a2 
+    [744, 5.11, 0.106, 0.723]; ... % WL, y0, a1, a2 
+    [807, 4.99, 0.067, 0.814]; ... % WL, y0, a1, a2 
+    [832, 4.67, 0.062, 0.819]; ... % WL, y0, a1, a2 
+    ];
 
 
+ y0 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,2), wavelengths, ...
+             'linear', 'extrap');
+ a1 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,3), wavelengths, ...
+             'linear', 'extrap');
+ a2 = interp1(dpf_ref_data(:,1), dpf_ref_data(:,4), wavelengths, ...
+             'linear', 'extrap');
+         
+ dpf_Duncan = y0 + a1 .* age.^a2;
+ 
 % ages = 10:50;
 % for ia=1:length(ages)
 %     dpfs(:, ia) = y0 + a1 .* ages(ia).^a2;
 % end
 % plot(ages, dpfs(1, :), 'r'); hold on;
 % plot(ages, dpfs(2, :), 'b');
-%
-%
-%
+
+
 % Scholkmann et al. (2013):
 % General equation as cubic function for computing DPFs for all wavelengths
 % and ages.
@@ -405,9 +419,24 @@ function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf)
 % fixed values obtained by LAR and LMA models (p.2)
 a = 223.3; b = 0.05624; c = 0.8493; d = -5.723e-07; e = 0.001245; f = -0.9025;
  
-dpf = [a + b*age^c + d*wavelengths(1)^3 + e*wavelengths(1)^2 + f*wavelengths(1); 
-a + b*age^c + d*wavelengths(2)^3 + e*wavelengths(2)^2 + f*wavelengths(2)];
+dpf_Scholkmann = [a + b*age^c + d*wavelengths(1)^3 + e*wavelengths(1)^2 + f*wavelengths(1); 
+a + b*age^c + d*wavelengths(2)^3 + e*wavelengths(2)^2 + f*wavelengths(2)]; 
 
+
+if dpf_method == 1
+    
+    dpf = dpf_Scholkmann;
+    
+elseif dpf_method == 2
+    
+    dpf = dpf_Duncan;
+    
+else 
+    
+    disp('Error');
+
+    
+end
 
 ppf = dpf / pvf;
 
