@@ -54,7 +54,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.option_dpf_method.Comment = 'DPF method';
     sProcess.options.option_dpf_method.Type    = 'combobox';
-    sProcess.options.option_dpf_method.Value   = {1, {'Scholkmann2013', 'Duncan interpolation'}};    % {Default index, {list of entries}}
+    sProcess.options.option_dpf_method.Value   = {2, {'Scholkmann2013', 'Duncan interpolation'}};    % {Default index, {list of entries}}
 
     sProcess.options = process_nst_dOD('get_options', sProcess.options);
     

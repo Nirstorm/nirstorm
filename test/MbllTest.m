@@ -59,6 +59,7 @@ classdef MbllTest < matlab.unittest.TestCase
             sOutput = bst_process('CallProcess', 'process_nst_mbll', sRaw, [], ...
                                   'option_age',             age, ...
                                   'option_pvf',             pvf, ...
+                                  'option_dpf_method', 2, ... % Ducan
                                   'option_baseline_method', 1, ...  % mean
                                   'timewindow', [0 (activ_window_samples(1)-1)*dt], ...
                                   'option_do_plp_corr',     1);
@@ -77,7 +78,7 @@ classdef MbllTest < matlab.unittest.TestCase
                 plot(time, sDataOut.F(2,:), 'b--');
             end
             
-            assert(all_close(dhb_signal, sDataOut.F));            
+            testCase.assertTrue(all_close(dhb_signal*1000, sDataOut.F*1000));            
         end
         
         function test_mbll_on_tapping_data(testCase)
@@ -116,7 +117,7 @@ classdef MbllTest < matlab.unittest.TestCase
                 plot(sDataOut.Time, sDataOut.F(2,:), 'b--');
             end
             
-            testCase.assertTrue(all_close(sDataOut.F, expected_mbll));
+            testCase.assertTrue(all_close(sDataOut.F*1000, expected_mbll*1000));
         end
         
     end
