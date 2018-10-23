@@ -176,15 +176,15 @@ if nargin < 2 || ~isfield(parameters, 'method')
    parameters.method = 'mean'; 
 end
 
-if nargin < 2 || ~isfield(parameters, 'window')
-    parameters.window = 1:nb_samples;
+if nargin < 2 || ~isfield(parameters, 'baseline_window')
+    parameters.baseline_window = 1:nb_samples;
 end
 
 switch parameters.method
     case 'mean'
-        od_ref = mean(nirs_sig(:, parameters.window), 2);
+        od_ref = mean(nirs_sig(:, parameters.baseline_window), 2);
     case 'median'
-        od_ref = median(nirs_sig(:, parameters.window), 2);
+        od_ref = median(nirs_sig(:, parameters.baseline_window), 2);
 end
 
 delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, nb_samples) );

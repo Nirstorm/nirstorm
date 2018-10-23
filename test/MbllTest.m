@@ -61,7 +61,7 @@ classdef MbllTest < matlab.unittest.TestCase
                                   'option_pvf',             pvf, ...
                                   'option_dpf_method', 2, ... % Ducan
                                   'option_baseline_method', 1, ...  % mean
-                                  'timewindow', [0 (activ_window_samples(1)-1)*dt], ...
+                                  'timewindow', [0 (activ_window_samples(1)-2)*dt], ...
                                   'option_do_plp_corr',     1);
             sDataOut = in_bst_data(sOutput.FileName);
             
@@ -71,11 +71,11 @@ classdef MbllTest < matlab.unittest.TestCase
             
             if 0
                 figure(); hold on; 
-                plot(time,dhb_signal(1,:), 'r');
-                plot(time,dhb_signal(2,:), 'b');
+                plot(time,dhb_signal(1,:)*1000, 'r');
+                plot(time,dhb_signal(2,:)*1000, 'b');
                 
-                plot(time, sDataOut.F(1,:), 'r--');
-                plot(time, sDataOut.F(2,:), 'b--');
+                plot(time, sDataOut.F(1,:)*1000, 'r--');
+                plot(time, sDataOut.F(2,:)*1000, 'b--');
             end
             
             testCase.assertTrue(all_close(dhb_signal*1000, sDataOut.F*1000));            
