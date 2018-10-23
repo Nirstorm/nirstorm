@@ -267,7 +267,7 @@ if nargin < 6
 end
 
 if nargin < 7
-    dpf_method = 1; % for Scholkmann2013
+    dpf_method = 2; % for Duncan
 end
 
 [nirs_psig, pair_names, pair_loc, pair_indexes] = group_paired_channels(nirs_sig, channel_def);
