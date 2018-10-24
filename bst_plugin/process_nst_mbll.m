@@ -52,9 +52,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_do_plp_corr.Type    = 'checkbox';
     sProcess.options.option_do_plp_corr.Value   = 1;
     
+    dpf_method_choices = get_dpf_method_choices();
+    
     sProcess.options.option_dpf_method.Comment = 'DPF method';
     sProcess.options.option_dpf_method.Type    = 'combobox';
-    sProcess.options.option_dpf_method.Value   = {2, {'Scholkmann2013', 'Duncan interpolation'}};    % {Default index, {list of entries}}
+    sProcess.options.option_dpf_method.Value   = {dpf_method_choices.DUNCAN1996, ...
+                                                  fieldnames(dpf_method_choices)};    % {Default index, {list of entries}}
 
     sProcess.options = process_nst_dOD('get_options', sProcess.options);
     
@@ -228,9 +231,9 @@ function [nirs_hb, channel_hb_def] = ...
 %    [- do_ppl_corr]: bool, default: 1
 %        Flag to enable partial light path correction (account for light
 %        scattering through head tissues)
-%    [- dpf_method]: integer, default: 1
-%        Select the method to compute dpf, which is either Scholkman2013 {1} or
-%        Duncan interpolation {2}
+%    [- dpf_method]: integer, default: dpf_method_choices.DUNCAN1996;
+%        Select the method to compute dpf
+%        See function get_dpf_method_choices() for enumeration of choices.
 % 
 % Output: 
 %   - nirs_hb: matrix of double, size: nb_samples x (nb_channels/nb_wavelengths)*2
@@ -266,8 +269,10 @@ if nargin < 6
     pvf = 50;
 end
 
+dpf_method_choices = get_dpf_method_choices();
+
 if nargin < 7
-    dpf_method = 2; % for Duncan
+    dpf_method = dpf_method_choices.DUNCAN1996;
 end
 
 [nirs_psig, pair_names, pair_loc, pair_indexes] = group_paired_channels(nirs_sig, channel_def);
@@ -367,10 +372,13 @@ function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf, dpf_method)
 %         The NIRS OD measurements
 %     - wavelengths: array of double, size: nb_wavelengths
 %         Wavelengths of the NIRS OD measurements
-%    [- age]: double, default is 25
+%     - age: double
 %         The subject's age
-%     - dpf_method: method used to calculate DPF factor for respective
-%         wavelengths ({1} Scholkmann2013 or {2} Duncan interpolation
+%     - pvf: double
+%         partial volume factor
+%     - dpf_method: integer, default: dpf_method_choices.DUNCAN1996;
+%        Select the method to compute dpf
+%        See function get_dpf_method_choices() for enumeration of choices.
 %
 % Output: matrix of double, size: nb_wavelengths x time
 %     Corrected NIRS OD measurements
@@ -422,20 +430,14 @@ a = 223.3; b = 0.05624; c = 0.8493; d = -5.723e-07; e = 0.001245; f = -0.9025;
 dpf_Scholkmann = [a + b*age^c + d*wavelengths(1)^3 + e*wavelengths(1)^2 + f*wavelengths(1); 
 a + b*age^c + d*wavelengths(2)^3 + e*wavelengths(2)^2 + f*wavelengths(2)]; 
 
-
-if dpf_method == 1
-    
-    dpf = dpf_Scholkmann;
-    
-elseif dpf_method == 2
-    
-    dpf = dpf_Duncan;
-    
-else 
-    
-    disp('Error');
-
-    
+dpf_method_choices = get_dpf_method_choices();
+switch dpf_method
+    case dpf_method_choices.SCHOLKMANN2013
+        dpf = dpf_Scholkmann;
+    case dpf_method_choices.DUNCAN1996
+        dpf = dpf_Duncan;
+    otherwise
+        disp('Error');
 end
 
 ppf = dpf / pvf;
@@ -444,7 +446,11 @@ nb_samples = size(delta_od, 2);
 delta_od_fixed = delta_od ./ repmat(ppf, 1, nb_samples);
 end
 
-
+function dm = get_dpf_method_choices()
+dm.SCHOLKMANN2013 = 1;
+dm.DUNCAN1996 = 2;
+end
+    
 function distances = cpt_distances(channels, pair_indexes)
 % Distance unit is the one of brainstorm (from Channel Loc fields)
 % -> meter
