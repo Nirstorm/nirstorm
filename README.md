@@ -1,7 +1,7 @@
-![splash illustration](https://raw.githubusercontent.com/wiki/Nirstorm/nirstorm/images/splash_illustration.png)
-
 # nirstorm
 Brainstorm plugin for fNIRS data analysis. 
+
+![splash illustration](https://raw.githubusercontent.com/wiki/Nirstorm/nirstorm/images/splash_illustration.png)
 
 Current features include classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
 ## Authors
