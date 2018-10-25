@@ -74,7 +74,15 @@ if ndims(head_model.Gain) ~= 3
     return;
 end
 
-sDataIn = in_bst_data(sInputs(1).FileName);
+% Load recordings
+if strcmp(sInputs.FileType, 'data')     % Imported data structure
+    sDataIn = in_bst_data(sInputs(1).FileName);
+    events = sDataIn.Events;
+elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
+    sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
+    events = sDataRaw.F.events;
+end
 
 % Separate NIRS channels from others (NIRS_AUX etc.)
 [fnirs, fchannel_def, nirs_other, channel_def_other] = ...
