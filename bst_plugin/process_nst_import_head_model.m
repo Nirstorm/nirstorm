@@ -53,9 +53,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.do_grey_mask.Value   = 1;       
     
     % Smoothing options
-    sProcess.options.do_smoothing.Comment = 'Spatial smoothing';
-    sProcess.options.do_smoothing.Type    = 'checkbox';
-    sProcess.options.do_smoothing.Value   = 1;
     % === DESCRIPTION   copied from process_ssmooth_surfstat
 %     sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
 %                                      'The smoothing is based only on the surface topography, <BR>' ...
@@ -64,10 +61,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
 %                                      'on the average distance between two vertices in the surface.<BR><BR>'];
 %     sProcess.options.help.Type    = 'label';
     % === FWHM (kernel size)
-    sProcess.options.fwhm.Comment = 'Smoothing FWHM:  ';
-    sProcess.options.fwhm.Type    = 'value';
-    sProcess.options.fwhm.Value   = {0.5, 'mm', 2};
+    sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
+    sProcess.options.smoothing_fwhm.Type    = 'value';
+    sProcess.options.smoothing_fwhm.Value   = {0.5, 'mm', 2};
     
+    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold below percentile: ';
+    sProcess.options.sensitivity_threshold_pct.Type    = 'value';
+    sProcess.options.sensitivity_threshold_pct.Value   = {0.5, '%', 2};
     
       sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
       sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
@@ -117,9 +117,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 
 do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
-do_smoothing = sProcess.options.do_smoothing.Value;
 do_grey_mask = sProcess.options.do_grey_mask.Value;
 use_closest_wl = sProcess.options.use_closest_wl.Value;
+
+sens_thresh_pct = sProcess.options.sensitivity_threshold_pct.Value{1};
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -343,8 +344,8 @@ for ipair=1:nb_pairs
 %         end
 %        assert(~any(isnan(sens_tmp(:))));
  %       bad_nodes = bad_nodes | isinf(sens_tmp) | isnan(sens_tmp) | abs(sens_tmp) <= eps(0);
-        if do_smoothing
-            FWHM = sProcess.options.fwhm.Value{1} / 1000;
+        if sProcess.options.smoothing_fwhm.Value{1} > 0
+            FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
             % Load cortex mesh
             [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
             cortex_mesh = sSubject.Surface(sSubject.iCortex).FileName;
@@ -362,6 +363,28 @@ for ipair=1:nb_pairs
 end
 bst_progress('stop');
 
+%% Sensitivity thresholding
+if sens_thresh_pct > 0
+ sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
+ thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
+ [N,D] = rat(thresh_sort_idx);
+if isequal(D,1) % integer
+    thresh_sort_idx = thresh_sort_idx+0.5;
+else                           
+    thresh_sort_idx = round(thresh_sort_idx);
+end
+[T,R] = strtok(num2str(thresh_sort_idx),'0.5');
+if strcmp(R,'.5')
+    sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
+else
+    sens_thresh = sensivitity_sorted(thresh_sort_idx);
+end
+
+sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
+
+end
+
+%% Outputs
 % Save the new head model
 sStudy = bst_get('Study', sInputs.iStudy);
 

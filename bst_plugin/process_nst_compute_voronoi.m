@@ -54,7 +54,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 
 % Get subject name
-if ~isempty(sProcess.options.subjectname.Value)
+if isfield(sProcess.options, 'subjectname') && ~isempty(sProcess.options.subjectname.Value)
     SubjectName = file_standardize(sProcess.options.subjectname.Value);
 else
     SubjectName = sInputs.SubjectName;
@@ -88,6 +88,9 @@ else
     bst_report('Warning', sProcess, sInputs, msg);
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    if isempty(voronoi)
+       return;
+    end
 end
 
 add_vol_data(voronoi, voronoi_fn, ...
@@ -97,6 +100,7 @@ OutputFiles = {'import'};
 end
 
 function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
+
 % Obtain the cortical surface
 sCortex = in_tess_bst(cortex_file);
 
@@ -164,7 +168,15 @@ vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 % vol_voro = binary_volume_dilated; %HACK
 if nargin > 2
     sSegmentation = in_mri_bst(segmentation_file);
-    vol_voro(sSegmentation.Cube ~= 204) = -1; %TODO TOCHECK importation of segmentation change layer indexes -> reliable?
+    if all(sSegmentation.Histogram.fncX == 0:5)
+        vol_voro(sSegmentation.Cube ~= 4) = -1;
+    elseif any(sSegmentation.Histogram.fncX == 204)
+        vol_voro(sSegmentation.Cube ~= 204) = -1;
+    else
+        bst_error('Unrecognized segmentation labels: should be from 0 to 5');
+        vol_voro = [];
+        return;
+    end
 end
 
 bst_progress('inc',1);
