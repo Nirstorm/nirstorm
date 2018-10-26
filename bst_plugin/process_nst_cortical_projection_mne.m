@@ -1,4 +1,4 @@
-function varargout = process_nst_cortical_projection( varargin )
+function varargout = process_nst_cortical_projection_mne( varargin )
 
 % @=============================================================================
 % This software is part of the Brainstorm software:
@@ -100,8 +100,30 @@ end
 [fnirs, fchannel_def, nirs_other, channel_def_other] = ...
     process_nst_mbll('filter_data_by_channel_type', sDataIn.F', ChanneMat, 'NIRS');
 
-[nirs_psig, pair_names, pair_loc, pair_indexes] = process_nst_mbll('group_paired_channels', fnirs, fchannel_def);
-sensitivity_surf = head_model.Gain;
+
+% Remove bad channels: they won't enter MBLL computation so no need to keep them
+[good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels', sDataIn.F',...
+                                                 ChanneMat, sDataIn.ChannelFlag);
+    
+[nirs_psig, pair_names, pair_loc, pair_indexes] = process_nst_mbll('group_paired_channels', good_nirs, good_channel_def);
+try
+    sensitivity_surf = process_nst_import_head_model('get_sensitivity_from_chans', head_model, pair_names);
+catch ME  
+    if ~isempty(sStudy.iHeadModel)
+        bst_warning('Warning', sProcess, sInputs, 'Given head model is not consistent with current montage. Using default one.');
+        head_model_fn = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+        head_model = in_bst_headmodel(head_model_fn);
+        sensitivity_surf = process_nst_import_head_model('get_sensitivity_from_chans', ...
+                                                         head_model, pair_names);
+    else
+        if strcmp(ME.identifier, 'NIRSTORM:HeadmodelMismatch')
+            bst_report('Error', sProcess, sInputs, ME.message);
+            return;
+        else
+            rethrow(ME);
+        end
+    end
+end
 % nirs_psig (nb_pairs x nb_wavelengths x nb_samples
 % nb_nodes = size(sensitivity_surf, 3);
 % nb_pairs = size(pair_ichans, 1);
