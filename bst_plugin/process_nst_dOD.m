@@ -128,13 +128,13 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     to_keep = sDataIn.ChannelFlag ~= -1 & strcmpi({ChanneMat.Channel.Type}, 'NIRS')';
     
     % Apply dOD computation
-    nirs_dOD = Compute(sDataIn.F(to_keep, :)', parameters);
+    nirs_dOD = Compute(sDataIn.F(to_keep, :), parameters);
 
     sStudy = bst_get('Study', sInputs.iStudy);
         
     % Save time-series data
     final_nirs = sDataIn.F;
-    final_nirs(to_keep, :) = nirs_dOD';
+    final_nirs(to_keep, :) = nirs_dOD;
     sDataOut = db_template('data');
     sDataOut.F            = final_nirs;
     sDataOut.Comment      = 'NIRS dOD';
@@ -146,7 +146,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     sDataOut.DisplayUnits = 'delta OD';
 
     % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_hb');
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dod');
     sDataOut.FileName = file_short(OutputFile);
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
@@ -157,7 +157,7 @@ end
 function delta_od = Compute(nirs_sig, parameters)
 %% Normalize given nirs signal
 % Args:
-%    - nirs_sig: matrix of double, size:  nb_wavelengths x nb_samples
+%    - nirs_sig: matrix of double, size:  nb_channels x nb_samples
 %        NIRS signal to normalize
 %   [- parameters.method]: str , choices are: 'mean' and 'median', default is 'mean'
 %        Normalization method.
@@ -167,7 +167,7 @@ function delta_od = Compute(nirs_sig, parameters)
 %        Mask to be applied on the temporal axis defining the window
 %        where to compute the reference signal.
 %
-% Output: matrix of double, size: nb_channels x nb_wavelengths
+% Output: matrix of double, size: nb_channels x nb_samples
 %    Normalized NIRS signal.
 
 nb_samples = size(nirs_sig, 2);
