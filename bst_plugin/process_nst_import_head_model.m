@@ -65,7 +65,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.smoothing_fwhm.Type    = 'value';
     sProcess.options.smoothing_fwhm.Value   = {0.5, 'mm', 2};
     
-    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold below percentile: ';
+    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
     sProcess.options.sensitivity_threshold_pct.Type    = 'value';
     sProcess.options.sensitivity_threshold_pct.Value   = {0.5, '%', 2};
     
@@ -310,7 +310,7 @@ for ipair=1:nb_pairs
             end
             sensitivity_vol = src_fluences{isrc}{iwl} .* ...
                               det_fluences{idet}{iwl}./normalization_factor ;
-            fprintf('Maximum Volumetric Sensitivity of %s = %f mm\n',  pair_names{ipair}, max(sensitivity_vol(:)));
+            % fprintf('Maximum Volumetric Sensitivity of %s = %f mm\n',  pair_names{ipair}, max(sensitivity_vol(:)));
         end
         % modified by zhengchen to normalize the sensitivity
         %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
@@ -365,20 +365,26 @@ bst_progress('stop');
 
 %% Sensitivity thresholding
 if sens_thresh_pct > 0
- sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
- thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
- [N,D] = rat(thresh_sort_idx);
-if isequal(D,1) % integer
-    thresh_sort_idx = thresh_sort_idx+0.5;
-else                           
-    thresh_sort_idx = round(thresh_sort_idx);
-end
-[T,R] = strtok(num2str(thresh_sort_idx),'0.5');
-if strcmp(R,'.5')
-    sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
-else
-    sens_thresh = sensivitity_sorted(thresh_sort_idx);
-end
+
+nz_sensitivity = sensitivity_surf(sensitivity_surf>0);
+min_sens =  min(nz_sensitivity);
+max_sens =  max(nz_sensitivity);
+sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
+
+%  sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
+%  thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
+%  [N,D] = rat(thresh_sort_idx);
+% if isequal(D,1) % integer
+%     thresh_sort_idx = thresh_sort_idx+0.5;
+% else                           
+%     thresh_sort_idx = round(thresh_sort_idx);
+% end
+% [T,R] = strtok(num2str(thresh_sort_idx),'0.5');
+% if strcmp(R,'.5')
+%     sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
+% else
+%     sens_thresh = sensivitity_sorted(thresh_sort_idx);
+% end
 
 sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
 
@@ -422,6 +428,36 @@ OutputFiles{1} = sInputs.FileName;
 
 % Save database
 db_save();
+end
+
+
+function sensitivity = get_sensitivity_from_chans(head_model, pair_names)
+
+head_model_pair_ids = containers.Map();
+for ipair=1:length(head_model.pair_names)
+    head_model_pair_ids(head_model.pair_names{ipair}) = ipair;
+end
+
+pairs_not_found = {};
+for ipair=1:length(pair_names)
+    pair_name = pair_names{ipair};
+    if ~head_model_pair_ids.isKey(pair_name)
+        pairs_not_found{end+1} = pair_name;
+    end
+end
+if ~isempty(pairs_not_found)
+    throw(MException('NIRSTORM:HeadmodelMismatch', ....
+          ['Sensitivity not found for pairs: ', ...
+           strjoin(pairs_not_found, ', ')]));
+end
+
+head_model_size = size(head_model.Gain);
+sensitivity = zeros(length(pair_names), head_model_size(2), head_model_size(3));
+for ipair=1:length(pair_names)
+    ipair_head_model = head_model_pair_ids(pair_names{ipair});
+    sensitivity(ipair, :, :) = head_model.Gain(ipair_head_model, :, :);
+end
+
 end
 
 
