@@ -1,3 +1,4 @@
+nst_get_bst_func_files.m
 nst_run_bst_proc.m
 nst_knnsearch.m
 process_nst_dOD.m

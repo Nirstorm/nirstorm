@@ -6,7 +6,7 @@ function sFilesOut = nst_run_bst_proc(out_items_names, force_redo, ProcessName, 
 % to always run the process and add a suffix to the output name if
 % an item with the same name already exists.
 % 
-% nst_run_bst_proc forces a process to have unique outputs. If outputs
+% nst_run_bst_proc forces the called process to have unique outputs. If outputs
 % already exist, the process will not be executed.
 % Unless force_redo=1. In this case, the exisiting outputs will be deleted
 % prior to executing the process.
@@ -16,10 +16,16 @@ function sFilesOut = nst_run_bst_proc(out_items_names, force_redo, ProcessName, 
 % function is rather suited only for processes with a fixed predictible number 
 % of outputs.
 %
+% WARNING: this is a helper for "simple" processes producing predictible
+% outputs in the same condition folder as the input data.
+% 
+% WARNING: works only for functional data
+%
 % Input:
-%    - out_items_names (cell array of str):
-%          Names of the output items (Comment field). Must be the same length
-%          as the actual number of outputs given by process "ProcessName".
+%    - out_items_names (str or cell array of str):
+%          Output item(s) names(s), looked for in the condition folder of sFile. 
+%          Must have the same length as the actual number of outputs 
+%          given by process "ProcessName".
 %    - force_redo (bool):
 %          Flag to force recomputation.
 %    - sFiles (cell array of file names or array of bst process input structures):
@@ -56,7 +62,60 @@ function sFilesOut = nst_run_bst_proc(out_items_names, force_redo, ProcessName, 
 % In this case, if "result" and "result_other" already exist, they will be deleted
 % and the process will be run.
 %
+% TODO: handle anatomy outputs
 
-bst_report('Info', ProcessName, sFiles, 'It is a meeee');
-sFilesOut = {}; %stub
+if ischar(out_items_names)
+    out_items_names = {out_items_names};
+end
+
+sInput = bst_process('GetInputStruct', sFiles);
+
+sFilesOut = {};
+duplicates = {};
+for i_item=1:length(out_items_names)
+    selected_files = nst_get_bst_func_files(sInput.SubjectName, sInput.Condition, out_items_names{i_item});
+    if ~isempty(selected_files) && ~ischar(selected_files) && length(selected_files) > 1
+        duplicates{end+1} = out_items_names{i_item};
+    end
+    sFilesOut{i_item} = selected_files;
+end
+if ~isempty(duplicates)
+    bst_error(sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', ')));
+    sFilesOut = {};
+    return;
+end
+existing = cellfun(@(s) ~isempty(s), sFilesOut);
+
+if any(~existing) || force_redo
+    if any(existing)
+        bst_report('Info', ProcessName, sFiles, ...
+                   sprintf('Force redo - removing previous result(s): %s', strjoin(sFilesOut, ', ')) );
+
+        bst_process('CallProcess', 'process_delete', sFilesOut, [], ...
+                    'target', 1); 
+    end
+    sFilesOut = bst_process('CallProcess', ProcessName, sFiles, sFiles2, varargin{:});
+    if length(sFilesOut) == 1
+        sFilesOut = {sFilesOut};
+    end
+    
+    if length(sFilesOut) ~= length(out_items_names)
+        bst_error(sprintf('Expected %d outputs but process produced %d. \n Process %s executed though.', ...
+                          length(out_items_names), length(sFilesOut), ProcessName));
+        return;
+    end
+    for i_item=1:length(out_items_names)
+        sFilesOut{i_item} = bst_process('CallProcess', 'process_set_comment', sFilesOut{i_item}, [], ...
+                                     'tag', out_items_names{i_item}, ...
+                                     'isindex', 0);                          
+    end
+else
+    bst_report('Info', ProcessName, sFiles, ...
+               sprintf('Skipped execution of %s. Outputs found.', ProcessName));
+end
+
+if length(sFilesOut) == 1
+    sFilesOut = sFilesOut{1};
+end
+
 end
