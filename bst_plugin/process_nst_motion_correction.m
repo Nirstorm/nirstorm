@@ -88,6 +88,7 @@ for iInput=1:length(sInputs)
     end
     if isempty(event)
         bst_report('Error', sProcess, sInputs(iInput), ['Event "' event_name '" does not exist in file.']);
+        OutputFiles{iInput} = sInputs(iInput).FileName;
         continue;
     end
     
