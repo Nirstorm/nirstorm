@@ -141,13 +141,13 @@ param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];
 
 [sStudy, ResultFile] = add_surf_data(pdata_hbo, sDataIn.Time, ...
     head_model, 'hbo_projected' , ...
-    sInputs.iStudy, sStudy,  ...
+    sInputs, sStudy,  ...
     'Projected HbO signals');
 OutputFiles{end+1} = ResultFile;
 
 [sStudy, ResultFile] = add_surf_data(pdata_hbr, sDataIn.Time, ...
     head_model, 'hbr_projected' , ...
-    sInputs.iStudy, sStudy,  ...
+    sInputs, sStudy,  ...
     'Projected HbR signals');
 OutputFiles{end+1} = ResultFile;
 
@@ -254,7 +254,7 @@ end
 
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
-    iStudy, sStudy, history_comment)
+    sInputs, sStudy, history_comment)
 
 %% Save a cortical map to brainstorm with given data
 
@@ -267,7 +267,7 @@ ResultsMat.Comment       = name;
 ResultsMat.Function      = '';
 ResultsMat.ImageGridAmp = data;
 ResultsMat.Time          = time;
-ResultsMat.DataFile      = [];
+ResultsMat.DataFile      = sInputs.FileName;
 if ~isempty(sStudy.iHeadModel)
     ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 end
@@ -294,7 +294,7 @@ newResult.HeadModelType = ResultsMat.HeadModelType;
 iResult = length(sStudy.Result) + 1;
 sStudy.Result(iResult) = newResult;
 % Update Brainstorm database
-bst_set('Study', iStudy, sStudy);
+bst_set('Study', sInputs.iStudy, sStudy);
 end
 
 
