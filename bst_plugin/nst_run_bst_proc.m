@@ -64,16 +64,26 @@ function sFilesOut = nst_run_bst_proc(out_items_names, force_redo, ProcessName, 
 %
 % TODO: handle anatomy outputs
 
+%% Check inputs
+if nargin < 5
+    sFiles2 = [];
+end
+
 if ischar(out_items_names)
     out_items_names = {out_items_names};
 end
 
-sInput = bst_process('GetInputStruct', sFiles);
+if ~isstruct(sFiles)
+    sInputs = bst_process('GetInputStruct', sFiles);
+else
+    sInputs = sFiles;
+end
 
+%% Look for existing outputs
 sFilesOut = {};
 duplicates = {};
 for i_item=1:length(out_items_names)
-    selected_files = nst_get_bst_func_files(sInput.SubjectName, sInput.Condition, out_items_names{i_item});
+    selected_files = nst_get_bst_func_files(sInputs(1).SubjectName, sInputs(1).Condition, out_items_names{i_item});
     if ~isempty(selected_files) && ~ischar(selected_files) && length(selected_files) > 1
         duplicates{end+1} = out_items_names{i_item};
     end
@@ -86,6 +96,7 @@ if ~isempty(duplicates)
 end
 existing = cellfun(@(s) ~isempty(s), sFilesOut);
 
+%% Run the process if needed
 if any(~existing) || force_redo
     if any(existing)
         bst_report('Info', ProcessName, sFiles, ...
@@ -95,19 +106,27 @@ if any(~existing) || force_redo
                     'target', 1); 
     end
     sFilesOut = bst_process('CallProcess', ProcessName, sFiles, sFiles2, varargin{:});
-    if length(sFilesOut) == 1
-        sFilesOut = {sFilesOut};
+    if isstruct(sFilesOut)
+        sFilesOut = {sFilesOut.FileName};
     end
     
     if length(sFilesOut) ~= length(out_items_names)
-        bst_error(sprintf('Expected %d outputs but process produced %d. \n Process %s executed though.', ...
-                          length(out_items_names), length(sFilesOut), ProcessName));
+        bst_process('CallProcess', 'process_delete', sFilesOut, [], ...
+                    'target', 1); 
+        bst_error(sprintf('Expected %d outputs but process produced %d.\n', ...
+                          length(out_items_names), length(sFilesOut)));
+        sFilesOut = {};
         return;
     end
     for i_item=1:length(out_items_names)
-        sFilesOut{i_item} = bst_process('CallProcess', 'process_set_comment', sFilesOut{i_item}, [], ...
-                                     'tag', out_items_names{i_item}, ...
-                                     'isindex', 0);                          
+        sOut = bst_process('CallProcess', 'process_set_comment', sFilesOut{i_item}, [], ...
+                                        'tag', out_items_names{i_item}, ...
+                                        'isindex', 0);
+        if isstruct(sOut)
+            sFilesOut{i_item} = sOut.FileName;
+        else
+            sFilesOut{i_item} = sOut;
+        end
     end
 else
     bst_report('Info', ProcessName, sFiles, ...
