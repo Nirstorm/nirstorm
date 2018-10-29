@@ -72,6 +72,17 @@ end
 if ischar(out_items_names)
     out_items_names = {out_items_names};
 end
+if ~iscell(out_items_names) || ~all(cellfun(@ischar, out_items_names))
+    throw(MException('Nirstorm:BadArgType', 'out_items_names must be str or cell array of str.')); 
+end
+
+if ~(force_redo == 1 || force_redo == 0)
+   throw(MException('Nirstorm:BadArgType', 'force_redo must be 0 or 1')); 
+end
+
+if ~ischar(ProcessName)
+   throw(MException('Nirstorm:BadArgType', 'ProcessName must be str'));  
+end
 
 if ~isstruct(sFiles)
     sInputs = bst_process('GetInputStruct', sFiles);
