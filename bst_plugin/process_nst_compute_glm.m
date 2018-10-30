@@ -44,13 +44,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'data','raw'};
-    sProcess.OutputTypes = {'data','raw'};
+    sProcess.InputTypes  = {'data', 'raw', 'results'};
+    sProcess.OutputTypes = {'data', 'data', 'results'};
     
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    
-    
+
     % Separator
     sProcess.options.separator.Type = 'separator';
     sProcess.options.separator.Comment = ' ';
@@ -109,6 +108,21 @@ function OutputFiles = Run(sProcess, sInput)
     end
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
+                               
+    surface_data = 1;
+    if isfield(DataMat, 'SurfaceFile')
+        surface_data = 1;
+        parent_data = in_bst_data(DataMat.DataFile);
+        % Make sure time axis is consistent
+        assert(all(parent_data.Time == DataMat.Time));
+        if isempty(DataMat.Events) && isfield(parent_data, 'Events')
+            DataMat.Events = parent_data.Events;
+        end
+        if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
+            DataMat.F = DataMat.ImageGridAmp; %TODO: check that it doesn't take too much memory
+        end
+    end
+    
     all_event_names = {DataMat.Events.label};
     events_found = ismember(selected_event_names, all_event_names);
     if ~all(events_found)
@@ -165,6 +179,7 @@ function OutputFiles = Run(sProcess, sInput)
         Out_DataMat.Description = names'; % Names of the regressors 
         Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
         Out_DataMat.Time        =  DataMat.Time;
+        Out_DataMat.DataFile    = sInput.FileName;
         Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
         OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
         % Save on disk
@@ -208,7 +223,6 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
-    
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
     Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
 
@@ -220,21 +234,31 @@ function OutputFiles = Run(sProcess, sInput)
     for i_reg_name=1:length(names)
         data_out = zeros(size(DataMat.F, 1), 1);
         data_out(nirs_ichans,:) = B(i_reg_name,:);
-        sDataOut = db_template('data');
-        sDataOut.F            = data_out;
-        sDataOut.Comment      = ['GLM_beta_' method_name '_' names{i_reg_name}];
-        sDataOut.ChannelFlag  = DataMat.ChannelFlag;
-        sDataOut.Time         = [1];
-        sDataOut.DataType     = 'recordings';
-        sDataOut.nAvg         = 1;
-        sDataOut.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
         
+        output_name = ['GLM_beta_' method_name '_' names{i_reg_name}];
         sStudy = bst_get('Study', sInput.iStudy);
-        OutputFiles{end+1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
-        sDataOut.FileName = file_short(OutputFiles{end});
-        bst_save(OutputFiles{end}, sDataOut, 'v7');
-        % Register in database
-        db_add_data(sInput.iStudy, OutputFiles{end}, sDataOut);
+        if surface_data
+            [sStudy, ResultFile] = nst_bst_add_surf_data(data_out, [1], [], output_name, ...
+                                                         sInput, sStudy, 'GLM', DataMat.SurfaceFile);
+            OutputFiles{end+1} = ResultFile;
+        else
+            sDataOut = db_template('data');
+            sDataOut.F            = data_out;
+            sDataOut.Comment      = output_name;
+            sDataOut.ChannelFlag  = DataMat.ChannelFlag;
+            sDataOut.Time         = [1];
+            sDataOut.DataType     = 'recordings';
+            sDataOut.nAvg         = 1;
+            sDataOut.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
+                
+            OutputFiles{end+1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
+            sDataOut.FileName = file_short(OutputFiles{end});
+            bst_save(OutputFiles{end}, sDataOut, 'v7');
+            % Register in database
+            db_add_data(sInput.iStudy, OutputFiles{end}, sDataOut);
+        end
+        
+
     end
     
     % Saving the covB Matrix.
