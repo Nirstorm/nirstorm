@@ -114,9 +114,12 @@ end
 if size(data, 2) ~= length(channel_def.Channel)
     data = data';
 end
-[pair_names, pair_loc, pair_ichans, pair_sd_indexes, ...
-          src_coords, src_ids, src_ichans, ...
-          det_coords, det_ids, det_ichans] = explode_channels(channel_def);
+
+montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+pair_ichans = montage_info.pair_ichans;
+src_coords = montage_info.src_pos;
+det_coords = montage_info.det_pos;
+pair_sd_indexes =  montage_info.pair_sd_indexes;
 
 if isfield(channel_def.Nirs, 'Wavelengths')
     nirs.SD.Lambda = channel_def.Nirs.Wavelengths;
@@ -145,134 +148,6 @@ nirs.events = events;
 end
 
 
-function [pair_names, pair_loc, pair_ichans, pair_sd_indexes, ...
-          src_coords, src_ids, src_ichans, ...
-          det_coords, det_ids, det_ichans] = explode_channels(channel_def)
-%% Explode channel data according to pairs, sources and detectors
-% Args
-%    - channel_def: struct
-%        Definition of channels as given by brainstorm
-%        Used fields: Channel
-%
-% TOCHECK WARNING: uses containers.Map which is available with matlab > v2008
-%
-%  Outputs: 
-%     - pair_names: cell array of str, size: nb_pairs
-%         Pair names, format: SXDX
-%     - pair_loc: array of double, size: nb_pairs x 3 x 2
-%         Pair localization (coordinates of source and detector)
-%     - pair_ichans: matrix of double, size: nb_pairs x nb_wavelengths
-%         Input channel indexes grouped by pairs
-%     - pair_sd_indexes: matrix of double, size: nb_pairs x 2
-%         1-based continuours indexes of sources and detectors for each
-%         sources.
-%     - src_coords:   nb_sources x 3
-%         Source coordinates, indexed by 1-based continuous index
-%         To access via source ID, as read from pair name:
-%             src_coords(src_id2idx(src_ID),:)
-%     - src_ids: 1d array of double, size: nb_sources
-%         vector of source ids (as used in pair name)
-%     - src_chans: cellarray of 1d array of double, size: nb_sources
-%         Channel indexes to which the source belongs (indexed by 1-based
-%         continuous index).
-%     - det_coords:   nb_detectors x 3
-%         Detector coordinates, indexed by 1-based continuous index
-%         To access via detector ID, as used in pair name:
-%             det_coords(det_id2idx(det_ID),:)
-%     - det_ids: 1d array of double, size: max_detector_id (hashing vector)
-%         vector of detector ids (as used in pair name)
-%     - det_chans: cellarray of 1d array of double, size: nb_sources
-%         Channel indexes to which the detector belongs (indexed by 1-based
-%         continuous index).
-
-MT_OD = 1;
-MT_HB = 2;
-
-if isfield(channel_def.Nirs, 'Wavelengths')
-    nb_measures = length(channel_def.Nirs.Wavelengths);
-    measure_type = MT_OD;
-else
-    nb_measures = length(channel_def.Nirs.Hb);
-    measure_type = MT_HB;
-end    
-
-pair_to_chans = containers.Map();
-pair_to_sd = containers.Map();
-src_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
-src_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
-det_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
-det_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
-for ichan=1:length(channel_def.Channel)
-    if strcmp(channel_def.Channel(ichan).Type, 'NIRS')
-        chan_name = channel_def.Channel(ichan).Name;
-        if measure_type == MT_OD
-            iwl = strfind(chan_name, 'WL');
-            pair_name = chan_name(1:iwl-1);
-            wl = str2double(chan_name(iwl+2:end));
-            imeasure = channel_def.Nirs.Wavelengths==wl;
-        else
-            ihb = strfind(chan_name, 'Hb');
-            pair_name = chan_name(1:ihb-1);
-            imeasure = strcmp(chan_name(ihb:end), channel_def.Nirs.Hb);
-        end
-        
-        if pair_to_chans.isKey(pair_name)
-            measures = pair_to_chans(pair_name);
-        else
-            measures = zeros(1, nb_measures);
-        end
-        measures(imeasure) = ichan;
-        pair_to_chans(pair_name) = measures;
-        
-        
-        [src_id, det_id] = split_pair_name(pair_name);
-        pair_to_sd(pair_name) = [src_id, det_id];
-        if src_to_chans.isKey(src_id)
-            src_to_chans(src_id) = [src_to_chans(src_id) ichan];
-        else
-            src_to_chans(src_id) = ichan;
-            src_coords_map(src_id) = channel_def.Channel(ichan).Loc(:, 1);
-        end
-        if det_to_chans.isKey(det_id)
-            det_to_chans(det_id) = [det_to_chans(det_id) ichan];
-        else
-            det_to_chans(det_id) = ichan;
-            det_coords_map(det_id) = channel_def.Channel(ichan).Loc(:, 2);
-        end
-    
-    end
-end
-
-src_coords = cell2mat(src_coords_map.values)';
-src_ichans = src_to_chans.values;
-src_ids = cell2mat(src_coords_map.keys);
-
-det_coords = cell2mat(det_coords_map.values)';
-det_ichans = det_to_chans.values;
-det_ids = cell2mat(det_coords_map.keys);
-
-nb_pairs = pair_to_chans.size(1);
-pair_names = pair_to_chans.keys;
-pair_ichans = zeros(nb_pairs, nb_measures);
-pair_loc = zeros(nb_pairs, 3, 2);
-pair_sd_indexes = zeros(nb_pairs, 2);
-for ipair=1:nb_pairs
-    p_indexes = pair_to_chans(pair_names{ipair});
-    pair_ichans(ipair, :) = p_indexes;
-    pair_loc(ipair, : , :) = channel_def.Channel(pair_ichans(ipair, 1)).Loc;
-    sdi = pair_to_sd(pair_names{ipair});
-    pair_sd_indexes(ipair, 1) = find(src_ids==sdi(1));
-    pair_sd_indexes(ipair, 2) = find(det_ids==sdi(2));
-end 
-
-end
-
-function [isrc, idet] = split_pair_name(pair_name)
-pair_re = 'S([0-9]{1,2})D([0-9]{1,2})';
-toks = regexp(pair_name, pair_re , 'tokens');
-isrc = str2double(toks{1}{1});
-idet = str2double(toks{1}{2});
-end
 
 function fn = protect_fn_str(sfn)
 fn = strrep(sfn, ' | ', '_');
