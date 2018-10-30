@@ -19,10 +19,10 @@ function [isrcs, idets, measures, channel_type] = nst_unformat_channels(channel_
 %           Examples: S1D2WL685, S01D7WL830, S3D01HbR
 %           
 %
-%        ISRCS (int): extracted source indexes
-%        IDETS (int): extracted detector indexes
-%        MEAS (int | str): extracted measure values
-%        CHAN_TYPE (int): channel type.
+%        ISRCS (array of int): extracted source indexes
+%        IDETS (array of int): extracted detector indexes
+%        MEAS (array of int | cell array of str): extracted measure values
+%        CHAN_TYPE (array of int): channel type (see NST_CHANNEL_TYPES for enum).
 %
 %   See also NST_UNFORMAT_CHANNEL, NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
 

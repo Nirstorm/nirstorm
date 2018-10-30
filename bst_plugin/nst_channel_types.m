@@ -7,6 +7,6 @@ function chan_types = nst_channel_types()
 %                   - CHANNEL_TYPES.WAVELENGTH
 %                   - CHANNEL_TYPES.Hb
 
-chan_types.WAVELENGTH = 0;
-chan_types.HB = 1;
+chan_types.WAVELENGTH = 1;
+chan_types.HB = 2;
 end

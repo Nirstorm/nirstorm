@@ -1,6 +1,48 @@
 classdef MontageTest < matlab.unittest.TestCase
     methods(Test)
         
+  
+        function test_montage_info(testCase)
+            
+            bst_create_test_subject();
+            ref_point =  [-0.0789 ; -0.0263 ; 0.0655]; % meter, somewhere at the back of the head when using Colin27_4NIRS
+            srcs_pos = [ref_point ref_point ref_point ref_point];
+            dets_pos = [ref_point+[0.01;0;0] ref_point+[0.01;0;0] ref_point+[0.01;0.01;0.01] ref_point+[0.01;0.01;0.01]];
+            nirs_input_file = bst_create_nirs_data('test', [], [], {'S2D2WL650', 'S2D2WL800', 'S2D3WL800', 'S2D3WL650'}, srcs_pos, dets_pos);
+            
+            sInput = in_bst_data(nirs_input_file);
+            channel_def = in_bst_channel(sInput.ChannelFile);
+            
+            montage_info = nst_montage_info_from_bst_channels(channel_def); 
+                       
+            testCase.assertEqual(montage_info.src_ids, 2);
+            testCase.assertTrue(all(sort(montage_info.det_ids) == [2 3]));
+            
+            testCase.assertTrue(all(montage_info.src_pos == ref_point'));
+            testCase.assertTrue(all(all(montage_info.det_pos == [ref_point+[0.01;0;0] ref_point+[0.01;0.01;0.01]]')));
+            
+            testCase.assertTrue(all(montage_info.src_ichans{1} == [1 2 3 4]));
+            
+            testCase.assertTrue(all(sort(montage_info.det_ichans{find(montage_info.det_ids==2)}) == [1 2]));
+            testCase.assertTrue(all(sort(montage_info.det_ichans{find(montage_info.det_ids==3)}) == [3 4]));
+                
+            for ipair=1:length(montage_info.pair_names)
+               switch montage_info.pair_names{ipair}
+                   case 'S2D2'
+                       testCase.assertTrue(all(montage_info.pair_ichans(ipair,:) == [1 2])); 
+                       testCase.assertTrue(all(montage_info.pair_sd_indexes(ipair,:) == [1 1]));
+                       testCase.assertTrue(all(all(squeeze(montage_info.pair_loc(ipair,:,:)) == [srcs_pos(:,1) dets_pos(:,2)])));
+                   case 'S2D3'
+                       testCase.assertTrue(all(montage_info.pair_ichans(ipair,:) == [4 3])); 
+                       testCase.assertTrue(all(montage_info.pair_sd_indexes(ipair,:) == [1 2]));
+                       testCase.assertTrue(all(all(squeeze(montage_info.pair_loc(ipair,:,:)) == [srcs_pos(:,1) dets_pos(:,3)])));
+                    otherwise
+                       error(['Wrong pair:' montage_info.pair_names{ipair}]);
+               end
+            end
+            
+            %TODO: check and test process_nst_mbll/group_paired_channels
+        end
         
         function test_pair_indexes(testCase)
             chan_names = {'S1D3WL685', 'S1D2WL685', 'S1D2WL830', 'S1D3WL830', ...
@@ -124,6 +166,8 @@ classdef MontageTest < matlab.unittest.TestCase
             [warning_msg, warning_msg_id] = lastwarn;
             testCase.assertMatches(warning_msg, 'Inconsistent measure.*');
             
-        end     
+        end
+        
+
     end
 end

@@ -419,6 +419,7 @@ end
 function distances = cpt_distances(channels, pair_indexes)
 % Distance unit is the one of brainstorm (from Channel Loc fields)
 % -> meter
+%TODO: factorize with separation computation
 distances = zeros(size(pair_indexes, 1), 1);
 for ipair=1:size(pair_indexes, 1)
     distances(ipair) = euc_dist(channels(pair_indexes(ipair, 1)).Loc(:,1), ...
@@ -888,7 +889,7 @@ function [paired_nirs, pair_names, pair_loc, pair_indexes] = ...
 %     - pair_indexes: matrix of double, size: nb_pairs x nb_wavelengths
 %         Input channel indexes grouped by pairs
 %
-
+% TODO: expose, doc, utest. See factorization with nst_montage_info_from_bst_channels 
 nb_wavelengths = length(channel_def.Nirs.Wavelengths);
 nb_samples = size(nirs, 1);
 

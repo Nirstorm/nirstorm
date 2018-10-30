@@ -1,3 +1,5 @@
+nst_montage_info_from_bst_channels.m
+nst_bst_add_surf_data.m
 nst_get_bst_func_files.m
 nst_run_bst_proc.m
 nst_knnsearch.m
