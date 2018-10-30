@@ -74,7 +74,9 @@ classdef ProjectionTest < matlab.unittest.TestCase
             sHead = in_tess_bst(head_mesh_fn);
             nirs_input = in_bst_data(nirs_input_mat_fn);
             ChannelMat = in_bst_channel(nirs_input.ChannelFile);
-            [tt, tt, tt, tt, src_coords, tt, tt, det_coords, tt, tt] = process_nst_import_head_model('explode_channels', ChannelMat);
+            montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+            src_coords = montage_info.src_pos;
+            det_coords = montage_info.det_pos;
             [src_hv_idx det_hv_idx] = process_nst_import_head_model('get_head_vertices_closest_to_optodes', ...
                 sMri, sHead, src_coords, det_coords);
             fluence_dir = cpt_spherical_fluences(sSubject, [src_hv_idx;det_hv_idx], ChannelMat.Nirs.Wavelengths, 50);
