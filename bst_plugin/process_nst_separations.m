@@ -102,14 +102,13 @@ end
 end
 
 function separations = Compute(channels, pair_indexes)
-% Compute distances between sources and detectors for given channels or
-% pairs.
+% Compute distances between sources and detectors for given channels or pairs.
 % Note: output unit is the same as the one of the input.
 %
 % Inputs:
 %    - channels (struct array):
 %       Channel brainstorm structure (see db_template('channeldesc'))
-%   [- pair_indexes (2d array of int): size(nb_pairs x 2)
+%   [- pair_indexes ] (2d array of int): size(nb_pairs x 2)
 %      List of pairs for which to compute separations.
 %      Column 1 contains source ids and column 2 contains detector ids.
 %      Must be consistent with given channels.

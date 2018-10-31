@@ -88,7 +88,7 @@ classdef MontageTest < matlab.unittest.TestCase
         end
         
         function test_unformat_channel(testCase)
-            chan_types = nst_channel_types();
+            chan_types = nst_measure_types();
             
             [isrc, idet, measure, mtype] = nst_unformat_channel('S01D03WL685');
             testCase.assertEqual(isrc, 1);
@@ -124,7 +124,7 @@ classdef MontageTest < matlab.unittest.TestCase
         end
         
         function test_unformat_channels(testCase)
-            chan_types = nst_channel_types();
+            chan_types = nst_measure_types();
             
             good_chans_wl = {'S01D03WL685', 'S01D02WL685', 'S01D1WL685'};
             [isrcs, idets, measures, mtype] = nst_unformat_channels(good_chans_wl);
@@ -153,7 +153,7 @@ classdef MontageTest < matlab.unittest.TestCase
                 nst_unformat_channels(non_homogeneous);
                 throw(MException('NIRSTORM:ExceptionNotThrown', 'Exception not thrown'));
             catch ME
-                testCase.assertMatches(ME.identifier, 'NIRSTORM:NonHomogeneousChannelType');
+                testCase.assertMatches(ME.identifier, 'NIRSTORM:NonHomogeneousMeasure');
             end
             
             meas_nb_not_consistent = {'S01D03WL685', 'S01D03WL830', 'S1D1WL685', 'S2D2WL830'};

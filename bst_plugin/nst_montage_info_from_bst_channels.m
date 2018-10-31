@@ -35,6 +35,13 @@ function montage_info = nst_montage_info_from_bst_channels(channel_def)
 %     - det_chans: cellarray of 1d array of double, size: nb_sources
 %         Channel indexes to which the detector belongs (indexed by 1-based
 %         continuous index).
+% 
+% TODO: factorize some code with nst_unformat_channels,
+% nst_get_pair_indexes_from_names
+
+[isrcs, idets, measures, channel_type] = nst_unformat_channels({channel_def.Channel.Name});
+measure_types = nst_measure_types();
+nb_measures = length(unique(measures));
 
 MT_OD = 1;
 MT_HB = 2;

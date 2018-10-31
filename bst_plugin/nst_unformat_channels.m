@@ -31,14 +31,14 @@ nb_channels = length(channel_labels);
 isrcs = zeros(1, nb_channels);
 idets = zeros(1, nb_channels);
 measures = cell(1, nb_channels);
-ctypes = zeros(1, nb_channels);
+mtypes = zeros(1, nb_channels);
 reformated_channels = cell(1, nb_channels);
 for ichan=1:nb_channels
-    [isrc, idet, meas, ctype] = nst_unformat_channel(channel_labels{ichan});
+    [isrc, idet, meas, mtype] = nst_unformat_channel(channel_labels{ichan});
     isrcs(ichan) = isrc;
     idets(ichan) = idet;
     measures{ichan} = meas;
-    ctypes(ichan) = ctype;
+    mtypes(ichan) = mtype;
     % reformat channels to make sure formatting is consistent
     % -> allow proper duplicate detection after
     reformated_channels{ichan} = nst_format_channel(isrc, idet, meas);
@@ -56,14 +56,14 @@ if ~isempty(duplicates)
 end
 
 % check homogeneity of channel type
-if length(unique(ctypes)) > 1
-    throw(MException('NIRSTORM:NonHomogeneousChannelType', 'Channel type is not homogeneous.'));
+if length(unique(mtypes)) > 1
+    throw(MException('NIRSTORM:NonHomogeneousMeasure', 'Measure type is not homogeneous.'));
 end
 
-chan_types = nst_channel_types();
+measure_types = nst_measure_types();
 
-channel_type = ctypes(1);
-if channel_type == chan_types.WAVELENGTH
+channel_type = mtypes(1);
+if channel_type == measure_types.WAVELENGTH
    measures = cell2mat(measures);
 end
 
@@ -76,9 +76,9 @@ mcounts = sparse(ones(1, length(unique_pairs_hash)), unique_pairs_hash, ...
                       nb_channels);
 all_measures = unique(measures);
 for ichan=1:nb_channels
-    if channel_type == chan_types.WAVELENGTH
+    if channel_type == measure_types.WAVELENGTH
         measure_hash = find(measures(ichan)==all_measures);
-    elseif channel_type == chan_types.HB
+    elseif channel_type == measure_types.HB
         measure_hash = find(strcmp(measures(ichan),all_measures));
     end
     h_idx = isrcs(ichan) * max_idet + idets(ichan);

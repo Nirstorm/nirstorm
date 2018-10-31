@@ -30,12 +30,12 @@ isrc = str2double(toks{1}{1});
 idet = str2double(toks{1}{2});
 measure = toks{1}{3};
 
-chan_types = nst_channel_types();
+measure_types = nst_measure_types();
 if ~isempty(strfind(measure, 'WL'))
-    channel_type = chan_types.WAVELENGTH;
+    channel_type = measure_types.WAVELENGTH;
     measure = str2double(measure(3:end));
 else
-    channel_type = chan_types.HB;
+    channel_type = measure_types.HB;
 end
 
 end
