@@ -40,7 +40,7 @@ function montage_info = nst_montage_info_from_bst_channels(channel_def)
 
 [isrcs, idets, chan_measures, measure_type] = nst_unformat_channels({channel_def.Name});
 measure_types = nst_measure_types();
-all_measures = unique(chan_measures);
+all_measures = unique(chan_measures(~isnan(chan_measures)));
 nb_measures = length(all_measures);
 
 %TODO: reuse already parsed isrcs / idets / measures

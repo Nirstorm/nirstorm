@@ -15,27 +15,33 @@ function [isrc, idet, measure, channel_type] = nst_unformat_channel(channel_labe
 %        MEAS (int | str): extracted measure value
 %        CHAN_TYPE (int): extracted channel type.
 %
+%        If channel cannot be unformatted then all returned values are nan
+%
 %   See also NST_UNFORMAT_CHANNELS, NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
 assert(ischar(channel_label));
 
 CHAN_RE = '^S([0-9]+)D([0-9]+)(WL\d+|HbO|HbR|HbT)$';
 toks = regexp(channel_label, CHAN_RE, 'tokens');
 if isempty(toks)
-    exception = MException('NIRSTORM:MalformedChannelLabel', ...
-                            ['Malformed channel label:', channel_label, ...
-                             '. Should be SxDyWLz or SxDyHb(O|R|T)']);
-    throw(exception);
-end
-isrc = str2double(toks{1}{1});
-idet = str2double(toks{1}{2});
-measure = toks{1}{3};
-
-measure_types = nst_measure_types();
-if ~isempty(strfind(measure, 'WL'))
-    channel_type = measure_types.WAVELENGTH;
-    measure = str2double(measure(3:end));
+    warning('NIRSTORM:MalformedChannelLabel', ...
+            ['Malformed channel label:', channel_label, ...
+             '. Should be SxDyWLz or SxDyHb(O|R|T)']);
+    isrc = nan;
+    idet = nan;
+    measure = nan;
+    channel_type = nan;
 else
-    channel_type = measure_types.HB;
+    isrc = str2double(toks{1}{1});
+    idet = str2double(toks{1}{2});
+    measure = toks{1}{3};
+    
+    measure_types = nst_measure_types();
+    if ~isempty(strfind(measure, 'WL'))
+        channel_type = measure_types.WAVELENGTH;
+        measure = str2double(measure(3:end));
+    else
+        channel_type = measure_types.HB;
+    end
 end
 
 end
