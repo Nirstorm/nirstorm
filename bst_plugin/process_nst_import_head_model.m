@@ -152,7 +152,7 @@ montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
 pair_names = montage_info.pair_names;
 pair_ichans = montage_info.pair_ichans;
 src_locs = montage_info.src_pos;
-src_ids = montage_info.src_ids;
+ = montage_info.src_ids;
 det_locs = montage_info.det_pos;
 det_ids = montage_info.det_ids;
 pair_sd_idx =  montage_info.pair_sd_indexes;
@@ -160,12 +160,14 @@ pair_sd_idx =  montage_info.pair_sd_indexes;
 nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
 nb_dets = size(det_locs, 1);
-if use_all_pairs    
-    [gs, gd] = meshgrid(src_ids, det_ids);
+if use_all_pairs
+    pair_ichans = nan; % pairs will not correspond to actual channels
+    [gs, gd] = meshgrid(1:nb_sources, 1:nb_dets);
     pair_sd_idx = [gs(:) gd(:)];
     pair_names = {};
     for ipair = 1:size(pair_sd_idx, 1)
-        pair_names{ipair} = nst_format_channel(pair_sd_idx(ipair, 1), pair_sd_idx(ipair, 2));
+        pair_names{ipair} = nst_format_channel(src_ids(pair_sd_idx(ipair, 1)),...
+                                               det_ids(pair_sd_idx(ipair, 2)));
     end
 end
 
@@ -286,15 +288,14 @@ end
 
 
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
-separations_pairs = process_nst_separations('Compute', ChannelMat.Channel, 'pairs');
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_sd_idx);
 
 
 for ipair=1:nb_pairs
     isrc = pair_sd_idx(ipair, 1);
     idet = pair_sd_idx(ipair, 2);
-    separation = separations_pairs(ipair);
+    separation = separations_by_pairs(ipair);
     for iwl=1:nb_wavelengths
-        ichan = pair_ichans(ipair, iwl);
         
         if do_export_fluences
             sVol.Comment = '';
@@ -418,6 +419,9 @@ HeadModelMat.Gain           = sensitivity_surf;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
 HeadModelMat.Comment       = 'NIRS head model';
+if use_all_pairs
+    HeadModelMat.Comment = [HeadModelMat.Comment ' [all pairs]'];
+end
 % newHeadModelMat.VoiNodes = voi_nodes;
 HeadModelMat.pair_names = pair_names;
 HeadModelMat = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
@@ -430,6 +434,9 @@ bst_save(HeadModelFile, HeadModelMat, 'v7');
 newHeadModel = db_template('HeadModel');
 newHeadModel.FileName = file_short(HeadModelFile);
 newHeadModel.Comment = 'NIRS head model from fluence';
+if use_all_pairs
+    newHeadModel.Comment = [newHeadModel.Comment ' [all pairs]'];
+end
 newHeadModel.HeadModelType  = 'surface';    
 % Update Study structure
 iHeadModel = length(sStudy.HeadModel) + 1;
@@ -479,7 +486,7 @@ end
 end
 
 
-function [src_head_vertex_ids det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
+function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
 
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
 src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
