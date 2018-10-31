@@ -148,7 +148,7 @@ sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 % Retrieve optode coordinates
 % Load channel file
 
-montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
 pair_names = montage_info.pair_names;
 pair_ichans = montage_info.pair_ichans;
 src_locs = montage_info.src_pos;

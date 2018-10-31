@@ -13,7 +13,7 @@ classdef MontageTest < matlab.unittest.TestCase
             sInput = in_bst_data(nirs_input_file);
             channel_def = in_bst_channel(sInput.ChannelFile);
             
-            montage_info = nst_montage_info_from_bst_channels(channel_def); 
+            montage_info = nst_montage_info_from_bst_channels(channel_def.Channel); 
                        
             testCase.assertEqual(montage_info.src_ids, 2);
             testCase.assertTrue(all(sort(montage_info.det_ids) == [2 3]));

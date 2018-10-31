@@ -73,7 +73,7 @@ if ndims(head_model.Gain) ~= 3
    return;
 end
  
-montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
 pair_names = montage_info.pair_names;
 src_coords = montage_info.src_pos;
 det_coords = montage_info.det_pos;

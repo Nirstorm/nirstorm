@@ -179,7 +179,7 @@ for iwl=1:nb_wavelengths
     gain = get_gains(nirs_head_model.Gain, nirs_head_model.pair_names, iwl, ...
         ChannelMat.Channel, find(selected_chans));
     %% define the reconstruction FOV
-    montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+    montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
     src_locs = montage_info.src_pos;
     det_locs = montage_info.det_pos;
     

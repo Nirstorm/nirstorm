@@ -115,7 +115,7 @@ if size(data, 2) ~= length(channel_def.Channel)
     data = data';
 end
 
-montage_info = nst_montage_info_from_bst_channels(ChannelMat);
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
 pair_ichans = montage_info.pair_ichans;
 src_coords = montage_info.src_pos;
 det_coords = montage_info.det_pos;

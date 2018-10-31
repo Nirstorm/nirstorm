@@ -1,9 +1,8 @@
 function montage_info = nst_montage_info_from_bst_channels(channel_def)
 %% Explode channel data according to pairs, sources and detectors
 % Args
-%    - channel_def: struct
-%        Definition of channels as given by brainstorm (see db_template('channelmat'))
-%        Used fields: Channel, Nirs.Wavelength
+%    - channel_def: struct array
+%        Definition of channels as given by brainstorm (see db_template('channeldesc'))
 %
 % TOCHECK WARNING: uses containers.Map which is available with matlab > v2008
 %
@@ -39,20 +38,12 @@ function montage_info = nst_montage_info_from_bst_channels(channel_def)
 % TODO: factorize some code with nst_unformat_channels,
 % nst_get_pair_indexes_from_names
 
-[isrcs, idets, measures, channel_type] = nst_unformat_channels({channel_def.Channel.Name});
+[isrcs, idets, chan_measures, measure_type] = nst_unformat_channels({channel_def.Name});
 measure_types = nst_measure_types();
-nb_measures = length(unique(measures));
+all_measures = unique(chan_measures);
+nb_measures = length(all_measures);
 
-MT_OD = 1;
-MT_HB = 2;
-
-if isfield(channel_def.Nirs, 'Wavelengths')
-    nb_measures = length(channel_def.Nirs.Wavelengths);
-    measure_type = MT_OD;
-else
-    nb_measures = length(channel_def.Nirs.Hb);
-    measure_type = MT_HB;
-end    
+%TODO: reuse already parsed isrcs / idets / measures
 
 pair_to_chans = containers.Map();
 pair_to_sd = containers.Map();
@@ -60,18 +51,21 @@ src_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
 src_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
 det_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
 det_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
-for ichan=1:length(channel_def.Channel)
-    if strcmp(channel_def.Channel(ichan).Type, 'NIRS')
-        chan_name = channel_def.Channel(ichan).Name;
-        if measure_type == MT_OD
-            iwl = strfind(chan_name, 'WL');
-            pair_name = chan_name(1:iwl-1);
-            wl = str2double(chan_name(iwl+2:end));
-            imeasure = channel_def.Nirs.Wavelengths==wl;
-        else
-            ihb = strfind(chan_name, 'Hb');
-            pair_name = chan_name(1:ihb-1);
-            imeasure = strcmp(chan_name(ihb:end), channel_def.Nirs.Hb);
+for ichan=1:length(channel_def)
+    if strcmp(channel_def(ichan).Type, 'NIRS')
+        chan_name = channel_def(ichan).Name;
+        switch measure_type
+            case measure_types.WAVELENGTH
+                iwl = strfind(chan_name, 'WL');
+                pair_name = chan_name(1:iwl-1);
+                wl = str2double(chan_name(iwl+2:end));
+                imeasure = all_measures==wl;
+            case measure_types.HB
+                ihb = strfind(chan_name, 'Hb');
+                pair_name = chan_name(1:ihb-1);
+                imeasure = strcmp(chan_name(ihb:end), all_measures);
+            otherwise
+                error('Bad measure type: %d', measure_type);
         end
         
         if pair_to_chans.isKey(pair_name)
@@ -89,13 +83,13 @@ for ichan=1:length(channel_def.Channel)
             src_to_chans(src_id) = [src_to_chans(src_id) ichan];
         else
             src_to_chans(src_id) = ichan;
-            src_coords_map(src_id) = channel_def.Channel(ichan).Loc(:, 1);
+            src_coords_map(src_id) = channel_def(ichan).Loc(:, 1);
         end
         if det_to_chans.isKey(det_id)
             det_to_chans(det_id) = [det_to_chans(det_id) ichan];
         else
             det_to_chans(det_id) = ichan;
-            det_coords_map(det_id) = channel_def.Channel(ichan).Loc(:, 2);
+            det_coords_map(det_id) = channel_def(ichan).Loc(:, 2);
         end
     
     end
@@ -117,7 +111,7 @@ pair_sd_indexes = zeros(nb_pairs, 2);
 for ipair=1:nb_pairs
     p_indexes = pair_to_chans(pair_names{ipair});
     pair_ichans(ipair, :) = p_indexes;
-    pair_loc(ipair, : , :) = channel_def.Channel(pair_ichans(ipair, 1)).Loc;
+    pair_loc(ipair, : , :) = channel_def(pair_ichans(ipair, 1)).Loc;
     sdi = pair_to_sd(pair_names{ipair});
     pair_sd_indexes(ipair, 1) = find(montage_info.src_ids==sdi(1));
     pair_sd_indexes(ipair, 2) = find(montage_info.det_ids==sdi(2));

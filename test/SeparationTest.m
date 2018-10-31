@@ -34,11 +34,11 @@ classdef SeparationTest < matlab.unittest.TestCase
             sInput = in_bst_data(nirs_input_file);
             channel_def = in_bst_channel(sInput.ChannelFile);
             separations = process_nst_separations('Compute', channel_def.Channel, pair_ids);
-            
+            % Note: output unit is same as in channel_def -> meter
             testCase.assertTrue(all(size(separations)==[size(pair_ids, 1) 1]));
-            expected_separation = sqrt(0.01^2 * 3) * 100;
+            expected_separation = sqrt(0.01^2 * 3);
             testCase.assertTrue(all_close(separations(1), expected_separation)); %S2D1
-            expected_separation = 0.01 * 100;
+            expected_separation = 0.01;
             testCase.assertTrue(all_close(separations(2), expected_separation)); %S2D2
         end
         
@@ -50,7 +50,9 @@ classdef SeparationTest < matlab.unittest.TestCase
             nirs_input = bst_create_nirs_data('test', [], [], {}, srcs_pos, dets_pos);
             output = bst_process('CallProcess', 'process_nst_separations', nirs_input, []);
             
+            %Note: output unit is cm 
             sDataOut = in_bst_data(output.FileName);
+            testCase.assertMatches(sDataOut.DisplayUnits, 'cm');
             testCase.assertTrue(all(size(sDataOut.F)==[4 1]));
             testCase.assertTrue(all_close(sDataOut.F(1), 0.01 * 100)); %S1D1WL1
             testCase.assertTrue(all_close(sDataOut.F(2), 0.01 * 100)); %S1D1WL2
