@@ -21,7 +21,43 @@ classdef BstHelperTest < matlab.unittest.TestCase
     end
     
     methods(Test)
- 
+        
+        function test_head_model_force_redo(testCase)
+            %TODO
+        end
+        
+        function test_head_model_dont_redo(testCase)
+            global GlobalData;
+            
+            %% Prepare data
+            y = [1:10 ; 101:110];
+            dt = 0.1;
+            time = (0:(size(y,2)-1)) * dt;
+            
+            bst_create_test_subject();
+            
+            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
+                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]); 
+                                    
+            %% 1st proc call
+            output_name = 'head_model';
+            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_nst_import_head_model', ...
+                                         sRaw, [], 'use_closest_wl', 1);
+                                     
+            testCase.assertEmpty(sFilesOut);
+            sInput = bst_process('GetInputStruct', sRaw);
+            sStudy = bst_get('Study', sInput.iStudy);
+            testCase.assertEqual(sStudy.iHeadModel, 1);
+            testCase.assertEqual(sStudy.HeadModel.Comment, output_name);
+            
+             %% Call proc again
+             sFilesOut = nst_run_bst_proc(output_name, 0, 'process_nst_import_head_model', ...
+                                          sRaw, [], 'use_closest_wl', 1);
+             testCase.assertEmpty(sFilesOut);
+             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,4}, ...
+                                   'Skipped execution of process_nst_import_head_model. Outputs found.');  
+        end
+        
         
         function test_run_proc_dont_redo(testCase)
             global GlobalData
@@ -54,7 +90,7 @@ classdef BstHelperTest < matlab.unittest.TestCase
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Set comment');
+            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Set comment'); %from previous call
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,4}, ...
                                    'Skipped execution of process_resample. Outputs found.');                    
         end        
@@ -159,6 +195,7 @@ classdef BstHelperTest < matlab.unittest.TestCase
         end
         
         
+
         
         function test_run_proc_multiple_outputs(testCase)
             
