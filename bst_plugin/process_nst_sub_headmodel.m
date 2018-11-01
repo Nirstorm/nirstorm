@@ -28,7 +28,7 @@ end
 
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Sub head model';
+sProcess.Comment     = 'Head model from precomputed one';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File2';
 sProcess.SubGroup    = 'NIRS';
