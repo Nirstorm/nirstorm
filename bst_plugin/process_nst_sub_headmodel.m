@@ -20,29 +20,109 @@ function varargout = process_nst_sub_headmodel( varargin )
 %
 % Authors: Thomas Vincent (2018)
 
+%TODO: put this in extra installation scenario
+
 eval(macro_method);
 end
 
 
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Cortical projection - MNE';
+sProcess.Comment     = 'Sub head model';
 sProcess.FileTag     = '';
-sProcess.Category    = 'File';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1206;
+sProcess.Category    = 'File2';
+sProcess.SubGroup    = 'NIRS';
+sProcess.Index       = 1201;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};
 % Definition of the outputs of this process
-sProcess.OutputTypes = {'results', 'results'};
-sProcess.nInputs     = 1;
+sProcess.OutputTypes = {'data', 'raw'};
+sProcess.nInputs     = 2;
 sProcess.nMinFiles   = 1;
-sProcess.isSeparator = 1;
+sProcess.isPaired    = 0;
+
+end
+
+%% ===== FORMAT COMMENT =====
+function Comment = FormatComment(sProcess) %#ok<DEFNU>
+    Comment = sProcess.Comment;
+end
 
 
-sProcess.options.head_model_fn.Comment = 'Head model file name: ';
-sProcess.options.head_model_fn.Type = 'text';
-sProcess.options.head_model_fn.Hidden = 1;
-sProcess.options.head_model_fn.Value = '';
+%% ===== RUN =====
+function OutputFiles = Run(sProcess, sInputA, sInputB) %#ok<DEFNU>
+OutputFiles = {};
+
+% sInputA: for which to compute sub head models based on actual montage
+% sInputB: associated with larger head model where to take sub head models from
+
+% Load head model from sInputB
+sStudyB = bst_get('Study', sInputB.iStudy);
+if isempty(sStudyB.iHeadModel)
+    bst_error('No head model found in File B. Consider process "Compute head model from fluence"');
+    return;
+end
+parent_head_model_fn = sStudyB.HeadModel(sStudyB.iHeadModel).FileName;
+parent_head_model = in_bst_headmodel(parent_head_model_fn);
+
+% Get pair names from sInputA
+ChannelMatA = in_bst_channel(sInputA(1).ChannelFile);
+
+montage_info_A = nst_montage_info_from_bst_channels(ChannelMatA.Channel);
+pair_names = montage_info_A.pair_names;
+
+sub_sensitivity_mat = process_nst_import_head_model('get_sensitivity_from_chans', ...
+                                                    parent_head_model, pair_names);
+
+% Save sub head model
+sStudyA = bst_get('Study', sInputA.iStudy);
+[sSubjectA, iSubjectA] = bst_get('Subject', sInputA.SubjectName);
+
+% Create structure
+HeadModelMat = db_template('headmodelmat');
+HeadModelMat.Gain           = sub_sensitivity_mat;
+HeadModelMat.HeadModelType  = 'surface';
+HeadModelMat.SurfaceFile    = sSubjectA.Surface(sSubjectA.iCortex).FileName;
+HeadModelMat.Comment       = 'NIRS head model';
+
+HeadModelMat.pair_names = pair_names;
+HeadModelMat = bst_history('add', HeadModelMat, 'compute', ...
+                          ['Sub head model from ' file_short(parent_head_model_fn)]);
+% Output file name
+from_fluence = ~isempty(strfind(parent_head_model_fn,'mcx_fluence'));
+if from_fluence
+    suffix = '_mcx_fluence';
+else
+    suffix = '';
+end
+HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudyA.FileName)), ...
+                                           sprintf('headmodel_nirs%s.mat', suffix));
+HeadModelFile = file_unique(HeadModelFile);
+% Save file
+bst_save(HeadModelFile, HeadModelMat, 'v7');
+
+newHeadModel = db_template('HeadModel');
+newHeadModel.FileName = file_short(HeadModelFile);
+if from_fluence
+    newHeadModel.Comment = 'NIRS head model from fluence';
+else
+    newHeadModel.Comment = 'NIRS head model';
+end
+
+newHeadModel.HeadModelType  = 'surface';    
+% Update Study structure
+iHeadModel = length(sStudyA.HeadModel) + 1;
+if ~isempty(sStudyA.HeadModel)
+    sStudyA.HeadModel(end+1) = newHeadModel;
+else
+    sStudyA.HeadModel = newHeadModel;
+end
+sStudyA.iHeadModel = iHeadModel;
+% Update DataBase
+bst_set('Study', sInputA.iStudy, sStudyA);
+panel_protocols('UpdateNode', 'Study', sInputA.iStudy);
+
+% Save database
+db_save();
 end
