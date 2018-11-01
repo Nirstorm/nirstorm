@@ -130,7 +130,7 @@ classdef ProjectionTest < matlab.unittest.TestCase
             assert(abs(max(r_hbo) / max(abs(r_hbr)) - max(y_dhb(1,:)) / max(abs(y_dhb(2,:)))) < 1);
             
             assert(r_hbo(1) < 1e-6);
-            assert(r_hbr(1) < 1e-7);
+            assert(r_hbr(1) < 2e-7);
             
             assert(max(r_hbo) > 0);
             assert(min(r_hbr) < 0);

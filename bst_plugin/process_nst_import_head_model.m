@@ -150,9 +150,8 @@ sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
 pair_names = montage_info.pair_names;
-pair_ichans = montage_info.pair_ichans;
 src_locs = montage_info.src_pos;
- = montage_info.src_ids;
+src_ids = montage_info.src_ids;
 det_locs = montage_info.det_pos;
 det_ids = montage_info.det_ids;
 pair_sd_idx =  montage_info.pair_sd_indexes;
@@ -161,7 +160,6 @@ nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
 nb_dets = size(det_locs, 1);
 if use_all_pairs
-    pair_ichans = nan; % pairs will not correspond to actual channels
     [gs, gd] = meshgrid(1:nb_sources, 1:nb_dets);
     pair_sd_idx = [gs(:) gd(:)];
     pair_names = {};

@@ -36,7 +36,7 @@ classdef MontageTest < matlab.unittest.TestCase
             end
             
             meas_nb_not_consistent = {'S01D03WL685', 'S01D03WL830', 'AUX1', 'S1D1WL685', 'S2D2WL830'};
-            [isrcs, idets, measures, mtype] = nst_unformat_channels(meas_nb_not_consistent);
+            [isrcs, idets, measures, mtype] = nst_unformat_channels(meas_nb_not_consistent, 1);
             testCase.assertEqual(isrcs, [1 1 nan 1 2]);
             testCase.assertEqual(idets, [3 3 nan 1 2]);
             testCase.assertEqual(measures, [685 830 nan 685 830]);
@@ -147,9 +147,9 @@ classdef MontageTest < matlab.unittest.TestCase
             testCase.assertEqual(measure, 'HbT');
             testCase.assertEqual(mtype, chan_types.HB);
             
-            bad_labels = {'S1D12Hb0', 'SS1D12HbR', 'S1D12wl685', 'S1D12CCO'};
+            bad_labels = {'S1D12Hb0', 'SS1D12HbR', 'S1D12wl685', 'AUX1', 'S1D12CCO'};
             for ilabel=1:length(bad_labels)
-                [isrc, idet, measure, mtype] = nst_unformat_channel(bad_labels{ilabel});
+                [isrc, idet, measure, mtype] = nst_unformat_channel(bad_labels{ilabel}, 1);
                 testCase.assertTrue(isnan(isrc));
                 testCase.assertTrue(isnan(idet));
                 testCase.assertTrue(isnan(measure));

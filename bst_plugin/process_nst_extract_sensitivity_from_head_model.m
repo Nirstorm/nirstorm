@@ -60,7 +60,7 @@ if isempty(sStudy.iHeadModel)
 end
 
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
+ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
@@ -74,13 +74,14 @@ if ndims(head_model.Gain) ~= 3
 end
  
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
-pair_names = montage_info.pair_names;
+
 src_coords = montage_info.src_pos;
 det_coords = montage_info.det_pos;
 
 nb_sources = size(src_coords, 1);
 nb_dets = size(det_coords, 1);
 sensitivity_surf = head_model.Gain;
+pair_names = head_model.pair_names;
 nb_nodes = size(sensitivity_surf, 3);
 % Save sensitivities
 for iwl=1:size(sensitivity_surf, 2)
@@ -100,7 +101,7 @@ if nb_dets < 100
         %sens_tmp = zeros(nb_nodes, length(time)) - 1;
         sens_tmp = zeros(nb_nodes, length(time));
         for ipair=1:size(sensitivity_surf, 1)
-            [src_id, det_id] = split_pair_name(pair_names{ipair});
+            [src_id, det_id] = nst_unformat_channel([pair_names{ipair} 'WL0']);
             sens_tmp(:, det_id + src_id*100) = squeeze(sensitivity_surf(ipair, iwl, :)); %source id will be minutes, det_it will be seconds
         end
         [sStudy, ResultFile] = add_surf_data(sens_tmp, time, ...
