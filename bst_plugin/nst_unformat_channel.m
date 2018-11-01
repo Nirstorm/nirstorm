@@ -1,4 +1,4 @@
-function [isrc, idet, measure, channel_type] = nst_unformat_channel(channel_label)
+function [isrc, idet, measure, channel_type] = nst_unformat_channel(channel_label, warn_bad_channel)
 % NST_UNFORMAT_CHANNEL extract source, dectector and measure information from channel label.
 %
 %   [ISRC, IDET, MEAS, CHAN_TYPE] = NST_UNFORMAT_CHANNEL(CHANNEL_LABEL)
@@ -20,12 +20,18 @@ function [isrc, idet, measure, channel_type] = nst_unformat_channel(channel_labe
 %   See also NST_UNFORMAT_CHANNELS, NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
 assert(ischar(channel_label));
 
+if nargin < 2
+    warn_bad_channel = 0;
+end
+
 CHAN_RE = '^S([0-9]+)D([0-9]+)(WL\d+|HbO|HbR|HbT)$';
 toks = regexp(channel_label, CHAN_RE, 'tokens');
 if isempty(toks)
-    warning('NIRSTORM:MalformedChannelLabel', ...
+    if warn_bad_channel
+        warning('NIRSTORM:MalformedChannelLabel', ...
             ['Malformed channel label:', channel_label, ...
-             '. Should be SxDyWLz or SxDyHb(O|R|T)']);
+            '. Should be SxDyWLz or SxDyHb(O|R|T)']);
+    end
     isrc = nan;
     idet = nan;
     measure = nan;

@@ -1,4 +1,4 @@
-function [isrcs, idets, measures, measure_type] = nst_unformat_channels(channel_labels)
+function [isrcs, idets, measures, measure_type] = nst_unformat_channels(channel_labels, warn_bad_channels)
 % NST_UNFORMAT_CHANNELS extract sources, dectectors and measures information 
 % from channel labels with *homogeneous* type (eg wavelength or Hb).
 %
@@ -27,6 +27,12 @@ function [isrcs, idets, measures, measure_type] = nst_unformat_channels(channel_
 %   See also NST_UNFORMAT_CHANNEL, NST_CHANNEL_TYPES, NST_FORMAT_CHANNEL
 
 assert(iscellstr(channel_labels));
+
+if nargin < 2
+    warn_bad_channels = 0;
+end
+    
+
 nb_channels = length(channel_labels);
 isrcs = zeros(1, nb_channels);
 idets = zeros(1, nb_channels);
@@ -34,7 +40,7 @@ measures = cell(1, nb_channels);
 mtypes = zeros(1, nb_channels);
 reformated_channels = cell(1, nb_channels);
 for ichan=1:nb_channels
-    [isrc, idet, meas, mtype] = nst_unformat_channel(channel_labels{ichan});
+    [isrc, idet, meas, mtype] = nst_unformat_channel(channel_labels{ichan}, warn_bad_channels);
     isrcs(ichan) = isrc;
     idets(ichan) = idet;
     measures{ichan} = meas;
@@ -79,7 +85,7 @@ unique_pairs_hash = unique(pairs_hash);
 mcounts = sparse(ones(1, length(unique_pairs_hash)), unique_pairs_hash, ...
                       ones(1, length(unique_pairs_hash)), 1, max(unique_pairs_hash), ...
                       nb_channels);
-all_measures = unique(measures);
+all_measures = unique(measures(~isnan(measures)));
 for ichan=1:nb_channels
     if ~isnan(isrcs(ichan))
         if measure_type == measure_types.WAVELENGTH
