@@ -447,7 +447,6 @@ sStudy.iHeadModel = iHeadModel;
 % Update DataBase
 bst_set('Study', sInputs.iStudy, sStudy);
 panel_protocols('UpdateNode', 'Study', sInputs.iStudy);
-OutputFiles{1} = sInputs.FileName;
 
 % Save database
 db_save();
