@@ -39,12 +39,6 @@ sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.isSeparator = 1;
 
-
-sProcess.options.head_model_fn.Comment = 'Head model file name: ';
-sProcess.options.head_model_fn.Type = 'text';
-sProcess.options.head_model_fn.Hidden = 1;
-sProcess.options.head_model_fn.Value = '';
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -59,20 +53,13 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 sStudy = bst_get('Study', sInputs.iStudy);
 
-if isempty(sProcess.options.head_model_fn.Value) 
-    % Retrieve head model from current study
-
-    if isempty(sStudy.iHeadModel)
-        bst_error('No head model found. Consider process "Compute head model from fluence"');
-        return;
-    end
-    head_model_fn = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-else
-    % Use given head model file
-    head_model_fn = sProcess.options.head_model_fn.Value;
+if isempty(sStudy.iHeadModel)
+    bst_error('No head model found. Consider process "Compute head model from fluence"');
+    return;
 end
-
+head_model_fn = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 head_model = in_bst_headmodel(head_model_fn);
+
 ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
 
 if ~strcmp(head_model.HeadModelType, 'surface')
