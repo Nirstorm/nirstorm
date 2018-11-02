@@ -101,20 +101,44 @@ for iInput=1:length(sInputs)
 end
 end
 
-function separations = Compute(channels)
-% Compute distances between sources and detectors for given channels
+function separations = Compute(channels, pair_indexes)
+% Compute distances between sources and detectors for given channels or pairs.
 % Note: output unit is the same as the one of the input.
+%
+% Inputs:
+%    - channels (struct array):
+%       Channel brainstorm structure (see db_template('channeldesc'))
+%   [- pair_indexes ] (2d array of int): size(nb_pairs x 2)
+%      List of pairs for which to compute separations.
+%      Column 1 contains source ids and column 2 contains detector ids.
+%      Must be consistent with given channels.
+%
+% Outputs:
+%    1D array of double containing separations in the same unit as
+%    in given channel.
+%    If pairs_indexes is not given, then size(separations) = nb_channels
+%    If pairs_indexes is given, then size(separations) = size(pair_indexes, 1);
 
-separations = zeros(length(channels), 1);
-for ichan=1:length(channels)
-    if strcmp(channels(ichan).Type, 'NIRS')
-        separations(ichan) = euc_dist(channels(ichan).Loc(:,1), ...
-                                      channels(ichan).Loc(:,2));
-    else
-        separations(ichan) = nan;
+if nargin < 2 % pair_indexes not given
+        separations = zeros(length(channels), 1);
+        for ichan=1:length(channels)
+            if strcmp(channels(ichan).Type, 'NIRS')
+                separations(ichan) = euc_dist(channels(ichan).Loc(:,1), ...
+                                              channels(ichan).Loc(:,2));
+            else
+                separations(ichan) = nan;
+            end
+        end
+else
+    montage_info = nst_montage_info_from_bst_channels(channels);
+    separations = zeros(size(pair_indexes, 1), 1);
+    for ipair=1:size(pair_indexes, 1)
+        src_idx = montage_info.src_ids == pair_indexes(ipair, 1);
+        det_idx = montage_info.det_ids == pair_indexes(ipair, 2);
+        separations(ipair) = euc_dist(montage_info.src_pos(src_idx, :), ...
+                                      montage_info.det_pos(det_idx, :));
     end
 end
-
 end
 
 function d = euc_dist(p1, p2)

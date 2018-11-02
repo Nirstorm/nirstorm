@@ -42,7 +42,6 @@ for ichan=1:length(isrcs)
     end
 end
 
-%stub
 pair_chan_indexes = cell2mat(pair_to_chans.values');
 pair_sd_ids = cell2mat(pair_to_sd.values');
 end

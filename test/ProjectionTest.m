@@ -74,7 +74,9 @@ classdef ProjectionTest < matlab.unittest.TestCase
             sHead = in_tess_bst(head_mesh_fn);
             nirs_input = in_bst_data(nirs_input_mat_fn);
             ChannelMat = in_bst_channel(nirs_input.ChannelFile);
-            [tt, tt, tt, tt, src_coords, tt, tt, det_coords, tt, tt] = process_nst_import_head_model('explode_channels', ChannelMat);
+            montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+            src_coords = montage_info.src_pos;
+            det_coords = montage_info.det_pos;
             [src_hv_idx det_hv_idx] = process_nst_import_head_model('get_head_vertices_closest_to_optodes', ...
                 sMri, sHead, src_coords, det_coords);
             fluence_dir = cpt_spherical_fluences(sSubject, [src_hv_idx;det_hv_idx], ChannelMat.Nirs.Wavelengths, 50);
@@ -90,10 +92,10 @@ classdef ProjectionTest < matlab.unittest.TestCase
             bst_process('CallProcess', ...
                 'process_nst_import_head_model', nirs_input_mat_fn, [], ...
                 'data_source', fluence_dir, ...
-                'do_export_fluence_vol', 1, ...
+                'do_export_fluence_vol', 0, ...
                 'outputdir', fluence_dir);
             
-            % Do projection
+            % Compute dOD
             nirs_dOD = bst_process('CallProcess', ...
                 'process_nst_dOD', nirs_input_mat_fn, [], ...
                 'option_baseline_method', 1, ...  % mean
@@ -128,7 +130,7 @@ classdef ProjectionTest < matlab.unittest.TestCase
             assert(abs(max(r_hbo) / max(abs(r_hbr)) - max(y_dhb(1,:)) / max(abs(y_dhb(2,:)))) < 1);
             
             assert(r_hbo(1) < 1e-6);
-            assert(r_hbr(1) < 1e-7);
+            assert(r_hbr(1) < 2e-7);
             
             assert(max(r_hbo) > 0);
             assert(min(r_hbr) < 0);
