@@ -26,7 +26,7 @@ classdef BstHelperTest < matlab.unittest.TestCase
             %TODO
         end
         
-        function test_head_model_dont_redo(testCase)
+        function test_head_model_redo(testCase)
             global GlobalData;
             
             %% Prepare data
@@ -50,12 +50,14 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertEqual(sStudy.iHeadModel, 1);
             testCase.assertEqual(sStudy.HeadModel.Comment, output_name);
             
+            ilast_report = size(GlobalData.ProcessReports.Reports, 1);
+            
              %% Call proc again
-             sFilesOut = nst_run_bst_proc(output_name, 0, 'process_nst_import_head_model', ...
+             sFilesOut = nst_run_bst_proc(output_name, 1, 'process_nst_import_head_model', ...
                                           sRaw, [], 'use_closest_wl', 1);
              testCase.assertEmpty(sFilesOut);
-             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,4}, ...
-                                   'Skipped execution of process_nst_import_head_model. Outputs found.');  
+             testCase.assertTrue(~isempty(strfind(GlobalData.ProcessReports.Reports{ilast_report+1,4}, ...
+                                                 'Force redo - removed previous result(s):')));
         end
         
         
@@ -149,9 +151,6 @@ classdef BstHelperTest < matlab.unittest.TestCase
 
         end
         
-        
-
-
         function test_run_proc_force_redo(testCase)
             global GlobalData
             
@@ -183,19 +182,16 @@ classdef BstHelperTest < matlab.unittest.TestCase
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
             
-            testCase.assertTrue(~isempty(strfind(GlobalData.ProcessReports.Reports{end-3,4}, ...
-                                                 'Force redo - removing previous result(s):')));
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,1}, 'process');
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,2}.Comment, 'Delete files');
+            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-3,1}, 'process');
+            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-3,2}.Comment, 'Delete files');
+            testCase.assertTrue(~isempty(strfind(GlobalData.ProcessReports.Reports{end-2,4}, ...
+                                                 'Force redo - removed previous result(s):')));
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Resample');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,2}.Comment, 'Set comment');
 
         end
-        
-        
-
         
         function test_run_proc_multiple_outputs(testCase)
             
