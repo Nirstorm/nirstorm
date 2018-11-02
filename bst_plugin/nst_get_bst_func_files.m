@@ -1,5 +1,8 @@
 function [file_names, file_data_types] = nst_get_bst_func_files(subject_name, condition_name, item_name, data_types, protocol_name)
 
+file_names = {};
+file_data_types = {};
+
 if nargin < 4
     data_types = nst_get_bst_data_fields();
 else
@@ -13,10 +16,12 @@ if nargin >= 5
 end
 
 sSubject = bst_get('Subject', subject_name, 1);
+if isempty(sSubject)
+    return;
+end
 sStudy = bst_get('StudyWithSubject', sSubject.FileName);
 
-file_names = {};
-file_data_types = {};
+
 
 for i_study=1:length(sStudy)
     for i_cond=1:length(sStudy(i_study).Condition)
