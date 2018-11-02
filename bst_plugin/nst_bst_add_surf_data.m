@@ -13,7 +13,7 @@ end
 %% Save a cortical map to brainstorm with given data
 
 ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-    ['results_' protect_fn_str(name)]);
+                         ['results_' protect_fn_str(name)]);
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
@@ -57,5 +57,8 @@ bst_set('Study', sInputs.iStudy, sStudy);
 end
 
 function sfn = protect_fn_str(s)
+sfn = strrep(s, ' | ', '--');
+sfn = strrep(s, ' : ', '--');
+sfn = strrep(s, ' :', '--');
 sfn = strrep(s, ' ', '_');
 end

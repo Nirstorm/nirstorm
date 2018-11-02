@@ -119,8 +119,15 @@ function OutputFiles = Run(sProcess, sInput)
             DataMat.Events = parent_data.Events;
         end
         if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
-            DataMat.F = DataMat.ImageGridAmp; %TODO: check that it doesn't take too much memory
+            Y = DataMat.ImageGridAmp'; %TODO: check that it doesn't take too much memory
+        else
+            bst_error('Cannot get signals from surface data');
         end
+    else
+        % Get signals of NIRS channels only:
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
+        [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+        Y = DataMat.F(nirs_ichans,:)';
     end
     
     all_event_names = {DataMat.Events.label};
@@ -146,7 +153,7 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     %% Create the design matrix X
-    [X,names]=getX(DataMat.Time, DataMat.Events(ievents), basis_choice);
+    [X,names] = getX(DataMat.Time, DataMat.Events(ievents), basis_choice);
     
     % Add trend function
     if sProcess.options.trend.Value == 1 
@@ -163,19 +170,19 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     % Check the collinearity of the matrix
-    
     if cond(X) > 300 
         bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
     end    
 
-    
     iStudy = sInput.iStudy;
 
+    output_prefix = [sInput.Comment ' | '];
+    
     if sProcess.options.save.Value == 1 
         % Save the design matrix
         Out_DataMat = db_template('matrixmat');
         Out_DataMat.Value           = X';
-        Out_DataMat.Comment     = 'Design Matrix';
+        Out_DataMat.Comment     = [output_prefix 'GLM Design Matrix'];
         Out_DataMat.Description = names'; % Names of the regressors 
         Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
         Out_DataMat.Time        =  DataMat.Time;
@@ -190,10 +197,7 @@ function OutputFiles = Run(sProcess, sInput)
     
     %% Solving  B such as Y = XB +e 
     
-    % Get signals of NIRS channels only:
-    ChannelMat = in_bst_channel(sInput.ChannelFile);
-    [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
-    Y = DataMat.F(nirs_ichans,:)';
+
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
@@ -212,7 +216,7 @@ function OutputFiles = Run(sProcess, sInput)
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
     
-    residual=Y - X*B ;
+    residual = Y - X*B ;
     
    
     %% Save results
@@ -220,7 +224,7 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = B';
-    Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
+    Out_DataMat.Comment     = [output_prefix 'GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
@@ -233,15 +237,16 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving B as maps
     for i_reg_name=1:length(names)
         data_out = zeros(size(DataMat.F, 1), 1);
-        data_out(nirs_ichans,:) = B(i_reg_name,:);
-        
-        output_name = ['GLM_beta_' method_name '_' names{i_reg_name}];
+
+        output_name = [output_prefix 'GLM_beta_' method_name '_' names{i_reg_name}];
         sStudy = bst_get('Study', sInput.iStudy);
+        
         if surface_data
-            [sStudy, ResultFile] = nst_bst_add_surf_data(data_out, [1], [], output_name, ...
+            [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_name, ...
                                                          sInput, sStudy, 'GLM', DataMat.SurfaceFile);
             OutputFiles{end+1} = ResultFile;
         else
+            data_out(nirs_ichans,:) = B(i_reg_name,:);
             sDataOut = db_template('data');
             sDataOut.F            = data_out;
             sDataOut.Comment      = output_name;
