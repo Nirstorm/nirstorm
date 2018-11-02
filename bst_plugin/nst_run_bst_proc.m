@@ -115,34 +115,35 @@ if any(~existing) || force_redo
     sStudy = bst_get('Study', sInput(1).iStudy);
     
     if any(existing)
-        bst_report('Info', ProcessName, sFiles, ...
-                   sprintf('Force redo - removing previous result(s): %s', strjoin(sFilesOut, ', ')) );
-
         if strcmp(sFilesOut_types{1}, 'HeadModel')
             assert(length(sFilesOut_types) == 1);
-            delete_head_model(sStudy, sInput(1).iStudy, new_iHeadModel);
+            prev_iHeadModel = strcmp({sStudy.HeadModel.FileName}, sFilesOut{1});
+            sStudy = delete_head_model(sStudy, sInput(1).iStudy, prev_iHeadModel);
         else
             bst_process('CallProcess', 'process_delete', sFilesOut, [], ...
                        'target', 1);
         end
+        bst_report('Info', ProcessName, sFiles, ...
+                   sprintf('Force redo - removed previous result(s): %s', strjoin(sFilesOut, ', ')) );
     end
-    
     
     % Special case for head model which is not returned in sFilesOut
     % -> keep track of iHeadmodel 
     prev_iHeadmodel = sStudy.iHeadModel;
     
+    % Call the process
     sFilesOut = bst_process('CallProcess', ProcessName, sFiles, sFiles2, varargin{:});
     
     % Check if process created a new head model
     sStudy = bst_get('Study', sInput(1).iStudy);
     new_iHeadModel = setdiff(sStudy.iHeadModel, prev_iHeadmodel);
-    assert(length(new_iHeadModel) <= 1);
+    assert(length(new_iHeadModel) <= 1); %just a safe-guard, should always be the case
     
     if isstruct(sFilesOut)
         sFilesOut = {sFilesOut.FileName};
     end
-
+    
+    % Check outputs consistency and rename them
     if isempty(sFilesOut) && ~isempty(new_iHeadModel)
         if length(out_items_names) ~= 1
             delete_head_model(sStudy, sInput(1).iStudy, new_iHeadModel);
@@ -187,7 +188,7 @@ end
 
 end
 
-function delete_head_model(sStudy, iStudy, iHeadModelDel)
+function sStudy = delete_head_model(sStudy, iStudy, iHeadModelDel)
 
 % From node_delete.m / case 'headmodel'
 
@@ -210,7 +211,7 @@ panel_protocols('UpdateNode', 'Study', iStudy);
 db_save();
 end
 
-function rename_head_model(sStudy, iStudy, iHeadModelRename, new_name)
+function sStudy = rename_head_model(sStudy, iStudy, iHeadModelRename, new_name)
 sStudy.HeadModel(iHeadModelRename).Comment = new_name;
 bst_set('Study', iStudy, sStudy);
 panel_protocols('UpdateNode', 'Study', iStudy);
