@@ -65,14 +65,18 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.smoothing_fwhm.Type    = 'value';
     sProcess.options.smoothing_fwhm.Value   = {0.5, 'mm', 2};
     
-    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold below percentile: ';
+    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
     sProcess.options.sensitivity_threshold_pct.Type    = 'value';
     sProcess.options.sensitivity_threshold_pct.Value   = {0.5, '%', 2};
     
-      sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
-      sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
-      sProcess.options.do_export_fluence_vol.Hidden = 1;
-      sProcess.options.do_export_fluence_vol.Value   = 0;    
+    sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
+    sProcess.options.use_all_pairs.Type    = 'checkbox';
+    sProcess.options.use_all_pairs.Value   = 0;
+    
+    sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
+    sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
+    sProcess.options.do_export_fluence_vol.Hidden = 1;
+    sProcess.options.do_export_fluence_vol.Value   = 0;    
 %     SelectOptions = {...
 %         '', ...                            % Filename
 %         '', ...                            % FileFormat
@@ -119,7 +123,7 @@ OutputFiles = {};
 do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
 do_grey_mask = sProcess.options.do_grey_mask.Value;
 use_closest_wl = sProcess.options.use_closest_wl.Value;
-
+use_all_pairs = sProcess.options.use_all_pairs.Value;
 sens_thresh_pct = sProcess.options.sensitivity_threshold_pct.Value{1};
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -143,13 +147,29 @@ sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
 % Retrieve optode coordinates
 % Load channel file
-[pair_names, tt, pair_ichans, pair_sd_idx, src_locs, src_ids, src_chans, det_locs, det_ids, det_chans] = ...
-    explode_channels(ChannelMat);
+
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+pair_names = montage_info.pair_names;
+src_locs = montage_info.src_pos;
+src_ids = montage_info.src_ids;
+det_locs = montage_info.det_pos;
+det_ids = montage_info.det_ids;
+pair_sd_idx =  montage_info.pair_sd_indexes;
+
+nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
 nb_dets = size(det_locs, 1);
-nb_pairs = length(pair_names);
-nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
+if use_all_pairs
+    [gs, gd] = meshgrid(1:nb_sources, 1:nb_dets);
+    pair_sd_idx = [gs(:) gd(:)];
+    pair_names = {};
+    for ipair = 1:size(pair_sd_idx, 1)
+        pair_names{ipair} = nst_format_channel(src_ids(pair_sd_idx(ipair, 1)),...
+                                               det_ids(pair_sd_idx(ipair, 2)));
+    end
+end
 
+nb_pairs = length(pair_names);
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
@@ -159,9 +179,6 @@ sHead = in_tess_bst(head_mesh_fn);
 [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
 
 %% Load fluence data from local .brainstorm folder (download if not available)
-% TODO: delay actual downloading after evaluating all download requests
-%       -> allow to send feeback to user on download size before actually
-%          downloading
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
 anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
         
@@ -174,7 +191,6 @@ end
 
 bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
 
-%TODO: loop over all_fluences and create full volumes
 mri_zeros = zeros(size(sMri.Cube));
 src_fluences = cell(1, nb_sources);
 det_fluences = cell(1, nb_dets);
@@ -269,14 +285,15 @@ else
 end
 
 
-separations = process_nst_separations('Compute', ChannelMat.Channel);
+% separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_sd_idx);
+
 
 for ipair=1:nb_pairs
     isrc = pair_sd_idx(ipair, 1);
     idet = pair_sd_idx(ipair, 2);
-    
+    separation = separations_by_pairs(ipair);
     for iwl=1:nb_wavelengths
-        ichan = pair_ichans(ipair, iwl);
         
         if do_export_fluences
             sVol.Comment = '';
@@ -297,20 +314,20 @@ for ipair=1:nb_pairs
                                               det_reference_voxels_index{idet}{iwl}(3));
         
         separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-        if ref_fluence==0 && separations(ichan) > separation_threshold
+        if ref_fluence==0 && separation > separation_threshold
             sensitivity_vol = mri_zeros;
         else 
             if ref_fluence==0
                 normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
                 msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separations(ichan)*100);
+                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
                 bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
             else
                 normalization_factor = ref_fluence;
             end
             sensitivity_vol = src_fluences{isrc}{iwl} .* ...
                               det_fluences{idet}{iwl}./normalization_factor ;
-            fprintf('Maximum Volumetric Sensitivity of %s = %f mm\n',  pair_names{ipair}, max(sensitivity_vol(:)));
+            % fprintf('Maximum Volumetric Sensitivity of %s = %f mm\n',  pair_names{ipair}, max(sensitivity_vol(:)));
         end
         % modified by zhengchen to normalize the sensitivity
         %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
@@ -365,20 +382,26 @@ bst_progress('stop');
 
 %% Sensitivity thresholding
 if sens_thresh_pct > 0
- sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
- thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
- [N,D] = rat(thresh_sort_idx);
-if isequal(D,1) % integer
-    thresh_sort_idx = thresh_sort_idx+0.5;
-else                           
-    thresh_sort_idx = round(thresh_sort_idx);
-end
-[T,R] = strtok(num2str(thresh_sort_idx),'0.5');
-if strcmp(R,'.5')
-    sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
-else
-    sens_thresh = sensivitity_sorted(thresh_sort_idx);
-end
+
+nz_sensitivity = sensitivity_surf(sensitivity_surf>0);
+min_sens =  min(nz_sensitivity);
+max_sens =  max(nz_sensitivity);
+sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
+
+%  sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
+%  thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
+%  [N,D] = rat(thresh_sort_idx);
+% if isequal(D,1) % integer
+%     thresh_sort_idx = thresh_sort_idx+0.5;
+% else                           
+%     thresh_sort_idx = round(thresh_sort_idx);
+% end
+% [T,R] = strtok(num2str(thresh_sort_idx),'0.5');
+% if strcmp(R,'.5')
+%     sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
+% else
+%     sens_thresh = sensivitity_sorted(thresh_sort_idx);
+% end
 
 sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
 
@@ -394,6 +417,9 @@ HeadModelMat.Gain           = sensitivity_surf;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
 HeadModelMat.Comment       = 'NIRS head model';
+if use_all_pairs
+    HeadModelMat.Comment = [HeadModelMat.Comment ' [all pairs]'];
+end
 % newHeadModelMat.VoiNodes = voi_nodes;
 HeadModelMat.pair_names = pair_names;
 HeadModelMat = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
@@ -406,6 +432,9 @@ bst_save(HeadModelFile, HeadModelMat, 'v7');
 newHeadModel = db_template('HeadModel');
 newHeadModel.FileName = file_short(HeadModelFile);
 newHeadModel.Comment = 'NIRS head model from fluence';
+if use_all_pairs
+    newHeadModel.Comment = [newHeadModel.Comment ' [all pairs]'];
+end
 newHeadModel.HeadModelType  = 'surface';    
 % Update Study structure
 iHeadModel = length(sStudy.HeadModel) + 1;
@@ -418,14 +447,43 @@ sStudy.iHeadModel = iHeadModel;
 % Update DataBase
 bst_set('Study', sInputs.iStudy, sStudy);
 panel_protocols('UpdateNode', 'Study', sInputs.iStudy);
-OutputFiles{1} = sInputs.FileName;
 
 % Save database
 db_save();
 end
 
 
-function [src_head_vertex_ids det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
+function sensitivity = get_sensitivity_from_chans(head_model, pair_names)
+
+head_model_pair_ids = containers.Map();
+for ipair=1:length(head_model.pair_names)
+    head_model_pair_ids(head_model.pair_names{ipair}) = ipair;
+end
+
+pairs_not_found = {};
+for ipair=1:length(pair_names)
+    pair_name = pair_names{ipair};
+    if ~head_model_pair_ids.isKey(pair_name)
+        pairs_not_found{end+1} = pair_name;
+    end
+end
+if ~isempty(pairs_not_found)
+    throw(MException('NIRSTORM:HeadmodelMismatch', ....
+          ['Sensitivity not found for pairs: ', ...
+           strjoin(pairs_not_found, ', ')]));
+end
+
+head_model_size = size(head_model.Gain);
+sensitivity = zeros(length(pair_names), head_model_size(2), head_model_size(3));
+for ipair=1:length(pair_names)
+    ipair_head_model = head_model_pair_ids(pair_names{ipair});
+    sensitivity(ipair, :, :) = head_model.Gain(ipair_head_model, :, :);
+end
+
+end
+
+
+function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
 
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
 src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
@@ -682,134 +740,6 @@ flag = any(strcmp(strtrim(anat_name), {'MRI: Colin27 4NIRS'}));
 end
 
 
-function [pair_names, pair_loc, pair_ichans, pair_sd_indexes, ...
-          src_coords, src_ids, src_ichans, ...
-          det_coords, det_ids, det_ichans] = explode_channels(channel_def)
-%% Explode channel data according to pairs, sources and detectors
-% Args
-%    - channel_def: struct
-%        Definition of channels as given by brainstorm
-%        Used fields: Channel
-%
-% TOCHECK WARNING: uses containers.Map which is available with matlab > v2008
-%
-%  Outputs: 
-%     - pair_names: cell array of str, size: nb_pairs
-%         Pair names, format: SXDX
-%     - pair_loc: array of double, size: nb_pairs x 3 x 2
-%         Pair localization (coordinates of source and detector)
-%     - pair_ichans: matrix of double, size: nb_pairs x nb_wavelengths
-%         Input channel indexes grouped by pairs
-%     - pair_sd_indexes: matrix of double, size: nb_pairs x 2
-%         1-based continuours indexes of sources and detectors for each
-%         sources.
-%     - src_coords:   nb_sources x 3
-%         Source coordinates, indexed by 1-based continuous index
-%         To access via source ID, as read from pair name:
-%             src_coords(src_id2idx(src_ID),:)
-%     - src_ids: 1d array of double, size: nb_sources
-%         vector of source ids (as used in pair name)
-%     - src_chans: cellarray of 1d array of double, size: nb_sources
-%         Channel indexes to which the source belongs (indexed by 1-based
-%         continuous index).
-%     - det_coords:   nb_detectors x 3
-%         Detector coordinates, indexed by 1-based continuous index
-%         To access via detector ID, as used in pair name:
-%             det_coords(det_id2idx(det_ID),:)
-%     - det_ids: 1d array of double, size: max_detector_id (hashing vector)
-%         vector of detector ids (as used in pair name)
-%     - det_chans: cellarray of 1d array of double, size: nb_sources
-%         Channel indexes to which the detector belongs (indexed by 1-based
-%         continuous index).
-
-MT_OD = 1;
-MT_HB = 2;
-
-if isfield(channel_def.Nirs, 'Wavelengths')
-    nb_measures = length(channel_def.Nirs.Wavelengths);
-    measure_type = MT_OD;
-else
-    nb_measures = length(channel_def.Nirs.Hb);
-    measure_type = MT_HB;
-end    
-
-pair_to_chans = containers.Map();
-pair_to_sd = containers.Map();
-src_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
-src_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
-det_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
-det_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
-for ichan=1:length(channel_def.Channel)
-    if strcmp(channel_def.Channel(ichan).Type, 'NIRS')
-        chan_name = channel_def.Channel(ichan).Name;
-        if measure_type == MT_OD
-            iwl = strfind(chan_name, 'WL');
-            pair_name = chan_name(1:iwl-1);
-            wl = str2double(chan_name(iwl+2:end));
-            imeasure = channel_def.Nirs.Wavelengths==wl;
-        else
-            ihb = strfind(chan_name, 'Hb');
-            pair_name = chan_name(1:ihb-1);
-            imeasure = strcmp(chan_name(ihb:end), channel_def.Nirs.Hb);
-        end
-        
-        if pair_to_chans.isKey(pair_name)
-            measures = pair_to_chans(pair_name);
-        else
-            measures = zeros(1, nb_measures);
-        end
-        measures(imeasure) = ichan;
-        pair_to_chans(pair_name) = measures;
-        
-        
-        [src_id, det_id] = split_pair_name(pair_name);
-        pair_to_sd(pair_name) = [src_id, det_id];
-        if src_to_chans.isKey(src_id)
-            src_to_chans(src_id) = [src_to_chans(src_id) ichan];
-        else
-            src_to_chans(src_id) = ichan;
-            src_coords_map(src_id) = channel_def.Channel(ichan).Loc(:, 1);
-        end
-        if det_to_chans.isKey(det_id)
-            det_to_chans(det_id) = [det_to_chans(det_id) ichan];
-        else
-            det_to_chans(det_id) = ichan;
-            det_coords_map(det_id) = channel_def.Channel(ichan).Loc(:, 2);
-        end
-    
-    end
-end
-
-src_coords = cell2mat(src_coords_map.values)';
-src_ichans = src_to_chans.values;
-src_ids = cell2mat(src_coords_map.keys);
-
-det_coords = cell2mat(det_coords_map.values)';
-det_ichans = det_to_chans.values;
-det_ids = cell2mat(det_coords_map.keys);
-
-nb_pairs = pair_to_chans.size(1);
-pair_names = pair_to_chans.keys;
-pair_ichans = zeros(nb_pairs, nb_measures);
-pair_loc = zeros(nb_pairs, 3, 2);
-pair_sd_indexes = zeros(nb_pairs, 2);
-for ipair=1:nb_pairs
-    p_indexes = pair_to_chans(pair_names{ipair});
-    pair_ichans(ipair, :) = p_indexes;
-    pair_loc(ipair, : , :) = channel_def.Channel(pair_ichans(ipair, 1)).Loc;
-    sdi = pair_to_sd(pair_names{ipair});
-    pair_sd_indexes(ipair, 1) = find(src_ids==sdi(1));
-    pair_sd_indexes(ipair, 2) = find(det_ids==sdi(2));
-end 
-
-end
-
-function [isrc, idet] = split_pair_name(pair_name)
-pair_re = 'S([0-9]{1,2})D([0-9]{1,2})';
-toks = regexp(pair_name, pair_re , 'tokens');
-isrc = str2double(toks{1}{1});
-idet = str2double(toks{1}{2});
-end
 
 function voronoi = get_voronoi(sProcess, sInputs)
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);

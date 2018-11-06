@@ -18,7 +18,7 @@ function varargout = process_nst_motion_correction( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2016)
+% Authors: Thomas Vincent (2015-2018)
 
 eval(macro_method);
 end
@@ -87,17 +87,16 @@ for iInput=1:length(sInputs)
         end
     end
     if isempty(event)
-        bst_report('Error', sProcess, sInputs(iInput), ['Event "' event_name '" does not exist in file.']);
-        continue;
+        bst_error(['Event "' event_name '" does not exist in file.']);
+        OutputFiles = {};
+        return
     end
     
     if isempty(event.times) % no marked event
-        OutputFiles{iInput} = sInputs(iInput).FileName;
-        continue;
+        data_corr = sDataIn.F';
+    else
+        data_corr = Compute(sDataIn.F', sDataIn.Time', event.samples');
     end
-    
-    data_corr = Compute(sDataIn.F', sDataIn.Time', event.samples');
-    
     if 0
         nirs_data_full = in_bst(sInputs(iInput).FileName, [], 1, 0, 'no');
         channels = in_bst_channel(sInputs(iInput).ChannelFile);

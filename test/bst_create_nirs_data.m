@@ -91,7 +91,7 @@ if nargin < 5 || isempty(srcs_pos)
         error('"srcs_pos" must be defined when "dets_pos" is given');
         return;
     end
-    [i_srcs, i_dets, measures, ctype] = nst_unformat_channels(chan_names);
+    [i_srcs, i_dets, measures, mtype] = nst_unformat_channels(chan_names);
     % Default locations:
     %   - one source every 3cm on a straight line at y=0, z=0
     %   - one detector every 3cm on a straight line at y=3, z=0
@@ -112,8 +112,8 @@ if nargin==5
 end
 
 % Create channel definition
-[i_srcs, i_dets, measures, ctype] = nst_unformat_channels(chan_names);
-chan_types = nst_channel_types();
+[i_srcs, i_dets, measures, mtype] = nst_unformat_channels(chan_names);
+measure_types = nst_measure_types();
 ChannelMat = db_template('channelmat');
 ChannelMat.Comment = sprintf('NIRS-BRS channels (%d)', nb_channels);
 ChannelMat.Channel = repmat(db_template('channeldesc'), 1, nb_channels);
@@ -121,17 +121,17 @@ for ichan=1:nb_channels
     ChannelMat.Channel(ichan).Name = chan_names{ichan};
     ChannelMat.Channel(ichan).Type = 'NIRS';
     ChannelMat.Channel(ichan).Weight = 1;
-    if ctype == chan_types.WAVELENGTH
+    if mtype == measure_types.WAVELENGTH
         ChannelMat.Channel(ichan).Group = sprintf('WL%d', measures(ichan));
-    elseif ctype == chan_types.HB
+    elseif mtype == measure_types.HB
         ChannelMat.Channel(ichan).Group = measures{ichan};
     end
     ChannelMat.Channel(ichan).Loc(:,1) = srcs_pos(:, ichan);
     ChannelMat.Channel(ichan).Loc(:,2) = dets_pos(:, ichan);
 end
-if ctype == chan_types.WAVELENGTH
+if mtype == measure_types.WAVELENGTH
     ChannelMat.Nirs.Wavelengths = unique(measures);
-elseif ctype == chan_types.HB
+elseif mtype == measure_types.HB
     ChannelMat.Nirs.Hb = unique(measures);
 end
 
