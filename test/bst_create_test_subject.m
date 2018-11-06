@@ -1,4 +1,4 @@
-function [subject_name, sSubject] = bst_create_test_subject()
+function [subject_name, sSubject, iSubject] = bst_create_test_subject()
 %% Ensure that nst_utest protocol exists
 ProtocolName = 'nst_utest';
 % Delete existing protocol
@@ -17,9 +17,9 @@ subject_name = 'test_subject';
 [sSubject, iSubject] = db_add_subject(subject_name);
 
 sTemplates = bst_get('AnatomyDefaults');
-iTemplate = strcmpi('Colin27_4NIRS', {sTemplates.Name});
+iTemplate = strcmpi('Colin27_4NIRS_lowres', {sTemplates.Name});
 if ~any(iTemplate)
-    error('Template Colin27_4NIRS not found');
+    error('Template Colin27_4NIRS_lowres not found');
 end
 db_set_template(iSubject, sTemplates(iTemplate), 0);
 db_save();
