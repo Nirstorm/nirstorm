@@ -98,7 +98,7 @@ function OutputFiles = Run(sProcess, sInput)
     OutputFiles={};
 
     DataMat = in_bst_data(sInput.FileName);
-    basis_choice=sProcess.options.basis.Value{2}(sProcess.options.basis.Value{1});
+    basis_choice=sProcess.options.basis.Value{2}{sProcess.options.basis.Value{1}};
 
     %% Select events
     % TODO: utests with all events found, no event selected, no available
@@ -153,26 +153,8 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     %% Create the design matrix X
-    [X,names] = getX(DataMat.Time, DataMat.Events(ievents), basis_choice);
-    
-    % Add trend function
-    if sProcess.options.trend.Value == 1 
-        [C,name]=getTrend(DataMat.Time, 'Constant');
-        X=[X C];
-        names=[names name];
-    end
-    
-    
-    % Check the rank of the matrix
-    n_regressor=size(X,2);
-    if  rank(X) < n_regressor
-        bst_report('Warning', sProcess, sInput, 'The design matrix is not full-ranked');
-    end
-    
-    % Check the collinearity of the matrix
-    if cond(X) > 300 
-        bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
-    end    
+    [X,names] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
+                                   basis_choice, sProcess.options.trend.Value);  
 
     iStudy = sInput.iStudy;
 
@@ -321,46 +303,64 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
     dfe=stat.dfe;
 end
 
-function [X,names]=getX(time,events,basis_choice)
-	n_event=length(events);
-    n_sample=length(time);
-    
-    X=zeros(n_sample,n_event); 
-    
-    % removing offset
-    time_offset=time(1);   
-    sample_offset=round(time(1)/(time(2)-time(1)));
-    
-    time=time-time_offset;
+function hrf_types = get_hrf_types()
+hrf_types.CANONICAL = 0;
+hrf_types.GAMMA = 1;
+hrf_types.BOXCAR = 2;
+end
 
-    % Selecting the basis function 
-    switch cell2mat(basis_choice)
-        case 'Hrf'  
-            basis_function=@Canonical; 
-        case'Gamma' 
-            basis_function=@Gamma;
-        case 'BoxCar' 
-            basis_function=@BoxCar;
+function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)
+	
+    X = [];
+    names = {};
+    
+    dt = time(2)-time(1);
+    
+    %% Setup HRF
+    hrf_time = 0:dt:hrf_duration;
+    if hrf_time(end) ~= hrf_duration
+        warning('HRF duration mismatch due to sampling: %f sec', ...
+                hrf_duration-hrf_time(end));
+    end
+    
+    hrf_types = get_hrf_types();
+    switch hrf_type
+        case hrf_types.CANONICAL  
+            hrf = cpt_hrf_canonical(hrf_time); 
+        case hrf_types.GAMMA 
+            hrf = cpt_hrf_gamma(hrf_time);
+        case hrf_types.BOXCAR 
+            hrf = cpt_hrf_boxcar(hrf_time);
         otherwise
-            basis_function=@Canonical;
+            bst_error('Unknown hrf_type');
+            return;
+    end
+    if size(hrf, 2) ~= 1
+        hrf = hrf'; % ensure column vector
     end
     
-    % create the stim matrix    
-    for i=1:n_event
-       %disp(events(i).label)
-       names{i}=events(i).label;
-       n_run=length(events(i).samples);
-       for j =  1:n_run
-           event=(events(i).samples(1,j) - sample_offset ):(events(i).samples(2,j) - sample_offset);
-           X(event,i)=ones(size(event)); 
-       end
+    %% Make stimulus-induced design matrix
+    n_samples = length(time);
+    X = nst_make_event_regressors(events, hrf, n_samples);
+    
+    %% Add trend function
+    if include_trend
+        [C,name] = getTrend(DataMat.Time, 'Constant');
+        X = [X C];
+        names = [names name];
     end
     
-    
-    for i=1:n_event
-        X(:,i) = filter(basis_function(time ), 1, X(:,i));
-        %X(:,i) = X(:,i) - mean(X(:,i));
+    %% Sanity checks
+    % Check the rank of the matrix
+    if  rank(X) < size(X,2)
+        bst_report('Warning', sProcess, sInput, 'The design matrix is not full-ranked');
     end
+    
+    % Check the collinearity of the matrix
+    if cond(X) > 300 
+        bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
+    end  
+    
 end
 
 function [C,names]=getTrend(time, trend_choice)
@@ -380,7 +380,7 @@ end
 
 
 
-function signal= Gamma(t,peakTime,peakDisp) 
+function signal = cpt_hrf_gamma(t,peakTime,peakDisp) 
 % Gamma : apply the gamma function over t_vect
     
     %signal=zeros( size(t_vect) );  
@@ -391,7 +391,7 @@ function signal= Gamma(t,peakTime,peakDisp)
     signal = signal / sum(signal);
 end
 
-function signal= BoxCar(t_vect,lag,duration)
+function signal = cpt_hrf_boxcar(t_vect,lag,duration)
 % BoxCar : apply the box car function over t_vect
     
     if nargin <  3, duration = 5; end
@@ -411,7 +411,7 @@ function signal= BoxCar(t_vect,lag,duration)
     end
 end
 
-function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio) 
+function signal= cpt_hrf_canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio) 
 % Canonical :return the Canonical Hrf
     
     assert( isvector(t)  )
@@ -422,10 +422,7 @@ function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio)
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
     if nargin <  6, ratio       = 1/6;end
-    
-
-    
-        
+          
    signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime) - ratio*uShootDisp^uShootTime*t.^(uShootTime-1).*exp(-uShootDisp*t)/gamma(uShootTime);
    signal = signal / sum(signal);
 end
