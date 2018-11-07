@@ -10,6 +10,8 @@ if nargin < 8
     end
 end
 
+%TODO: check consistency between data and nb of vertices
+
 %% Save a cortical map to brainstorm with given data
 
 ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
@@ -21,7 +23,9 @@ ResultsMat.Comment       = name;
 ResultsMat.Function      = '';
 ResultsMat.ImageGridAmp = data;
 ResultsMat.Time          = time;
-ResultsMat.DataFile      = sInputs.FileName;
+if ~isempty(sInputs)
+    ResultsMat.DataFile  = sInputs.FileName;
+end
 if ~isempty(head_model)
     if ~isempty(sStudy.iHeadModel)
         ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
@@ -52,7 +56,12 @@ newResult.HeadModelType = ResultsMat.HeadModelType;
 iResult = length(sStudy.Result) + 1;
 sStudy.Result(iResult) = newResult;
 % Update Brainstorm database
-bst_set('Study', sInputs.iStudy, sStudy);
+if ~isempty(sInputs)
+    bst_set('Study', sInputs.iStudy, sStudy);
+else
+    [tmp, iStudy] = bst_get('Study', sStudy.FileName);
+    bst_set('Study', iStudy, sStudy);
+end
                                                   
 end
 
