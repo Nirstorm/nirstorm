@@ -143,6 +143,9 @@ ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
 
 % Load anat mri
+if isempty(sSubject.iAnatomy)
+    bst_error(['No anatomical data found for ' sInputs.SubjectName]);
+end
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
 % Retrieve optode coordinates
