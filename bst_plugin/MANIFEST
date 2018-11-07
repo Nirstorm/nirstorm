@@ -1,3 +1,5 @@
+nst_make_event_toeplitz_mtx.m
+nst_make_event_regressors.m
 process_nst_sub_headmodel.m
 nst_measure_types.m
 nst_montage_info_from_bst_channels.m

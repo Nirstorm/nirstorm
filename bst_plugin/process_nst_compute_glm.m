@@ -98,7 +98,7 @@ function OutputFiles = Run(sProcess, sInput)
     OutputFiles={};
 
     DataMat = in_bst_data(sInput.FileName);
-    basis_choice=sProcess.options.basis.Value{2}(sProcess.options.basis.Value{1});
+    basis_choice=sProcess.options.basis.Value{2}{sProcess.options.basis.Value{1}};
 
     %% Select events
     % TODO: utests with all events found, no event selected, no available
@@ -119,8 +119,15 @@ function OutputFiles = Run(sProcess, sInput)
             DataMat.Events = parent_data.Events;
         end
         if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
-            DataMat.F = DataMat.ImageGridAmp; %TODO: check that it doesn't take too much memory
+            Y = DataMat.ImageGridAmp'; %TODO: check that it doesn't take too much memory
+        else
+            bst_error('Cannot get signals from surface data');
         end
+    else
+        % Get signals of NIRS channels only:
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
+        [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+        Y = DataMat.F(nirs_ichans,:)';
     end
     
     all_event_names = {DataMat.Events.label};
@@ -146,36 +153,18 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     %% Create the design matrix X
-    [X,names]=getX(DataMat.Time, DataMat.Events(ievents), basis_choice);
-    
-    % Add trend function
-    if sProcess.options.trend.Value == 1 
-        [C,name]=getTrend(DataMat.Time, 'Constant');
-        X=[X C];
-        names=[names name];
-    end
-    
-    
-    % Check the rank of the matrix
-    n_regressor=size(X,2);
-    if  rank(X) < n_regressor
-        bst_report('Warning', sProcess, sInput, 'The design matrix is not full-ranked');
-    end
-    
-    % Check the collinearity of the matrix
-    
-    if cond(X) > 300 
-        bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
-    end    
+    [X,names] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
+                                   basis_choice, sProcess.options.trend.Value);  
 
-    
     iStudy = sInput.iStudy;
 
+    output_prefix = [sInput.Comment ' | '];
+    
     if sProcess.options.save.Value == 1 
         % Save the design matrix
         Out_DataMat = db_template('matrixmat');
         Out_DataMat.Value           = X';
-        Out_DataMat.Comment     = 'Design Matrix';
+        Out_DataMat.Comment     = [output_prefix 'GLM Design Matrix'];
         Out_DataMat.Description = names'; % Names of the regressors 
         Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
         Out_DataMat.Time        =  DataMat.Time;
@@ -190,10 +179,7 @@ function OutputFiles = Run(sProcess, sInput)
     
     %% Solving  B such as Y = XB +e 
     
-    % Get signals of NIRS channels only:
-    ChannelMat = in_bst_channel(sInput.ChannelFile);
-    [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
-    Y = DataMat.F(nirs_ichans,:)';
+
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
@@ -212,7 +198,7 @@ function OutputFiles = Run(sProcess, sInput)
         bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
     end
     
-    residual=Y - X*B ;
+    residual = Y - X*B ;
     
    
     %% Save results
@@ -220,7 +206,7 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
     Out_DataMat.Value           = B';
-    Out_DataMat.Comment     = ['GLM_beta_matrix_' method_name];
+    Out_DataMat.Comment     = [output_prefix 'GLM_beta_matrix_' method_name];
     Out_DataMat.Description = names; % Names of the regressors 
     Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
     Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
@@ -233,15 +219,16 @@ function OutputFiles = Run(sProcess, sInput)
     % Saving B as maps
     for i_reg_name=1:length(names)
         data_out = zeros(size(DataMat.F, 1), 1);
-        data_out(nirs_ichans,:) = B(i_reg_name,:);
-        
-        output_name = ['GLM_beta_' method_name '_' names{i_reg_name}];
+
+        output_name = [output_prefix 'GLM_beta_' method_name '_' names{i_reg_name}];
         sStudy = bst_get('Study', sInput.iStudy);
+        
         if surface_data
-            [sStudy, ResultFile] = nst_bst_add_surf_data(data_out, [1], [], output_name, ...
+            [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_name, ...
                                                          sInput, sStudy, 'GLM', DataMat.SurfaceFile);
             OutputFiles{end+1} = ResultFile;
         else
+            data_out(nirs_ichans,:) = B(i_reg_name,:);
             sDataOut = db_template('data');
             sDataOut.F            = data_out;
             sDataOut.Comment      = output_name;
@@ -316,46 +303,64 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
     dfe=stat.dfe;
 end
 
-function [X,names]=getX(time,events,basis_choice)
-	n_event=length(events);
-    n_sample=length(time);
-    
-    X=zeros(n_sample,n_event); 
-    
-    % removing offset
-    time_offset=time(1);   
-    sample_offset=round(time(1)/(time(2)-time(1)));
-    
-    time=time-time_offset;
+function hrf_types = get_hrf_types()
+hrf_types.CANONICAL = 0;
+hrf_types.GAMMA = 1;
+hrf_types.BOXCAR = 2;
+end
 
-    % Selecting the basis function 
-    switch cell2mat(basis_choice)
-        case 'Hrf'  
-            basis_function=@Canonical; 
-        case'Gamma' 
-            basis_function=@Gamma;
-        case 'BoxCar' 
-            basis_function=@BoxCar;
+function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)
+	
+    X = [];
+    names = {};
+    
+    dt = time(2)-time(1);
+    
+    %% Setup HRF
+    hrf_time = 0:dt:hrf_duration;
+    if hrf_time(end) ~= hrf_duration
+        warning('HRF duration mismatch due to sampling: %f sec', ...
+                hrf_duration-hrf_time(end));
+    end
+    
+    hrf_types = get_hrf_types();
+    switch hrf_type
+        case hrf_types.CANONICAL  
+            hrf = cpt_hrf_canonical(hrf_time); 
+        case hrf_types.GAMMA 
+            hrf = cpt_hrf_gamma(hrf_time);
+        case hrf_types.BOXCAR 
+            hrf = cpt_hrf_boxcar(hrf_time);
         otherwise
-            basis_function=@Canonical;
+            bst_error('Unknown hrf_type');
+            return;
+    end
+    if size(hrf, 2) ~= 1
+        hrf = hrf'; % ensure column vector
     end
     
-    % create the stim matrix    
-    for i=1:n_event
-       %disp(events(i).label)
-       names{i}=events(i).label;
-       n_run=length(events(i).samples);
-       for j =  1:n_run
-           event=(events(i).samples(1,j) - sample_offset ):(events(i).samples(2,j) - sample_offset);
-           X(event,i)=ones(size(event)); 
-       end
+    %% Make stimulus-induced design matrix
+    n_samples = length(time);
+    X = nst_make_event_regressors(events, hrf, n_samples);
+    
+    %% Add trend function
+    if include_trend
+        [C,name] = getTrend(DataMat.Time, 'Constant');
+        X = [X C];
+        names = [names name];
     end
     
-    
-    for i=1:n_event
-        X(:,i) = filter(basis_function(time ), 1, X(:,i));
-        %X(:,i) = X(:,i) - mean(X(:,i));
+    %% Sanity checks
+    % Check the rank of the matrix
+    if  rank(X) < size(X,2)
+        bst_report('Warning', sProcess, sInput, 'The design matrix is not full-ranked');
     end
+    
+    % Check the collinearity of the matrix
+    if cond(X) > 300 
+        bst_report('Warning', sProcess, sInput, [ 'The design matrix is high-correlated : Cond(x)=' num2str(cond(X))] );
+    end  
+    
 end
 
 function [C,names]=getTrend(time, trend_choice)
@@ -375,7 +380,7 @@ end
 
 
 
-function signal= Gamma(t,peakTime,peakDisp) 
+function signal = cpt_hrf_gamma(t,peakTime,peakDisp) 
 % Gamma : apply the gamma function over t_vect
     
     %signal=zeros( size(t_vect) );  
@@ -386,7 +391,7 @@ function signal= Gamma(t,peakTime,peakDisp)
     signal = signal / sum(signal);
 end
 
-function signal= BoxCar(t_vect,lag,duration)
+function signal = cpt_hrf_boxcar(t_vect,lag,duration)
 % BoxCar : apply the box car function over t_vect
     
     if nargin <  3, duration = 5; end
@@ -406,7 +411,7 @@ function signal= BoxCar(t_vect,lag,duration)
     end
 end
 
-function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio) 
+function signal= cpt_hrf_canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio) 
 % Canonical :return the Canonical Hrf
     
     assert( isvector(t)  )
@@ -417,10 +422,7 @@ function signal= Canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,ratio)
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
     if nargin <  6, ratio       = 1/6;end
-    
-
-    
-        
+          
    signal = peakDisp^peakTime*t.^(peakTime-1).*exp(-peakDisp*t)/gamma(peakTime) - ratio*uShootDisp^uShootTime*t.^(uShootTime-1).*exp(-uShootDisp*t)/gamma(uShootTime);
    signal = signal / sum(signal);
 end
