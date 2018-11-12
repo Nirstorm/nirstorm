@@ -27,7 +27,7 @@ end
 
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Source reconstruction - cMEM';
+    sProcess.Comment     = 'Compute sources: BEst';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
@@ -39,6 +39,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'data', 'data'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
+    
+     
+    % Options: MNE options
+    sProcess.options.mem.Comment = {'panel_brainentropy', 'Source estimation options: '};
+    sProcess.options.mem.Type    = 'editpref';
+    sProcess.options.mem.Value   = be_main();
+    
     % Definition of the options
     sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
     sProcess.options.thresh_dis2cortex.Type    = 'value';
@@ -60,6 +67,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.store_sparse_results.Comment = 'Store sparse results';
     sProcess.options.store_sparse_results.Type    = 'checkbox';
     sProcess.options.store_sparse_results.Value   = 0;
+   
 end
 
 %% ===== FORMAT COMMENT =====
@@ -71,12 +79,6 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
-
-if ~license('test', 'statistics_toolbox')
-    bst_error('Stats Toolbox not available');
-    return;
-end
-
 be_install(); %ensure brainentropy is installed.
 
 sStudy = bst_get('Study', sInputs.iStudy);
@@ -123,10 +125,16 @@ measure_tag = 'WL';
 % end
 % baseline_data = in_bst_data(sStudy.Data(baseline_id).FileName);
 
-% Default options
-MethodOptions = be_main();
-% Interface to edit options
-MethodOptions = gui_show_dialog('MEM options', @panel_brainentropy, [], [], MethodOptions);
+% iItem = [];
+% iItem = [iItem sInputs.iItem];
+% if length(iItem) == 1
+% % Default options
+% MethodOptions = be_main();
+% % Interface to edit options
+% MethodOptions = gui_show_dialog('MEM options', @panel_brainentropy, [], [], MethodOptions);
+% end
+
+MethodOptions.MEMpaneloptions =   sProcess.options.mem.Value.MEMpaneloptions;
 % Add fields that are not defined by the options of the MEM interface
 if ~isempty(MethodOptions)
     switch (nirs_head_model.HeadModelType)
