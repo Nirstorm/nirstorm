@@ -85,7 +85,11 @@ unique_pairs_hash = unique(pairs_hash);
 mcounts = sparse(ones(1, length(unique_pairs_hash)), unique_pairs_hash, ...
                       ones(1, length(unique_pairs_hash)), 1, max(unique_pairs_hash), ...
                       nb_channels);
-all_measures = unique(measures(~isnan(measures)));
+if ~iscell(measures)                 
+    all_measures = unique(measures(~isnan(measures)));
+else
+    all_measures = unique(measures(cellfun(@(e) ischar(e) || ~isnan(e), measures)));  
+end
 for ichan=1:nb_channels
     if ~isnan(isrcs(ichan))
         if measure_type == measure_types.WAVELENGTH

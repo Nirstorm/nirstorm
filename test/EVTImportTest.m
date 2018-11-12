@@ -19,7 +19,7 @@ classdef EVTImportTest < matlab.unittest.TestCase
     
     methods(TestMethodTeardown)
         function tear_down(testCase)
-            rmdir(fullfile(nst_get_local_user_dir(),'unittest',testCase.tmp_dir), 's');
+            rmdir(testCase.tmp_dir, 's');
             utest_clean_bst();
         end
     end
@@ -28,14 +28,9 @@ classdef EVTImportTest < matlab.unittest.TestCase
         function test_evt_event_import_events(testCase)
             global GlobalData;
             
-            utest_dir=fullfile(nst_get_local_user_dir(),'unittest');
-            if ~exist(fullfile(utest_dir,testCase.tmp_dir), 'dir')
-                mkdir(fullfile(utest_dir,testCase.tmp_dir));
-            end
-            
             events=generate_fake_event(10,2,150);
             
-            dlmwrite(fullfile(utest_dir,testCase.tmp_dir,'event.evt'),events,'delimiter','\t')
+            dlmwrite(fullfile(testCase.tmp_dir,'event.evt'),events,'delimiter','\t')
             %bst_save(fullfile(utest_dir,testCase.tmp_dir,'event.evt'),events);
             %bst_save(fullfile(utest_dir,'event.evt') ,events);
 
@@ -80,12 +75,7 @@ classdef EVTImportTest < matlab.unittest.TestCase
         
         function test_evt_event_merge(testCase)
             global GlobalData;
-            
-                        utest_dir=fullfile(nst_get_local_user_dir(),'unittest');
-            if ~exist(fullfile(utest_dir,testCase.tmp_dir), 'dir')
-                mkdir(fullfile(utest_dir,testCase.tmp_dir));
-            end
-            
+                       
             events=generate_fake_event(10,4,150);
             
             dlmwrite(fullfile(utest_dir,testCase.tmp_dir,'event.evt'),events,'delimiter','\t')
