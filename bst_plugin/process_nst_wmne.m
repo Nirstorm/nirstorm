@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1205; %0: not shown, >0: defines place in the list of processes
+    sProcess.Index       = 1204; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'raw', 'data'};
@@ -39,7 +39,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'data', 'data'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    
     % Definition of the options
     sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
     sProcess.options.thresh_dis2cortex.Type    = 'value';
@@ -83,11 +82,6 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
-
-if ~license('test', 'statistics_toolbox')
-    bst_error('Stats Toolbox not available');
-    return;
-end
 
 sStudy = bst_get('Study', sInputs.iStudy);
 
@@ -285,24 +279,40 @@ G = HM.Gain./MSD;
 % selection of the data:
 sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
 M = M(:,sample(1):sample(2));
+
 Sigma_d    =   inv(diag(diag(real(cov(Baseline')))));
+
 param1 = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
 pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... ');
 p = OPTIONS.depth_weigth_MNE;
-Sigma_s = diag(power(diag(G'*Sigma_d*G),p)); % beta = 0 p= 0.5
+if OPTIONS.NoiseCov_recompute
+    Sigma_s = diag(power(diag(G'*Sigma_d*G),p)); 
+else
+    Sigma_s = diag(power(diag(G'*G),p)); 
+end
 W = sqrt(Sigma_s);
 scale = trace(G*G')./trace(W'*W);       % Scale alpha using trace(G*G')./trace(W'*W)
 alpha = param1.*scale;
 Fit = [];
 Prior = [];
-for i = 1:length(param1)%
-    J = ((G'*Sigma_d*G+alpha(i).*Sigma_s)^-1)*G'*Sigma_d*M; % Weighted MNE solution
-    Fit = [Fit,norm(M-G*J)];       % Define Fit as a function of alpha
-    Prior = [Prior,norm(W*J)];          % Define Prior as a function of alpha
+[U,S,V] = svd(G,'econ');
+G2 = U*S;
+Sigma_s2 = V'*Sigma_s*V;
+for i = 1:length(param1)
+    if OPTIONS.NoiseCov_recompute 
+    J = ((G2'*Sigma_d*G2+alpha(i).*Sigma_s2)^-1)*G2'*Sigma_d*M;
+    else
+    J = ((G2'*G2+alpha(i).*Sigma_s2)^-1)*G2'*M; % Weighted MNE solution
+    end
+    Fit = [Fit,norm(M-G2*J)];       % Define Fit as a function of alpha
+    Prior = [Prior,norm(W*V*J)];          % Define Prior as a function of alpha
 end
 [~,Index] = min(Fit/max(Fit)+Prior/max(Prior));  % Find the optimal alpha
-
+if OPTIONS.NoiseCov_recompute
 J = ((G'*Sigma_d*G+alpha(Index).*Sigma_s)^-1)*G'*Sigma_d*M;
+else
+J = ((G'*G+alpha(Index).*Sigma_s)^-1)*G'*M;    
+end
 
 pbar = bst_progress('text', 'wMNE, solving MEN by L-curve ... done');
 

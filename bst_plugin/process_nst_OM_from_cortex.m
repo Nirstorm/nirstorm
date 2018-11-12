@@ -37,7 +37,7 @@ sProcess.OutputTypes = {'import'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
-sProcess.options.cortex_to_scalp_extent.Comment = 'Extent of cortex-to-scalp projection:';
+sProcess.options.cortex_to_scalp_extent.Comment = 'Extent of cortical ROI to scalp projection:';
 sProcess.options.cortex_to_scalp_extent.Type = 'value';
 sProcess.options.cortex_to_scalp_extent.Value = {4.0, 'cm', 2};
 
@@ -55,5 +55,5 @@ cortex_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
 [head_vertex_ids, sHead] = process_nst_cpt_fluences_from_cortex('proj_cortex_scout_to_scalp', ...
                                                                  cortex_scout_selection, ...
                                                                  sProcess.options.cortex_to_scalp_extent.Value{1}.*0.01, 1);
-OutputFiles = process_nst_OM_from_head('Compute', sProcess, cortex_scout_selection.sSubject, sHead, head_vertex_ids);
+OutputFiles = process_nst_OM_from_head('Compute', sProcess, cortex_scout_selection.sSubject, sHead, head_vertex_ids, sInputs);
 end
