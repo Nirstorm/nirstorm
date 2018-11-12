@@ -60,7 +60,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.basis.Comment = 'Basis function';
     sProcess.options.basis.Type    = 'combobox';
-    sProcess.options.basis.Value   = {1, {'Hrf','Gamma','BoxCar'}};
+    
+    sProcess.options.basis.Value   = {1, fieldnames(get_hrf_types())};
     
     sProcess.options.trend.Comment = 'Add a constant trend function ';
     sProcess.options.trend.Type    = 'checkbox';
@@ -98,7 +99,7 @@ function OutputFiles = Run(sProcess, sInput)
     OutputFiles={};
 
     DataMat = in_bst_data(sInput.FileName);
-    basis_choice=sProcess.options.basis.Value{2}{sProcess.options.basis.Value{1}};
+    basis_choice = sProcess.options.basis.Value{1};
 
     %% Select events
     % TODO: utests with all events found, no event selected, no available
@@ -153,33 +154,18 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     %% Create the design matrix X
+    hrf_duration = 25; % sec -- TODO: expose as process parameter
     [X,names] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
-                                   basis_choice, sProcess.options.trend.Value);  
-
+                                   basis_choice, hrf_duration, sProcess.options.trend.Value);  
+    n_regressor = size(X, 2);
+    
     iStudy = sInput.iStudy;
 
     output_prefix = [sInput.Comment ' | '];
     
-    if sProcess.options.save.Value == 1 
-        % Save the design matrix
-        Out_DataMat = db_template('matrixmat');
-        Out_DataMat.Value           = X';
-        Out_DataMat.Comment     = [output_prefix 'GLM Design Matrix'];
-        Out_DataMat.Description = names'; % Names of the regressors 
-        Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
-        Out_DataMat.Time        =  DataMat.Time;
-        Out_DataMat.DataFile    = sInput.FileName;
-        Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
-        OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
-        % Save on disk
-        save(OutputFiles{end}, '-struct', 'Out_DataMat');
-        % Register in database
-        db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
-    end 
+
     
     %% Solving  B such as Y = XB +e 
-    
-
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
@@ -202,6 +188,28 @@ function OutputFiles = Run(sProcess, sInput)
     
    
     %% Save results
+    
+    
+    %TODO: save as internal result matrix -- GLM results
+    %  - beta mat
+    %  - beta cov
+    %  - design matrix
+%     -    if sProcess.options.save.Value == 1 
+% -        % Save the design matrix
+% -        Out_DataMat = db_template('matrixmat');
+% -        Out_DataMat.Value           = X';
+% -        Out_DataMat.Comment     = [output_prefix 'GLM Design Matrix'];
+% -        Out_DataMat.Description = names'; % Names of the regressors 
+% -        Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
+% -        Out_DataMat.Time        =  DataMat.Time;
+% -        Out_DataMat.DataFile    = sInput.FileName;
+% -        Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
+% -        OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
+% -        % Save on disk
+% -        save(OutputFiles{end}, '-struct', 'Out_DataMat');
+% -        % Register in database
+% -        db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+% -    end 
     
     % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
@@ -304,13 +312,21 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
 end
 
 function hrf_types = get_hrf_types()
-hrf_types.CANONICAL = 0;
-hrf_types.GAMMA = 1;
-hrf_types.BOXCAR = 2;
+hrf_types.CANONICAL = 1;
+hrf_types.GAMMA = 2;
+hrf_types.BOXCAR = 3;
 end
 
 function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)
 	
+    if nargin < 4
+        hrf_duration = 25;
+    end
+    
+    if nargin < 5
+        include_trend = 1;
+    end
+
     X = [];
     names = {};
     
@@ -342,6 +358,7 @@ function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, in
     %% Make stimulus-induced design matrix
     n_samples = length(time);
     X = nst_make_event_regressors(events, hrf, n_samples);
+    names = {events.label};
     
     %% Add trend function
     if include_trend
