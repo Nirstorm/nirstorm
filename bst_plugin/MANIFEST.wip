@@ -5,3 +5,5 @@ process_nst_detect_bad_CV.m
 process_nst_iir_filter.m
 process_nst_surfacedepth.m
 process_nst_cmem_fusion.m
+process_nst_dOD_SSR.m
+process_nst_mbll_SSR.m

@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'MBLL - OD to delta OD_SSR';
     sProcess.FileTag     = ' | dOD';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1004; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSEEGVisualCheckerboard';
     % Definition of the input accepted by this process
@@ -99,11 +99,11 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
     
     % Remove bad channels: they won't enter MBLL computation so no need to keep them 
-    [good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels',sDataIn.F', ChanneMat, sDataIn.ChannelFlag);
+    [good_nirs, good_channel_def] = process_nst_mbll_SSR('filter_bad_channels',sDataIn.F', ChanneMat, sDataIn.ChannelFlag);
     
     % Separate NIRS channels from others (NIRS_AUX etc.)                                                
     [fnirs, fchannel_def, nirs_other, channel_def_other] = ...
-        process_nst_mbll('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
+        process_nst_mbll_SSR('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
     
     
     % Apply dOD computation
@@ -113,7 +113,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     [nirs_dOD, channel_dOD_def] = Compute(fnirs, baseline_method, fchannel_def, do_SuperficalRegression);
     end
     
-    [final_nirs, ChannelMat] = process_nst_mbll('concatenate_data',nirs_dOD, channel_dOD_def, nirs_other, channel_def_other);
+    [final_nirs, ChannelMat] = process_nst_mbll_SSR('concatenate_data',nirs_dOD, channel_dOD_def, nirs_other, channel_def_other);
     
     % Create new condition because channel definition is different from original one
      cond_name = sInputs.Condition;
@@ -174,8 +174,8 @@ switch normalize_method
         od_ref = median(nirs_sig, 1);
 end
 
-[nirs_psig, pair_names, pair_loc, pair_indexes] = process_nst_mbll('group_paired_channels',nirs_sig, channel_def);
-pair_distances = process_nst_mbll('cpt_distances',channel_def.Channel, pair_indexes) .* 100; %convert to cm
+[nirs_psig, pair_names, pair_loc, pair_indexes] = process_nst_mbll_SSR('group_paired_channels',nirs_sig, channel_def);
+pair_distances = process_nst_mbll_SSR('cpt_distances',channel_def.Channel, pair_indexes) .* 100; %convert to cm
 nb_samples = size(nirs_sig, 1);
 nb_pairs = length(pair_names);
 dOD = zeros(nb_pairs, 2, nb_samples);
@@ -184,7 +184,7 @@ if do_SuperficalRegression
     [~,idx_supf_chann] = find(ismember(pair_names,supf_chann{1}'));
     delta_od_supf = zeros(2,nb_samples);
     for i_supf_chann = 1:length(idx_supf_chann)
-       delta_od_supf = process_nst_mbll('normalize_nirs',squeeze(nirs_psig(idx_supf_chann(i_supf_chann), :, :)), ...
+       delta_od_supf = process_nst_mbll_SSR('normalize_nirs',squeeze(nirs_psig(idx_supf_chann(i_supf_chann), :, :)), ...
                               normalize_method)+delta_od_supf; 
        disp(['Superfical Channel-' pair_names(idx_supf_chann(i_supf_chann)) num2str(pair_distances(idx_supf_chann(i_supf_chann)),'%.2f') 'cm']);
     end
@@ -193,7 +193,7 @@ end
 
 for ipair=1:size(nirs_psig, 1)
     
-    delta_od = process_nst_mbll('normalize_nirs',squeeze(nirs_psig(ipair, :, :)), ...
+    delta_od = process_nst_mbll_SSR('normalize_nirs',squeeze(nirs_psig(ipair, :, :)), ...
                               normalize_method);
     
     % SSR regression  Gregg 2010 Frontiers

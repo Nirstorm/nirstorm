@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute sources: BEst'; % in panel_brainentropy.m comment name has to be "Compute sources: BEst" to call BEST panel
 sProcess.FileTag     = '';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = 'NIRS - wip';
 sProcess.Index       = 1202; %0: not shown, >0: defines place in the list of processes
 sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping';
 % Definition of the input accepted by this process
