@@ -176,7 +176,7 @@ if nargin < 2 || ~isfield(parameters, 'method')
    parameters.method = 'mean'; 
 end
 
-if nargin < 2 || ~isfield(parameters, 'baseline_window')
+if nargin < 2 || ~isfield(parameters, 'baseline_window') || isempty(parameters.baseline_window)
     parameters.baseline_window = 1:nb_samples;
 end
 
