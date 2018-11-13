@@ -63,7 +63,7 @@ def get_matlab_help_doc(func_name):
         # Pick core version if exists: 
         doc_fn = None
         for dfn in doc_fns:
-            if 'ref' in dfn:
+            if op.join('matlab', 'ref') in dfn:
                 doc_fn = dfn
                 toolbox = 'core'
                 break

@@ -21,7 +21,7 @@ ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
 ResultsMat = db_template('resultsmat');
 ResultsMat.Comment       = name;
 ResultsMat.Function      = '';
-ResultsMat.ImageGridAmp = data;
+ResultsMat.ImageGridAmp  = data;
 ResultsMat.Time          = time;
 if ~isempty(sInputs)
     ResultsMat.DataFile  = sInputs.FileName;
@@ -49,7 +49,6 @@ bst_save(ResultFile, ResultsMat, 'v6');
 newResult = db_template('results');
 newResult.Comment       = name;
 newResult.FileName      = file_short(ResultFile);
-newResult.DataFile      = ''; %sInputs.FileName;
 newResult.isLink        = 0;
 newResult.HeadModelType = ResultsMat.HeadModelType;
 % Add new entry to the database

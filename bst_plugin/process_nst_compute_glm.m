@@ -34,13 +34,13 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Compute GLM';
+    sProcess.Comment     = 'GLM - design and fit';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 0;
 
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
+    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
@@ -49,34 +49,37 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
+    
+    sProcess.options.stim_events.Comment = 'Stimulation events: ';
+    sProcess.options.stim_events.Type    = 'text';
+    sProcess.options.stim_events.Value   = '';
+    
+    sProcess.options.hrf_model.Comment = 'HRF model: ';
+    sProcess.options.hrf_model.Type    = 'combobox';
+    sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
+    
+    sProcess.options.trend.Comment = 'Add constant regressor ';
+    sProcess.options.trend.Type    = 'checkbox';
+    sProcess.options.trend.Value   =  1;
+    
+    sProcess.options.fitting.Comment = 'Fitting method';
+    sProcess.options.fitting.Type    = 'combobox';
+    sProcess.options.fitting.Value   = {1, {'OLS','AR-IRLS' }};
 
     % Separator
     sProcess.options.separator.Type = 'separator';
     sProcess.options.separator.Comment = ' ';
     
-    sProcess.options.stim_events.Comment = 'Stim events: ';
-    sProcess.options.stim_events.Type    = 'text';
-    sProcess.options.stim_events.Value   = '';
+    sProcess.options.save_residuals.Comment = '<B>Extra outputs</B>:';
+    sProcess.options.save_residuals.Type    = 'label';
     
-    sProcess.options.basis.Comment = 'Basis function';
-    sProcess.options.basis.Type    = 'combobox';
-    sProcess.options.basis.Value   = {1, {'Hrf','Gamma','BoxCar'}};
+    sProcess.options.save_residuals.Comment = 'Residuals';
+    sProcess.options.save_residuals.Type    = 'checkbox';
+    sProcess.options.save_residuals.Value   =  0;
     
-    sProcess.options.trend.Comment = 'Add a constant trend function ';
-    sProcess.options.trend.Type    = 'checkbox';
-    sProcess.options.trend.Value   =  1;
-    
-    sProcess.options.save.Comment = 'Save the design matrix';
-    sProcess.options.save.Type    = 'checkbox';
-    sProcess.options.save.Value   =  1;
-    
-    % Separator
-    sProcess.options.separator.Type = 'separator';
-    sProcess.options.separator.Comment = ' ';
-    
-    sProcess.options.fitting.Comment = 'Fitting method';
-    sProcess.options.fitting.Type    = 'combobox';
-    sProcess.options.fitting.Value   = {1, {'OLS','AR-IRLS(AnalizIR toolbox)' }};
+    sProcess.options.save_betas.Comment = 'Beta maps';
+    sProcess.options.save_betas.Type    = 'checkbox';
+    sProcess.options.save_betas.Value   =  0;
 
 end
 
@@ -85,12 +88,12 @@ end
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
-    fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
-    if( fitting_choice == 1 )
-        Comment=[ Comment ' OLS fit'];
-    elseif( fitting_choice == 2)
-        Comment=[ Comment ' AR-IRLS fit'];
-    end    
+%     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
+%     if( fitting_choice == 1 )
+%         Comment=[ Comment ' OLS fit'];
+%     elseif( fitting_choice == 2)
+%         Comment=[ Comment ' AR-IRLS fit'];
+%     end    
 end
 
 function OutputFiles = Run(sProcess, sInput)
@@ -98,8 +101,11 @@ function OutputFiles = Run(sProcess, sInput)
     OutputFiles={};
 
     DataMat = in_bst_data(sInput.FileName);
-    basis_choice=sProcess.options.basis.Value{2}{sProcess.options.basis.Value{1}};
+    basis_choice = sProcess.options.hrf_model.Value{1};
 
+    save_residuals = sProcess.options.save_residuals.Value;
+    save_betas = sProcess.options.save_residuals.Value;
+    
     %% Select events
     % TODO: utests with all events found, no event selected, no available
     %       event in data, one event missing
@@ -153,33 +159,16 @@ function OutputFiles = Run(sProcess, sInput)
     end
     
     %% Create the design matrix X
+    hrf_duration = 25; % sec -- TODO: expose as process parameter
     [X,names] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
-                                   basis_choice, sProcess.options.trend.Value);  
-
+                                   basis_choice, hrf_duration, sProcess.options.trend.Value);  
+    n_regressor = size(X, 2);
+    
     iStudy = sInput.iStudy;
 
-    output_prefix = [sInput.Comment ' | '];
     
-    if sProcess.options.save.Value == 1 
-        % Save the design matrix
-        Out_DataMat = db_template('matrixmat');
-        Out_DataMat.Value           = X';
-        Out_DataMat.Comment     = [output_prefix 'GLM Design Matrix'];
-        Out_DataMat.Description = names'; % Names of the regressors 
-        Out_DataMat.ChannelFlag =  ones(n_regressor,1);   % List of good/bad channels (1=good, -1=bad)
-        Out_DataMat.Time        =  DataMat.Time;
-        Out_DataMat.DataFile    = sInput.FileName;
-        Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
-        OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
-        % Save on disk
-        save(OutputFiles{end}, '-struct', 'Out_DataMat');
-        % Register in database
-        db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
-    end 
     
     %% Solving  B such as Y = XB +e 
-    
-
 
     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
     if( fitting_choice == 1 ) % Use OLS : : \( B= ( X^{T}X)^{-1} X^{T} Y \)
@@ -195,86 +184,91 @@ function OutputFiles = Run(sProcess, sInput)
         method_name='AR-IRLS_fit';
         [B,covB,dfe]=ar_irls_fit( Y, X, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
     else
-        bst_report('Error', sProcess, sInputs, 'This method is not implemented yet' );
+        bst_report('Error', sProcess, sInput, 'This method is not implemented yet' );
     end
+    
+    output_prefix = [sInput.Comment ' | GLM ' method_name ' '];
     
     residual = Y - X*B ;
     
    
     %% Save results
-    
-    % Saving the B Matrix
     Out_DataMat = db_template('matrixmat');
-    Out_DataMat.Value           = B';
-    Out_DataMat.Comment     = [output_prefix 'GLM_beta_matrix_' method_name];
-    Out_DataMat.Description = names; % Names of the regressors 
-    Out_DataMat.ChannelFlag =  ones(size(B,2),1);   % List of good/bad channels (1=good, -1=bad)
-    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
-
-    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'B_matrix');
+    Out_DataMat.Value       = X'; % nb_regressors x nb_samples
+    Out_DataMat.Comment     = [output_prefix 'results'];
+    Out_DataMat.Description = names'; % Names of the regressors
+    Out_DataMat.ChannelFlag = DataMat.ChannelFlag;  
+    Out_DataMat.Time        = DataMat.Time;
+    Out_DataMat.DataFile    = sInput.FileName;
+    
+    Out_DataMat.beta = B; % nb_regressors x nb_positions
+    Out_DataMat.beta_cov = covB; % nb_regressors x nb_regressors x nb_positions
+    Out_DataMat.df = dfe; % scalar int
+    Out_DataMat.input_units = DataMat.DisplayUnits;
+    
+    Out_DataMat = bst_history('add', Out_DataMat, 'Design', FormatComment(sProcess));
+    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'design_matrix');
+    % Save on disk
     save(OutputFiles{end}, '-struct', 'Out_DataMat');
+    % Register in database
     db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
     
-    % Saving B as maps
-    for i_reg_name=1:length(names)
-        data_out = zeros(size(DataMat.F, 1), 1);
+    if save_betas
+        % Saving B as maps
+        for i_reg_name=1:length(names)
+            data_out = zeros(size(DataMat.F, 1), 1);
 
-        output_name = [output_prefix 'GLM_beta_' method_name '_' names{i_reg_name}];
-        sStudy = bst_get('Study', sInput.iStudy);
-        
-        if surface_data
-            [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_name, ...
-                                                         sInput, sStudy, 'GLM', DataMat.SurfaceFile);
-            OutputFiles{end+1} = ResultFile;
-        else
-            data_out(nirs_ichans,:) = B(i_reg_name,:);
-            sDataOut = db_template('data');
-            sDataOut.F            = data_out;
-            sDataOut.Comment      = output_name;
-            sDataOut.ChannelFlag  = DataMat.ChannelFlag;
-            sDataOut.Time         = [1];
-            sDataOut.DataType     = 'recordings';
-            sDataOut.nAvg         = 1;
-            sDataOut.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
-                
-            OutputFiles{end+1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
-            sDataOut.FileName = file_short(OutputFiles{end});
-            bst_save(OutputFiles{end}, sDataOut, 'v7');
-            % Register in database
-            db_add_data(sInput.iStudy, OutputFiles{end}, sDataOut);
+            output_name = [output_prefix '- beta ' names{i_reg_name}];
+            sStudy = bst_get('Study', sInput.iStudy);
+
+            if surface_data
+                [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_name, ...
+                                                             sInput, sStudy, 'GLM', DataMat.SurfaceFile);
+            else
+                data_out(nirs_ichans,:) = B(i_reg_name,:);
+                sDataOut = db_template('data');
+                sDataOut.F            = data_out;
+                sDataOut.Comment      = output_name;
+                sDataOut.ChannelFlag  = DataMat.ChannelFlag;
+                sDataOut.Time         = [1];
+                sDataOut.DataType     = 'recordings';
+                sDataOut.nAvg         = 1;
+                sDataOut.DisplayUnits = sInput.DisplayUnits; %TODO: check scaling
+
+                beta_fn = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' names{i_reg_name}]);
+                sDataOut.FileName = file_short(beta_fn);
+                bst_save(beta_fn, sDataOut, 'v7');
+                % Register in database
+                db_add_data(sInput.iStudy, beta_fn, sDataOut);
+            end 
         end
-        
-
     end
     
-    % Saving the covB Matrix.
-    Out_DataMat = db_template('matrixmat');
-    Out_DataMat.Value           = covB;
-    Out_DataMat.Comment     = [ 'GLM_covB_' method_name '_df=' int2str(dfe) ];
-    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
-    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'covB_matrix');
-    save(OutputFiles{end}, '-struct', 'Out_DataMat');
-    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);    
-    
-    % Saving the residual matrix.
-    Out_DataMat = db_template('data');
-    Out_DataMat.F           = residual' ;
-    Out_DataMat.Comment     = ['GLM_' method_name '_Residual Matrix'];
-    Out_DataMat.DataType     = 'recordings'; 
-    Out_DataMat.Time        =  DataMat.Time;
-    Out_DataMat.Events      =  DataMat.Events;
-    Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
-    Out_DataMat.DisplayUnits = DataMat.DisplayUnits; 
-    Out_DataMat.nAvg         = 1; 
-    
-    Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
-    Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
-    OutputFiles{end+1} = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
-    Out_DataMat.FileName = file_short(OutputFiles{end});
-    bst_save(OutputFiles{end}, Out_DataMat, 'v7');
-    db_add_data(iStudy, OutputFiles{end}, Out_DataMat);
+    if save_residuals
+        % Saving the residual matrix.
+        output_name = [output_prefix '- residuals'];
+        if surface_data
+                [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_name, ...
+                                                             sInput, sStudy, 'GLM', DataMat.SurfaceFile);
+        else
+            Out_DataMat = db_template('data');
+            Out_DataMat.F           = residual' ;
+            Out_DataMat.Comment     = output_name;
+            Out_DataMat.DataType     = 'recordings';
+            Out_DataMat.Time        =  DataMat.Time;
+            Out_DataMat.Events      =  DataMat.Events;
+            Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
+            Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
+            Out_DataMat.nAvg         = 1;
+            
+            Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+            Out_DataMat = bst_history('add', Out_DataMat, 'GLM', FormatComment(sProcess));
+            residuals_fn = bst_process('GetNewFilename', fileparts(sInput.FileName), 'data_residual');
+            Out_DataMat.FileName = file_short(residuals_fn);
+            bst_save(residuals_fn, Out_DataMat, 'v7');
+            db_add_data(iStudy, residuals_fn, Out_DataMat);
+        end
+    end
 end
 
 
@@ -304,13 +298,21 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
 end
 
 function hrf_types = get_hrf_types()
-hrf_types.CANONICAL = 0;
-hrf_types.GAMMA = 1;
-hrf_types.BOXCAR = 2;
+hrf_types.CANONICAL = 1;
+hrf_types.GAMMA = 2;
+hrf_types.BOXCAR = 3;
 end
 
 function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)
 	
+    if nargin < 4
+        hrf_duration = 25;
+    end
+    
+    if nargin < 5
+        include_trend = 1;
+    end
+
     X = [];
     names = {};
     
@@ -342,6 +344,7 @@ function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, in
     %% Make stimulus-induced design matrix
     n_samples = length(time);
     X = nst_make_event_regressors(events, hrf, n_samples);
+    names = {events.label};
     
     %% Add trend function
     if include_trend

@@ -34,7 +34,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Compute Subject Analysis';
+    sProcess.Comment     = 'GLM - intra subject contrast';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1402;
@@ -43,8 +43,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'matrix'};
-    sProcess.OutputTypes = {'data','raw'};
+    sProcess.InputTypes  = {'data', 'results'};
+    sProcess.OutputTypes = {'data', 'results'};
     
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;

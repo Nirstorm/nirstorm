@@ -13,9 +13,11 @@ end
 % Create new protocol
 gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
 
+% Add test subject
 subject_name = 'test_subject';
 [sSubject, iSubject] = db_add_subject(subject_name);
 
+% Set anatomy to template Colin27 4NIRS - low res version
 sTemplates = bst_get('AnatomyDefaults');
 iTemplate = strcmpi('Colin27_4NIRS_lowres', {sTemplates.Name});
 if ~any(iTemplate)
@@ -23,5 +25,9 @@ if ~any(iTemplate)
 end
 db_set_template(iSubject, sTemplates(iTemplate), 0);
 db_save();
+
+% Set default cortical surface to low resolution mid
 sSubject = bst_get('Subject', subject_name);
+db_surface_default( iSubject, 'Cortex', find(strcmp({sSubject.Surface.Comment}, 'mid_lowres')));
+panel_protocols('RepaintTree');
 end
