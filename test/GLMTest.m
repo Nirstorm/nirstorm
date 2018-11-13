@@ -22,10 +22,10 @@ classdef GLMTest < matlab.unittest.TestCase
     
     methods(Test)
         
-        function test_simulation(testCase)
+        function test_cortical_simulation(testCase)
             
             % Simulate cortical signals -> dHb
-            [sHbCortex, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(testCase.tmp_dir);
+            [sHbCortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(testCase.tmp_dir);
             
             % ASSUME: sHbCortex(1) is HbO and sHbCortex(2) is HbR
             % TODO: use common enum for safer identification
@@ -34,19 +34,30 @@ classdef GLMTest < matlab.unittest.TestCase
             sGlmResults = cell(1, length(sHbCortex));
             for ihb=1:length(sHbCortex)
                 sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_compute_glm', sHbCortex(ihb), [], ...
-                                                'stim_events', strjoin(stim_event_names, ','), ...
-                                                'basis',       1, ...  % Hrf
-                                                'trend',       0, ...
-                                                'save',        1, ...
-                                                'fitting',     1);  % OLS
+                                                'stim_events',    strjoin(stim_event_names, ','), ...
+                                                'hrf_model',      1, ...  % CANONICAL
+                                                'trend',          0, ...
+                                                'fitting',        1, ...  % OLS
+                                                'save_residuals', 1, ...
+                                                'save_betas',     1);
             end
+            
+            % Check beta estimates, non-regression test at specific voxel
+            % where esimtates are the most accurate
+            glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
+            testCase.assertTrue( abs(beta_map_hb(1, 4708)-glm_results_hbo.beta(1,4708)) < 3e-7);
+            glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
+            testCase.assertTrue( abs(beta_map_hb(2, 4658)-glm_results_hbr.beta(1,4658)) < 1.5e-7);
+
+            % Check activation detection (p-val thresholding)
+            %   
         end
         
     end
     
 end
 
-function [hb_cortex, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
+function [hb_cortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
 
 %TODO: add second experimental condition
 

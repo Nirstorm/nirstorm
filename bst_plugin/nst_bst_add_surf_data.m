@@ -21,7 +21,7 @@ ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
 ResultsMat = db_template('resultsmat');
 ResultsMat.Comment       = name;
 ResultsMat.Function      = '';
-ResultsMat.ImageGridAmp = data;
+ResultsMat.ImageGridAmp  = data;
 ResultsMat.Time          = time;
 if ~isempty(sInputs)
     ResultsMat.DataFile  = sInputs.FileName;
