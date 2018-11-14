@@ -1,8 +1,8 @@
-function [sStudy, ResultFile] = nst_bst_add_surf_data(data, time, head_model, name, ...
+function [sStudy, ResultFile] = nst_bst_add_surf_data(data, time, head_model, file_tag, comment, ...
                                                       sInputs, sStudy, history_comment, surface_file)
                                                   
                                                   
-if nargin < 8
+if nargin < 9
     if ~isempty(head_model)
         surface_file =  file_short(head_model.SurfaceFile);
     else
@@ -15,11 +15,11 @@ end
 %% Save a cortical map to brainstorm with given data
 
 ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                         ['results_' protect_fn_str(name)]);
+                         ['results_' protect_fn_str(file_tag)]);
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
-ResultsMat.Comment       = name;
+ResultsMat.Comment       = comment;
 ResultsMat.Function      = '';
 ResultsMat.ImageGridAmp  = data;
 ResultsMat.Time          = time;
@@ -47,7 +47,7 @@ bst_save(ResultFile, ResultsMat, 'v6');
 % ===== REGISTER NEW FILE =====
 % Create new results structure
 newResult = db_template('results');
-newResult.Comment       = name;
+newResult.Comment       = comment;
 newResult.FileName      = file_short(ResultFile);
 newResult.isLink        = 0;
 newResult.HeadModelType = ResultsMat.HeadModelType;

@@ -105,11 +105,17 @@ for ifn=1:length(relative_fns)
         conn = openConnection(jurl);
         conn.setConnectTimeout(15000);
         if ~isempty(strfind(url, 'http:'))
-            status = getResponseCode(conn);
-            if status == 404
+            try
+                status = getResponseCode(conn);
+                if status == 404
+                    remote_files_not_found{end+1} = url;
+                    continue;
+                end
+            catch
                 remote_files_not_found{end+1} = url;
                 continue;
             end
+
         else % ftp
             try
                 conn.connect();

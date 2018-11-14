@@ -220,17 +220,18 @@ function OutputFiles = Run(sProcess, sInput)
         for i_reg_name=1:length(names)
             data_out = zeros(size(DataMat.F, 1), 1);
 
-            output_name = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
+            output_tag = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
+            output_comment = [output_prefix '- beta ' names{i_reg_name}];
             sStudy = bst_get('Study', sInput.iStudy);
 
             if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_name, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
                                                              sInput, sStudy, 'GLM', DataMat.SurfaceFile);
             else
                 data_out(nirs_ichans,:) = B(i_reg_name,:);
                 sDataOut = db_template('data');
                 sDataOut.F            = data_out;
-                sDataOut.Comment      = output_name;
+                sDataOut.Comment      = output_tag;
                 sDataOut.ChannelFlag  = DataMat.ChannelFlag;
                 sDataOut.Time         = [1];
                 sDataOut.DataType     = 'recordings';
@@ -248,14 +249,15 @@ function OutputFiles = Run(sProcess, sInput)
     
     if save_residuals
         % Saving the residual matrix.
-        output_name = sprintf('ir%d_glm_res', sInput.iItem);
+        output_tag = sprintf('ir%d_glm_res', sInput.iItem);
+        output_comment = [output_prefix '- residuals'];
         if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_name, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_tag, output_comment, ...
                                                              sInput, sStudy, 'GLM', DataMat.SurfaceFile);
         else
             Out_DataMat = db_template('data');
             Out_DataMat.F           = residual' ;
-            Out_DataMat.Comment     = output_name;
+            Out_DataMat.Comment     = output_tag;
             Out_DataMat.DataType     = 'recordings';
             Out_DataMat.Time        =  DataMat.Time;
             Out_DataMat.Events      =  DataMat.Events;
