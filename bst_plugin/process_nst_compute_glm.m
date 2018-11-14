@@ -220,7 +220,7 @@ function OutputFiles = Run(sProcess, sInput)
         for i_reg_name=1:length(names)
             data_out = zeros(size(DataMat.F, 1), 1);
 
-            output_name = [output_prefix '- beta ' names{i_reg_name}];
+            output_name = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
             sStudy = bst_get('Study', sInput.iStudy);
 
             if surface_data
@@ -248,7 +248,7 @@ function OutputFiles = Run(sProcess, sInput)
     
     if save_residuals
         % Saving the residual matrix.
-        output_name = [output_prefix '- residuals'];
+        output_name = sprintf('ir%d_glm_res', sInput.iItem);
         if surface_data
                 [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_name, ...
                                                              sInput, sStudy, 'GLM', DataMat.SurfaceFile);
@@ -295,7 +295,7 @@ function [B,covB,dfe]=ols_fit(y,X)
     
 
     
-    if 1 % for test when running GLMTest.test_cortical_simulation
+    if 0 % for test when running GLMTest.test_cortical_simulation
        
         % activ pos hbO: 4708
         % inactiv pos hbo: 4977
