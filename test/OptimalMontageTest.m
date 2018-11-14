@@ -24,7 +24,7 @@ classdef OptimalMontageTest < matlab.unittest.TestCase
         
         function test_OM_from_cortex(testCase)
             global GlobalData;
-            subject_name = bst_create_test_subject();
+            subject_name = bst_create_test_subject('Colin27_4NIRS');
             
             stg_vertex_id = 19552;
             roi_scout_selection = bst_create_scout(subject_name, 'cortex', 'roi_temporal', stg_vertex_id, 2, 'User scouts');
@@ -54,7 +54,7 @@ classdef OptimalMontageTest < matlab.unittest.TestCase
         
         function test_OM_from_head(testCase)
             global GlobalData;
-            subject_name = bst_create_test_subject();
+            subject_name = bst_create_test_subject('Colin27_4NIRS');
             head_vertex_idx = 6465; %ASSUME: valid for Colin27 4NIRS default head mesh
             head_scout_selection = bst_create_scout(subject_name, 'scalp', 'OM_temporal', head_vertex_idx, 5, 'User scouts');
             

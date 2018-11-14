@@ -1,4 +1,9 @@
-function [subject_name, sSubject, iSubject] = bst_create_test_subject()
+function [subject_name, sSubject, iSubject] = bst_create_test_subject(template_name)
+
+if nargin < 1
+    template_name = 'Colin27_4NIRS_lowres';
+end
+
 %% Ensure that nst_utest protocol exists
 ProtocolName = 'nst_utest';
 % Delete existing protocol
@@ -19,9 +24,9 @@ subject_name = 'test_subject';
 
 % Set anatomy to template Colin27 4NIRS - low res version
 sTemplates = bst_get('AnatomyDefaults');
-iTemplate = strcmpi('Colin27_4NIRS_lowres', {sTemplates.Name});
+iTemplate = strcmpi(template_name, {sTemplates.Name});
 if ~any(iTemplate)
-    error('Template Colin27_4NIRS_lowres not found');
+    error('Template %s not found', template_name);
 end
 db_set_template(iSubject, sTemplates(iTemplate), 0);
 db_save();
