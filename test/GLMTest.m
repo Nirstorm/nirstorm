@@ -36,7 +36,7 @@ classdef GLMTest < matlab.unittest.TestCase
                 sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_compute_glm', sHbCortex(ihb), [], ...
                                                 'stim_events',    strjoin(stim_event_names, ','), ...
                                                 'hrf_model',      1, ...  % CANONICAL
-                                                'trend',          0, ...
+                                                'trend',          1, ...
                                                 'fitting',        1, ...  % OLS
                                                 'save_residuals', 1, ...
                                                 'save_betas',     1);
@@ -45,12 +45,17 @@ classdef GLMTest < matlab.unittest.TestCase
             % Check beta estimates, non-regression test at specific voxel
             % where esimtates are the most accurate
             glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
-            testCase.assertTrue( abs(beta_map_hb(1, 4708)-glm_results_hbo.beta(1,4708)) < 3e-7);
+            poi_activ = 4538;
+            testCase.assertTrue( abs(beta_map_hb(1, poi_activ)-glm_results_hbo.beta(1,poi_activ)) < 3.5e-6);
             glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
-            testCase.assertTrue( abs(beta_map_hb(2, 4658)-glm_results_hbr.beta(1,4658)) < 1.5e-7);
+            poi_activ = 4658;
+            testCase.assertTrue( abs(beta_map_hb(2, poi_activ)-glm_results_hbr.beta(1,poi_activ)) < 3.5e-7);
 
             % Check activation detection (p-val thresholding)
-            %   
+            %
+            stat_results = bst_process('CallProcess', 'process_nst_compute_ttest', ...
+                                       sGlmResults{1}, [], ...
+                                       'Contrast', '[1]');
         end
         
     end
