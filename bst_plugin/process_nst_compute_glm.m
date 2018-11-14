@@ -115,7 +115,6 @@ function OutputFiles = Run(sProcess, sInput)
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
                                
-    surface_data = 1;
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
         parent_data = in_bst_data(DataMat.DataFile);
@@ -130,6 +129,8 @@ function OutputFiles = Run(sProcess, sInput)
             bst_error('Cannot get signals from surface data');
         end
     else
+        surface_data = 0;
+
         % Get signals of NIRS channels only:
         ChannelMat = in_bst_channel(sInput.ChannelFile);
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
@@ -200,6 +201,7 @@ function OutputFiles = Run(sProcess, sInput)
     Out_DataMat.ChannelFlag = DataMat.ChannelFlag;  
     Out_DataMat.Time        = DataMat.Time;
     Out_DataMat.DataFile    = sInput.FileName;
+    Out_DataMat.SurfaceFile = DataMat.SurfaceFile;
     
     Out_DataMat.beta = B; % nb_regressors x nb_positions
     Out_DataMat.beta_cov = covB; % nb_regressors x nb_regressors x nb_positions
@@ -273,16 +275,46 @@ end
 
 
 function [B,covB,dfe]=ols_fit(y,X)
+    
     B= pinv(X'*X)* X'*y; % or B=X\y; 
     
-    residual=y - X*B ;     
-    covE=cov(residual);
-    
-    for i=1:size(residual,2)     
-        covB(:,:,i)=covE(i,i) * pinv(transpose(X)*X);
-    end
     dfe = size(y,1) - rank(X);
     
+    fit = X * B;
+    residual = y - fit;     
+    
+    % covE=cov(residual);
+    
+    mse_residuals = var(residual) * (size(y,1)-1) / dfe;
+    
+    inv_XtX = pinv(transpose(X)*X);
+    for i=1:size(residual,2)
+        covB(:,:,i) = mse_residuals(i) * inv_XtX;
+        % covB(:,:,i) = covE(i,i) * pinv(transpose(X)*X);
+    end
+    
+
+    
+    if 1 % for test when running GLMTest.test_cortical_simulation
+       
+        % activ pos hbO: 4708
+        % inactiv pos hbo: 4977
+        
+        poi_inact = 4955;
+        
+        figure(); hold on;
+        plot(y(:,poi_inact), 'k');
+        plot(residual(:,poi_inact), 'g');
+        plot(fit(:,poi_inact), 'r');
+        mse_residuals_inact = mse_residuals(poi_inact);
+        fprintf('MSE_inact = %e\n', mse_residuals_inact);
+        t_stat_inact = B(poi_inact) / sqrt(covB(1,1,poi_inact));
+        fprintf('tstat_inact = %1.3f\n', t_stat_inact);
+        p_val_inact = process_test_parametric2('ComputePvalues', t_stat_inact, dfe, 't', ...
+                                               'one+');
+        fprintf('p_val_inact = %1.3f\n', p_val_inact);
+        
+    end
 end
 
 function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
@@ -348,7 +380,7 @@ function [X,names] = make_design_matrix(time, events, hrf_type, hrf_duration, in
     
     %% Add trend function
     if include_trend
-        [C,name] = getTrend(DataMat.Time, 'Constant');
+        [C,name] = getTrend(time, 'Constant');
         X = [X C];
         names = [names name];
     end
