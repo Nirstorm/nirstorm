@@ -52,17 +52,39 @@ classdef GLMTest < matlab.unittest.TestCase
             testCase.assertTrue( abs(beta_map_hb(2, poi_activ)-glm_results_hbr.beta(1,poi_activ)) < 3.5e-7);
 
             % Check activation detection (p-val thresholding)
-            %
-            stat_results = bst_process('CallProcess', 'process_nst_compute_ttest', ...
+            stat_sResults = bst_process('CallProcess', 'process_nst_compute_ttest', ...
                                        sGlmResults{1}, [], ...
                                        'Contrast', '[1]');
+            stat_results = in_bst_results(stat_sResults.FileName);
+            thresh_options.pThreshold = 5e-2;
+            thresh_options.Correction = 'bonferroni';
+            thresh_options.Control = 1;
+            %TODO: fix number of tests according to cortical coverage
+            [pmask, corr_p] = bst_stat_thresh(stat_results.pmap, thresh_options);
+            
+            activation_mask = zeros(size(pmask));
+            activation_mask(activation_scout.sScout.Vertices) = 1;
+            
+            % Load scalp/cortex geometry and compute depth
+            sCortex = in_tess_bst(stat_results.SurfaceFile);
+            sSubject = bst_get('Subject', sHbCortex.SubjectName);
+            sScalp = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+            [scalp_points, depth] = nst_knnsearch(sScalp.Vertices, sCortex.Vertices);
+            
+            % Test that all truely activated vertices that are not too deep (<3cm)
+            % are detected
+            max_depth = 0.03; % meter
+            testCase.assertTrue(all(pmask(activation_mask & depth<max_depth)==1));
+            
+            % Non regression test on the number of false positive
+            testCase.assertLessThan(sum(pmask(~activation_mask)), 300);
         end
         
     end
     
 end
 
-function [hb_cortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
+function [hb_cortex, beta_map_hb, activation_stim1_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
 
 %TODO: add second experimental condition
 
@@ -121,7 +143,10 @@ db_save();
 
 %% Create scout for activating region
 seed_vertex_id = 4560; %scout seed 
-activation_scout = bst_create_scout(subject_name, 'cortex', 'activation', seed_vertex_id, 4, 'User scouts');
+activation_stim1_scout = bst_create_scout(subject_name, 'cortex', 'activation_stim1', seed_vertex_id, 4, 'User scouts');
+
+% seed_vertex_id = 4560; %scout seed 
+% activation_stim2_scout = bst_create_scout(subject_name, 'cortex', 'activation_stim2', seed_vertex_id, 4, 'User scouts');
 
 %% Create functional cortical signals for HbO and HbR
 
@@ -130,18 +155,18 @@ delta_hb = [ 0.01        ;... %HbO (mmol.l-1)
             -0.005       ];   %HbR (mmol.l-1)
 delta_hb = delta_hb / 1000; % mol.l-1
 HB_TYPES = {'HbO', 'HbR'};
-surface_file = activation_scout.sSubject.Surface(activation_scout.isurface).FileName;
+surface_file = activation_stim1_scout.sSubject.Surface(activation_stim1_scout.isurface).FileName;
 sCortex = in_tess_bst(surface_file);
 nb_vertices = size(sCortex.Vertices,1);
 func_map_hb = zeros(length(HB_TYPES), nb_samples, nb_vertices);
 beta_map_hb = zeros(length(HB_TYPES), nb_vertices);
 for ihb=1:length(HB_TYPES)
-    beta_map_hb(ihb, activation_scout.sScout.Vertices) = delta_hb(ihb, 1);
+    beta_map_hb(ihb, activation_stim1_scout.sScout.Vertices) = delta_hb(ihb, 1);
     func_map_hb(ihb, :, :) = X * beta_map_hb(ihb,:) + (rand(nb_samples, nb_vertices) * 0.1 * delta_hb(ihb, 1));
-    nst_bst_add_surf_data(squeeze(func_map_hb(ihb,:, :))', time, head_model_holder, ['simu_signal_' HB_TYPES{ihb}], ...
-                          [], sStudy, 'simulated', surface_file);
+    nst_bst_add_surf_data(squeeze(func_map_hb(ihb,:, :))', time, head_model_holder, ['simu_sig_' HB_TYPES{ihb}], ...
+                          ['Simulated signals ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
     nst_bst_add_surf_data(beta_map_hb(ihb,:)', 1, head_model_holder, ['simu_beta_' HB_TYPES{ihb}], ...
-                          [], sStudy, 'simulated', surface_file);
+                          ['Simulated beta ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
 end
 
 %% Project in topographic space using head model
