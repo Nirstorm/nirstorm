@@ -41,6 +41,8 @@ function varargout = nst_ppl_1st_level_surface_template_V1(arg1, arg2, glm_contr
 % - check anatomical consistency of head model -> within subhead model
 %   process
 % - export manual inputs
+% - importation of manual inputs:
+%   NST_PPL_1ST_LEVEL_SURFACE_TEMPLATE_V1('import_manual_markings', PROTOCOL_NAME)
 % - wiki page
 % - utest
 % - allow sparse storage for projected signals
