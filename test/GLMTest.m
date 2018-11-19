@@ -45,46 +45,67 @@ classdef GLMTest < matlab.unittest.TestCase
             % Check beta estimates, non-regression test at specific voxel
             % where esimtates are the most accurate
             glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
-            poi_activ = 4538;
-            testCase.assertTrue( abs(beta_map_hb(1, poi_activ)-glm_results_hbo.beta(1,poi_activ)) < 3.5e-6);
+            poi_activ = 4491; % for condition 1
+            testCase.assertTrue( abs(beta_map_hb(1, 1, poi_activ)-glm_results_hbo.beta(1,poi_activ)) < 1e-6);
+            poi_activ = 4890; % for condition 2
+            testCase.assertTrue( abs(beta_map_hb(1, 2, poi_activ)-glm_results_hbo.beta(2,poi_activ)) < 3.5e-7);
+            
             glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
-            poi_activ = 4658;
-            testCase.assertTrue( abs(beta_map_hb(2, poi_activ)-glm_results_hbr.beta(1,poi_activ)) < 3.5e-7);
+            poi_activ = 4539; % for condition 1
+            testCase.assertTrue( abs(beta_map_hb(2, 1, poi_activ)-glm_results_hbr.beta(1,poi_activ)) < 2e-7);
+            poi_activ = 4780; % for condition 2
+            testCase.assertTrue( abs(beta_map_hb(2, 2, poi_activ)-glm_results_hbr.beta(2,poi_activ)) < 2e-7);
 
             % Check activation detection (p-val thresholding)
-            stat_sResults = bst_process('CallProcess', 'process_nst_compute_ttest', ...
+            stat_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_compute_ttest', ...
                                        sGlmResults{1}, [], ...
-                                       'Contrast', '[1]');
-            stat_results = in_bst_results(stat_sResults.FileName);
+                                       'Contrast', '[1 0]');
+            stat_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_compute_ttest', ...
+                                       sGlmResults{1}, [], ...
+                                       'Contrast', '[0 1]');
+                                   
+            stat_results_stim1_hbo = in_bst_results(stat_sResults_stim1_hbo.FileName);
+            stat_results_stim2_hbo = in_bst_results(stat_sResults_stim2_hbo.FileName);
+
             thresh_options.pThreshold = 5e-2;
             thresh_options.Correction = 'bonferroni';
             thresh_options.Control = 1;
-            %TODO: fix number of tests according to cortical coverage
-            [pmask, corr_p] = bst_stat_thresh(stat_results.pmap, thresh_options);
-            
-            activation_mask = zeros(size(pmask));
-            activation_mask(activation_scout.sScout.Vertices) = 1;
             
             % Load scalp/cortex geometry and compute depth
-            sCortex = in_tess_bst(stat_results.SurfaceFile);
+            sCortex = in_tess_bst(stat_results_stim1_hbo.SurfaceFile);
             sSubject = bst_get('Subject', sHbCortex.SubjectName);
             sScalp = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
             [scalp_points, depth] = nst_knnsearch(sScalp.Vertices, sCortex.Vertices);
             
-            % Test that all truely activated vertices that are not too deep (<3cm)
-            % are detected
-            max_depth = 0.03; % meter
-            testCase.assertTrue(all(pmask(activation_mask & depth<max_depth)==1));
+            %TODO: fix number of tests according to cortical coverage
+            [pmask_stim1_hbo, corr_p] = bst_stat_thresh(stat_results_stim1_hbo.pmap, thresh_options);
+            [pmask_stim2_hbo, corr_p] = bst_stat_thresh(stat_results_stim2_hbo.pmap, thresh_options);
+
+            activation_mask_stim1_hbo = zeros(size(pmask_stim1_hbo));
+            activation_mask_stim1_hbo(activation_scout(1).sScout.Vertices) = 1;
+
+            activation_mask_stim2_hbo = zeros(size(pmask_stim2_hbo));
+            activation_mask_stim2_hbo(activation_scout(2).sScout.Vertices) = 1;
             
+            % Test that all truely activated vertices are detected 
+            % limit to vertices not too deep (<3cm)
+            max_depth = 0.03; % meter
+            testCase.assertTrue(all(pmask_stim1_hbo(activation_mask_stim1_hbo & depth<max_depth)==1));
+            testCase.assertTrue(all(pmask_stim2_hbo(activation_mask_stim2_hbo & depth<max_depth)==1));
+
             % Non regression test on the number of false positive
-            testCase.assertLessThan(sum(pmask(~activation_mask)), 300);
+            testCase.assertLessThan(sum(pmask_stim1_hbo(~activation_mask_stim1_hbo)), 300);
+            testCase.assertLessThan(sum(pmask_stim2_hbo(~activation_mask_stim2_hbo)), 1);
+
+            % TODO: test bilateral
+            
         end
         
     end
     
 end
 
-function [hb_cortex, beta_map_hb, activation_stim1_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
+function [hb_cortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
 
 %TODO: add second experimental condition
 
@@ -92,12 +113,18 @@ dt = 0.1; %sec
 nb_samples = 6000;
 time = (0:(nb_samples-1))*dt;
 events = db_template('event');
-stim_event_names = {'stim'};
+stim_event_names = {'stim1', 'stim2'};
 events(1).label = stim_event_names{1};
-events(1).times = [10 90 120 160 200 260 300 330 360 440 520 550];
+events(1).times = [10 160 200 260 300 330 360 400 440 460 490 520 550];
 events(1).epochs = ones(1, length(events(1).times));
-stim_duration = 25; % sec
+
+events(2).label = stim_event_names{2};
+events(2).times = [40 60 90 120 140 150 170 210 270 300 380];
+events(2).epochs = ones(1, length(events(2).times));
+
+stim_duration = 10; % sec
 events(1).times(2,:) = events(1).times(1,:) + stim_duration;
+events(2).times(2,:) = events(2).times(1,:) + stim_duration;
 
 % Insure rounding is consistent
 for icond=1:length(events)
@@ -143,32 +170,34 @@ db_save();
 
 %% Create scout for activating region
 seed_vertex_id = 4560; %scout seed 
-activation_stim1_scout = bst_create_scout(subject_name, 'cortex', 'activation_stim1', seed_vertex_id, 4, 'User scouts');
+activation_scout(1) = bst_create_scout(subject_name, 'cortex', 'activation_stim1', seed_vertex_id, 4, 'User scouts');
 
-% seed_vertex_id = 4560; %scout seed 
-% activation_stim2_scout = bst_create_scout(subject_name, 'cortex', 'activation_stim2', seed_vertex_id, 4, 'User scouts');
+seed_vertex_id = 4823; %scout seed 
+activation_scout(2) = bst_create_scout(subject_name, 'cortex', 'activation_stim2', seed_vertex_id, 3, 'User scouts');
 
 %% Create functional cortical signals for HbO and HbR
 
-           % Condition1  
-delta_hb = [ 0.01        ;... %HbO (mmol.l-1)
-            -0.005       ];   %HbR (mmol.l-1)
+           % stim1   stim2  
+delta_hb = [ 0.01    0.005     ;... %HbO (mmol.l-1)
+            -0.005  -0.002    ];   %HbR (mmol.l-1)
 delta_hb = delta_hb / 1000; % mol.l-1
 HB_TYPES = {'HbO', 'HbR'};
-surface_file = activation_stim1_scout.sSubject.Surface(activation_stim1_scout.isurface).FileName;
+surface_file = activation_scout(1).sSubject.Surface(activation_scout(1).isurface).FileName;
 sCortex = in_tess_bst(surface_file);
 nb_vertices = size(sCortex.Vertices,1);
+nb_conditions = length(events);
 func_map_hb = zeros(length(HB_TYPES), nb_samples, nb_vertices);
-beta_map_hb = zeros(length(HB_TYPES), nb_vertices);
+beta_map_hb = zeros(length(HB_TYPES), nb_conditions, nb_vertices);
 for ihb=1:length(HB_TYPES)
-    beta_map_hb(ihb, activation_stim1_scout.sScout.Vertices) = delta_hb(ihb, 1);
-    func_map_hb(ihb, :, :) = X * beta_map_hb(ihb,:) + (rand(nb_samples, nb_vertices) * 0.1 * delta_hb(ihb, 1));
+    for icond=1:nb_conditions
+        beta_map_hb(ihb, icond, activation_scout(icond).sScout.Vertices) = delta_hb(ihb, icond);
+        nst_bst_add_surf_data(squeeze(beta_map_hb(ihb, icond, :)), 1, head_model_holder, ['simu_beta_' HB_TYPES{ihb} '_' events(icond).label], ...
+                              ['Simulated beta ' HB_TYPES{ihb} ' ' events(icond).label], [], sStudy, 'simulated', surface_file);
+    end
+    func_map_hb(ihb, :, :) = X * squeeze(beta_map_hb(ihb,:,:) ) + rand(nb_samples, nb_vertices) * 0.1 * mean(delta_hb(ihb,:));
     nst_bst_add_surf_data(squeeze(func_map_hb(ihb,:, :))', time, head_model_holder, ['simu_sig_' HB_TYPES{ihb}], ...
                           ['Simulated signals ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
-    nst_bst_add_surf_data(beta_map_hb(ihb,:)', 1, head_model_holder, ['simu_beta_' HB_TYPES{ihb}], ...
-                          ['Simulated beta ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
 end
-
 %% Project in topographic space using head model
 head_model = in_bst_headmodel(headmodel_fn);
 channel_def = in_bst_channel(sDummy.ChannelFile);
