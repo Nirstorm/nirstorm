@@ -226,7 +226,7 @@ function OutputFiles = Run(sProcess, sInput)
 
             if surface_data
                 [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
-                                                             sInput, sStudy, 'GLM', DataMat.SurfaceFile);
+                                                             [], sStudy, 'GLM', DataMat.SurfaceFile);
             else
                 data_out(nirs_ichans,:) = B(i_reg_name,:);
                 sDataOut = db_template('data');
@@ -253,7 +253,7 @@ function OutputFiles = Run(sProcess, sInput)
         output_comment = [output_prefix '- residuals'];
         if surface_data
                 [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_tag, output_comment, ...
-                                                             sInput, sStudy, 'GLM', DataMat.SurfaceFile);
+                                                             [], sStudy, 'GLM', DataMat.SurfaceFile);
         else
             Out_DataMat = db_template('data');
             Out_DataMat.F           = residual' ;
