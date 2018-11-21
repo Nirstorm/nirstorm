@@ -59,7 +59,7 @@ classdef FilterTableTest < matlab.unittest.TestCase
                 filtered_table = nst_filter_table(testCase.acq_table, filters_acquisitions);
                 
                 testCase.assertEqual(size(filtered_table, 1), 5);
-                testCase.assertTrue(all(ismember(filtered_table.period), {'pre', 'post'}));
+                testCase.assertTrue(all(ismember(filtered_table.period, {'pre', 'post'})));
             end
             
             function test_include_function(testCase)
@@ -67,7 +67,7 @@ classdef FilterTableTest < matlab.unittest.TestCase
                 filtered_table = nst_filter_table(testCase.acq_table, filters_acquisitions);
                 
                 testCase.assertEqual(size(filtered_table, 1), 3);
-                testCase.assertEqual(unique(filtered_table.subject_id), 1);  
+                testCase.assertEqual(unique(filtered_table.subject_id), 2);  
             end
             
             function test_exclude_values(testCase)
@@ -89,8 +89,7 @@ classdef FilterTableTest < matlab.unittest.TestCase
             function test_entry_include(testCase)
                 filters_acquisitions.entry__.include = [...
                           struct('subject_id', 1, 'period', 'pre' , 'task', 'NB'), ...
-                          struct('subject_id', 2, 'period', 'pre' , 'task', 'DT'), ...
-                          struct('subject_id', 10, 'period', 'dummy' , 'task', 'dummy')];
+                          struct('subject_id', 2, 'period', 'pre' , 'task', 'DT')];
                 
                 filtered_table = nst_filter_table(testCase.acq_table, filters_acquisitions);
                 
@@ -98,7 +97,7 @@ classdef FilterTableTest < matlab.unittest.TestCase
                 testCase.assertEqual(filtered_table.subject_id(1), 1);
                 testCase.assertEqual(filtered_table.subject_id(2), 2);
                 testCase.assertEqual(filtered_table.period{1}, 'pre');
-                testCase.assertEqual(filtered_table.period{2}, 'mid');
+                testCase.assertEqual(filtered_table.period{2}, 'pre');
                 testCase.assertEqual(filtered_table.task{1}, 'NB');
                 testCase.assertEqual(filtered_table.task{2}, 'DT');
                 testCase.assertEqual(filtered_table.acq_date{1}, '2017/05/23');
@@ -160,17 +159,17 @@ classdef FilterTableTest < matlab.unittest.TestCase
                     nst_filter_table(testCase.acq_table, filters_acquisitions);
                     throw(MException('Nirstorm:ExceptionNotThrown', 'Exception not thrown'));
                 catch ME
-                    testCase.assertMatches(ME.identifier, 'Nirstorm:InvalidFilterOperation');
+                    testCase.assertMatches(ME.identifier, 'Nirstorm:InvalidFilter');
                 end
              end
             
             function test_filter_inconsistent_value_type(testCase)
-                filters_acquisitions.age.include = '1';
+                filters_acquisitions.age.include = {'1'};
                 try
                     nst_filter_table(testCase.acq_table, filters_acquisitions);
                     throw(MException('Nirstorm:ExceptionNotThrown', 'Exception not thrown'));
                 catch ME
-                    testCase.assertMatches(ME.identifier, 'Nirstorm:InconsistentFilterValue');
+                    testCase.assertMatches(ME.identifier, 'Nirstorm:InconsistentFilterType');
                 end
             end
              
@@ -180,7 +179,7 @@ classdef FilterTableTest < matlab.unittest.TestCase
                     nst_filter_table(testCase.acq_table, filters_acquisitions);
                     throw(MException('Nirstorm:ExceptionNotThrown', 'Exception not thrown'));
                 catch ME
-                    testCase.assertMatches(ME.identifier, 'Nirstorm:FilterFunctionNotPredicate');
+                    testCase.assertMatches(ME.identifier, 'Nirstorm:InvalidFilterFunction');
                 end
             end
             
