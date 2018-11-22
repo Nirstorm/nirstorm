@@ -1,4 +1,4 @@
-function sFilesOut = nst_run_bst_proc(out_items_names, force_redo, ProcessName, sFiles, sFiles2, varargin)
+function [sFilesOut, redone] = nst_run_bst_proc(out_items_names, force_redo, ProcessName, sFiles, sFiles2, varargin)
 % Allow to run a brainstorm process only if expected outputs do not already exist 
 % or if recomputation is forced.
 % Outputs have predefined names as given by out_items_names. Each output
@@ -109,6 +109,8 @@ end
 assert(length(unique({sInputs.SubjectName}))==1);
 subject_name = sInputs(1).SubjectName;
 
+redone = 0;
+
 %% Parse output definitions (extract condition if given)
 outputs = struct();
 for i_item=1:length(out_items_names)
@@ -138,6 +140,12 @@ for i_item=1:length(outputs)
     
     % Check if output exists in specified condition
     [selected_files, file_type] = nst_get_bst_func_files(subject_name, outputs(i_item).condition, outputs(i_item).comment);
+    
+    if ~isempty(file_type) && ~iscell(file_type) && strcmp(file_type, 'HeadModel') && ...
+            ~strcmp(outputs(1).condition, sInputs(1).Condition)
+        error('Moving of head model to new condition not supported');
+    end
+    
     if ~isempty(selected_files) && ~ischar(selected_files) && length(selected_files) > 1
         duplicates{end+1} = [outputs(i_item).condition '/' outputs(i_item).comment];
     end
@@ -172,14 +180,15 @@ if any(~existing) || force_redo
     
     % Special case for head model which is not returned in sFilesOut
     % -> keep track of iHeadmodel 
-    prev_iHeadmodel = sStudy.iHeadModel;
+    prev_iHeadmodel = outputs(1).sStudy.iHeadModel;
     
     % Call the process
     sFilesOut = bst_process('CallProcess', ProcessName, sFiles, sFiles2, varargin{:});
+    redone = 1;
     
     % Check if process created a new head model
-    sStudy = bst_get('Study', sInputs(1).iStudy);
-    new_iHeadModel = setdiff(sStudy.iHeadModel, prev_iHeadmodel);
+    outputs(1).sStudy = bst_get('Study', outputs(1).iStudy);
+    new_iHeadModel = setdiff(outputs(1).sStudy.iHeadModel, prev_iHeadmodel);
     assert(length(new_iHeadModel) <= 1); %just a safe-guard, should always be the case
     
     if isstruct(sFilesOut)
@@ -189,14 +198,15 @@ if any(~existing) || force_redo
     % Check outputs consistency and rename them
     if isempty(sFilesOut) && ~isempty(new_iHeadModel) % special case for head model
         if length(outputs) ~= 1
-            delete_head_model(sStudy, sInputs(1).iStudy, new_iHeadModel);
+            outputs(1).sStudy = delete_head_model(outputs(1).sStudy, outputs(1).iStudy , new_iHeadModel);
             bst_error(sprintf('Expected %d outputs but process produced only one head model.\n', ...
                               length(out_items_names)));
+            redone = 0;
             sFilesOut = {};
             return;
         end
         if sInputs(1).iStudy == outputs(1).iStudy
-            rename_head_model(sStudy, sInputs(1).iStudy, new_iHeadModel, out_items_names{1});
+            rename_head_model(outputs(1).sStudy, outputs(1).iStudy, new_iHeadModel, outputs(1).comment);
         else
             error('Moving of head model to new condition not supported');
         end
@@ -206,6 +216,7 @@ if any(~existing) || force_redo
                         'target', 1); 
             bst_error(sprintf('Expected %d outputs but process produced %d.\n', ...
                               length(outputs), length(sFilesOut)));
+            redone = 0;
             sFilesOut = {};
             return;
         end
@@ -275,6 +286,10 @@ end
 
 function sStudy = rename_head_model(sStudy, iStudy, iHeadModelRename, new_name)
 sStudy.HeadModel(iHeadModelRename).Comment = new_name;
+headmodel_fn = file_fullpath(sStudy.HeadModel(iHeadModelRename).FileName);
+sHeadModel = load(headmodel_fn);
+sHeadModel.Comment = new_name;
+bst_save(headmodel_fn, sHeadModel, 'v7');
 bst_set('Study', iStudy, sStudy);
 panel_protocols('UpdateNode', 'Study', iStudy);
 db_save();
