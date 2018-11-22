@@ -37,8 +37,9 @@ classdef BstHelperTest < matlab.unittest.TestCase
                                     
             %% 1st proc call
             output_name = 'dummy_resampled';
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
 
+            testCase.assertTrue(redone==1);
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Resample');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,1}, 'process');
@@ -49,8 +50,9 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(all_close(resampled_data.Time, (0:2:(size(y,2)-1))*dt));
             
             %% Call proc again
-            sFilesOut = nst_run_bst_proc('dummy_resampled', 1, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc('dummy_resampled', 1, 'process_resample', sRaw, [], 'freq', 5);
             
+            testCase.assertTrue(redone==1);
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
             
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-3,1}, 'process');
@@ -82,8 +84,10 @@ classdef BstHelperTest < matlab.unittest.TestCase
             output_cond = 'new_cond';
             output_comment = 'dummy_resampled';
             output_name = [output_cond '/' output_comment];
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
 
+            testCase.assertTrue(redone==1);
+            
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,2}.Comment, 'Resample');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
@@ -99,7 +103,9 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(all_close(resampled_data.Time, (0:2:(size(y,2)-1))*dt));
             
             %% Call proc again
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            
+            testCase.assertTrue(redone==0);
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
             testCase.assertEqual(length(GlobalData.ProcessReports.Reports), prev_report_nb_items+1);
@@ -129,9 +135,11 @@ classdef BstHelperTest < matlab.unittest.TestCase
                                     
             %% 1st proc call
             output_name = 'head_model';
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_nst_import_head_model', ...
-                                         sRaw, [], 'use_closest_wl', 1);
+            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_nst_import_head_model', ...
+                                                  sRaw, [], 'use_closest_wl', 1);
                                      
+            testCase.assertTrue(redone==1);
+            
             testCase.assertEmpty(sFilesOut);
             sInput = bst_process('GetInputStruct', sRaw);
             sStudy = bst_get('Study', sInput.iStudy);
@@ -141,8 +149,11 @@ classdef BstHelperTest < matlab.unittest.TestCase
             ilast_report = size(GlobalData.ProcessReports.Reports, 1);
             
              %% Call proc again
-             sFilesOut = nst_run_bst_proc(output_name, 1, 'process_nst_import_head_model', ...
-                                          sRaw, [], 'use_closest_wl', 1);
+             [sFilesOut, redone] = nst_run_bst_proc(output_name, 1, 'process_nst_import_head_model', ...
+                                                    sRaw, [], 'use_closest_wl', 1);
+             
+             testCase.assertTrue(redone==1);
+             
              testCase.assertEmpty(sFilesOut);
              testCase.assertTrue(~isempty(strfind(GlobalData.ProcessReports.Reports{ilast_report+1,4}, ...
                                                  'Force redo - removed previous result(s):')));
@@ -164,8 +175,10 @@ classdef BstHelperTest < matlab.unittest.TestCase
                                     
             %% 1st proc call
             output_name = 'dummy_resampled';
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut,redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
 
+            testCase.assertTrue(redone==1);
+            
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Resample');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,1}, 'process');
@@ -176,7 +189,9 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(all_close(resampled_data.Time, (0:2:(size(y,2)-1))*dt));
             
             %% Call proc again
-            sFilesOut = nst_run_bst_proc('dummy_resampled', 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc('dummy_resampled', 0, 'process_resample', sRaw, [], 'freq', 5);
+            
+            testCase.assertTrue(redone==0);
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
@@ -199,8 +214,10 @@ classdef BstHelperTest < matlab.unittest.TestCase
                                         [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
                                     
             %% 1st proc call
-            sFilesOut = nst_run_bst_proc({'dummy_resampled', 'dummy_dummy'}, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc({'dummy_resampled', 'dummy_dummy'}, 0, 'process_resample', sRaw, [], 'freq', 5);
 
+            testCase.assertTrue(redone==0);
+            
             testCase.assertTrue(isempty(sFilesOut));
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,2}.Comment, 'Delete files');
@@ -231,7 +248,10 @@ classdef BstHelperTest < matlab.unittest.TestCase
                         'tag', output_name, 'isindex', 0);
                     
                     
-            sFilesOut = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            
+            testCase.assertTrue(redone==0);
+            
             testCase.assertEmpty(sFilesOut);
             testCase.assertTrue(~isempty(strfind(GlobalData.lastestFullErrMsg, ...
                                 'Cannot safely manage unique outputs. Found duplicate items: dummy_raw/dummy_resampled')));
