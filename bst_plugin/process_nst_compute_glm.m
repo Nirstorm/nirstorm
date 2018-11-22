@@ -124,7 +124,10 @@ function OutputFiles = Run(sProcess, sInput)
             DataMat.Events = parent_data.Events;
         end
         if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
-            Y = DataMat.ImageGridAmp'; %TODO: check that it doesn't take too much memory
+            Y = DataMat.ImageGridAmp';
+            if issparse(Y)
+                Y = full(Y);
+            end
         else
             bst_error('Cannot get signals from surface data');
         end
