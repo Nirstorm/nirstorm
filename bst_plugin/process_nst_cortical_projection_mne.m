@@ -39,6 +39,9 @@ sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.isSeparator = 1;
 
+sProcess.options.sparse_storage.Comment = 'Sparse storage';
+sProcess.options.sparse_storage.Type    = 'checkbox';
+sProcess.options.sparse_storage.Value   =  0;
 end
 
 %% ===== FORMAT COMMENT =====
@@ -128,14 +131,12 @@ param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];
 
 [sStudy, ResultFile] = nst_bst_add_surf_data(pdata_hbo, sDataIn.Time, ...
     head_model, 'hbo_proj', 'HbO cortex', ...
-    sInputs, sStudy,  ...
-    'Projected HbO signals');
+    sInputs, sStudy,  'Projected HbO signals', [], sProcess.options.sparse_storage.Value);
 OutputFiles{end+1} = ResultFile;
 
 [sStudy, ResultFile] = nst_bst_add_surf_data(pdata_hbr, sDataIn.Time, ...
     head_model, 'hbr_projected', 'HbR cortex' , ...
-    sInputs, sStudy,  ...
-    'Projected HbR signals');
+    sInputs, sStudy, 'Projected HbR signals', [], sProcess.options.sparse_storage.Value);
 OutputFiles{end+1} = ResultFile;
 
 clear pdata_hbo pdata_hbr;

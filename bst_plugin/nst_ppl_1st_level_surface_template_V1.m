@@ -7,7 +7,9 @@ function varargout = nst_ppl_1st_level_surface_template_V1(arg1, arg2, glm_contr
 % DEFAULT_OPTIONS = NST_PPL_1ST_LEVEL_SURFACE_TEMPLATE_V1('setup', PROTOCOL_NAME)
 %     Return default options and set current protocol to PROTOCOL_NAME
 %
-% [GLM_CON_FILES, REDONE] = NST_PPL_1ST_LEVEL_SURFACE_TEMPLATE_V1(FILE_RAW, GLM_EVENTS_ORDER, GLM_CONTRASTS, OPTIONS, FORCE_REDO=0)
+% [GLM_CON_FILES, REDONE_GLM, PREPROC_FOLDER, GLM_FOLDER] = 
+%         NST_PPL_1ST_LEVEL_SURFACE_TEMPLATE_V1(FILE_RAW, GLM_EVENTS_ORDER, 
+%                                               GLM_CONTRASTS, OPTIONS, FORCE_REDO=0)
 %   
 %     Apply pipeline to given data FILE_RAW.
 %     ASSUME: all subjects in a given protocol have the same template
@@ -38,15 +40,15 @@ function varargout = nst_ppl_1st_level_surface_template_V1(arg1, arg2, glm_contr
 %            - compute contrasts defined in GLM_CONTRASTS
 %
 % TODO:
+% - options documentation
 % - check anatomical consistency of head model -> within subhead model
-%   process
+%   process already?
 % - export manual inputs
 % - importation of manual inputs:
 %   NST_PPL_1ST_LEVEL_SURFACE_TEMPLATE_V1('import_manual_markings', PROTOCOL_NAME)
 % - wiki page
 % - utest
-% - allow sparse storage for projected signals
-%
+% 
 options.PIPELINE_TAG = '_nspst_V1';
 
 if ischar(arg1) && strcmp(arg1, 'setup')
@@ -62,21 +64,52 @@ if nargin < 5
     force_redo = 0;
 end
 
+% Check if given subject is dummy one created to hold full head model
+subject_name = fileparts(fileparts(file_raw));
+fm_subject = ['full_head_model_' options.PIPELINE_TAG];
+if strcmp(subject_name, fm_subject) % TODO factorize filename logic
+    warning('Ignoring dummy subject %s used to store head model for all pairs', fm_subject);
+    varargout{1:nargout} = cell(1, nargout); 
+    return;
+end
+
 if ~isempty(file_raw)
     % Get head model precomputed for all optode pairs
     % (precompute it by cloning given data if needed)
-    sFile_raw_head_model = get_full_head_model(file_raw, options);
-    [sFiles_preprocessed, redone_preprocs] = preprocs(file_raw, sFile_raw_head_model, options);
+    [sFile_raw_head_model, fhm_redone] = get_sFile_for_full_head_model(file_raw, options);
+    [sFiles_preprocessed, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_head_model, options, force_redo|fhm_redone);
 else
     error('Given raw data is empty');
 end
 
-[varargout{1:nargout}] = glm_1st_level(sFiles_preprocessed, glm_events_order, glm_contrasts, options, redone_preprocs | force_redo);
+[sFiles_GLM, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, glm_events_order, glm_contrasts, options, redone_preprocs | force_redo);
+
+if options.clean_preprocessings
+    full_preproc_folder = fileparts(sFiles_preprocessed{1});
+    [sStudy, iStudy] = bst_get('StudyWithCondition', full_preproc_folder);
+    db_delete_studies(iStudy);
+end
+
+if nargout >= 1
+    varargout{1} = sFiles_GLM;
+end
+
+if nargout >= 2
+    varargout{2} = redone_any_contrast;
+end
+
+if nargout >= 3 
+    varargout{3} = glm_folder;
+end
+
+if nargout >= 4 && ~options.clean_preprocessings
+    varargout{4} = preproc_folder;
+end
 
 end
 
 
-function [sFilesHbProj, redo_parent] = preprocs(sFile_raw, sFile_raw_full_head_model, options, force_redo)
+function [sFilesHbProj, redone, preproc_folder] = preprocs(sFile_raw, sFile_raw_full_head_model, options, force_redo)
 
 if nargin < 4
     force_redo = 0;
@@ -96,31 +129,33 @@ nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process
 
 % Motion correction
 redo_parent = force_redo | options.moco.redo;
-sFileMoco = nst_run_bst_proc([preproc_folder 'Motion-corrected'], redo_parent, ...
+[sFileMoco, redo_parent] = nst_run_bst_proc([preproc_folder 'Motion-corrected'], redo_parent, ...
                              'process_nst_motion_correction', sFile_raw, [], ...
                              'option_event_name', 'movement_artefacts');
 
                          
 % Resample to 5Hz (save some space)
 redo_parent = redo_parent | options.resample.redo;
-sFileMocoResampled = nst_run_bst_proc([preproc_folder 'Motion-corrected | Resampled'], redo_parent, ...
-                                      'process_resample', sFileMoco, [], ...
-                                      'freq', options.resample.freq, ...
-                                      'read_all', 1);
+[sFileMocoResampled, redo_parent] = nst_run_bst_proc([preproc_folder 'Motion-corrected | Resampled'], redo_parent, ...
+                                                      'process_resample', sFileMoco, [], ...
+                                                      'freq', options.resample.freq, ...
+                                                      'read_all', 1);
 % Process: Detect bad channels
-bst_process('CallProcess', 'process_nst_detect_bad', sFileMocoResampled, [], ...
-            'option_remove_negative', 1, ...
-            'option_invalidate_paired_channels', 1, ...
-            'option_max_sat_prop', 0.8);
-
+% This one is done in-place -> not tracked to handle all do/redo scenarios
+if redo_parent
+    bst_process('CallProcess', 'process_nst_detect_bad', sFileMocoResampled, [], ...
+                'option_remove_negative', 1, ...
+                'option_invalidate_paired_channels', 1, ...
+                'option_max_sat_prop', 0.8);
+end
 % Convert to delta OD
 redo_parent = redo_parent | options.dOD.redo;
-sFile_dOD = nst_run_bst_proc([preproc_folder 'dOD'], redo_parent, 'process_nst_dOD', sFileMocoResampled, [], ...
-                             'option_baseline_method', 1);  % mean
+[sFile_dOD, redo_parent] = nst_run_bst_proc([preproc_folder 'dOD'], redo_parent, 'process_nst_dOD', sFileMocoResampled, [], ...
+                                            'option_baseline_method', 1);  % mean
               
 % High pass filter
 redo_parent = redo_parent | options.high_pass_filter.redo;
-sFile_dOD_filtered = nst_run_bst_proc([preproc_folder 'dOD | filtered'],  redo_parent, 'process_bandpass', sFile_dOD, [], ...
+[sFile_dOD_filtered, redo_parent] = nst_run_bst_proc([preproc_folder 'dOD | filtered'],  redo_parent, 'process_bandpass', sFile_dOD, [], ...
                                       'highpass', {0.005, ''}, ...
                                       'lowpass', {0, ''}, ...
                                       'attenuation', 'relax', ...
@@ -130,17 +165,18 @@ sFile_dOD_filtered = nst_run_bst_proc([preproc_folder 'dOD | filtered'],  redo_p
                                   
 % Compute head model from full head model
 redo_parent = redo_parent | options.head_model.redo;
-nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
-                 sFile_dOD_filtered, sFile_raw_full_head_model);                                  
+[dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
+                                            sFile_dOD_filtered, sFile_raw_full_head_model);                                  
                                   
 % Project and convert to d[HbX]
 redo_parent = redo_parent | options.projection.redo;
-sFilesHbProj = nst_run_bst_proc({[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex']},  redo_parent, ... 
-                                'process_nst_cortical_projection_mne', sFile_dOD_filtered, []);
-
+[sFilesHbProj, redo_parent] = nst_run_bst_proc({[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex']},  redo_parent, ... 
+                                                'process_nst_cortical_projection_mne', sFile_dOD_filtered, [], ...
+                                                'sparse_storage', options.projection.sparse_storage);
+redone = redo_parent;
 end
 
-function [sFiles_GLM, redone_any_contrast] = glm_1st_level(sFiles, stim_events, contrasts, options, force_redo)
+function [sFiles_GLM, redone_any_contrast, glm_folder] = glm_1st_level(sFiles, stim_events, contrasts, options, force_redo)
 
 if nargin < 5
     force_redo = 1;
@@ -152,20 +188,21 @@ sSubject = bst_get('Subject', SubjectName);
 
 redone_any_contrast = 0; % Track if any contrast for any file had to be recomputed
 sFiles_GLM = cell(1, length(sFiles));
+
+redo_parent = force_redo | options.GLM.redo;
 for ifile=1:length(sFiles)
     data_cmt = load(file_fullpath(sFiles{ifile}), 'Comment');
     
     comment_glm_prefix{ifile} = [glm_folder 'GLM ' data_cmt.Comment];
     % Process: GLM - design and fit
-    redo_parent = force_redo | options.GLM.redo;
-    sFiles_GLM{ifile} = nst_run_bst_proc([comment_glm_prefix{ifile} ' - fit'], redo_parent, ...
-                                         'process_nst_compute_glm', sFiles{ifile}, [], ...
-                                         'stim_events',    strjoin(stim_events, ', '), ...
-                                         'hrf_model',      1, ...  % CANONICAL
-                                         'trend',          1, ...
-                                         'fitting',        1, ...  % OLS
-                                         'save_residuals', 0, ...
-                                         'save_betas',     0);
+    [sFiles_GLM{ifile}, redone_fit] = nst_run_bst_proc([comment_glm_prefix{ifile} ' | fit'], redo_parent, ...
+                                                       'process_nst_compute_glm', sFiles{ifile}, [], ...
+                                                       'stim_events',    strjoin(stim_events, ', '), ...
+                                                       'hrf_model',      1, ...  % CANONICAL
+                                                       'trend',          1, ...
+                                                       'fitting',        1, ...  % OLS
+                                                       'save_residuals', 0, ...
+                                                       'save_betas',     0);
 end
 
 for ifile=1:length(sFiles_GLM)
@@ -173,12 +210,12 @@ for ifile=1:length(sFiles_GLM)
     for icon=1:length(contrasts)
 
         % Process: GLM - intra subject contrast
-        redo = redo_parent | options.contrast.redo;
+        redo = redone_fit | options.contrast.redo;
         %TODO: store contrast in main GLM result
-        sFiles_GLM_ttest = nst_run_bst_proc([comment_glm_prefix{ifile} ' - con_t-+ ' contrasts(icon).label], redo, ...
-                                            'process_nst_compute_ttest', sFiles_GLM{ifile}, [], ...
-                                            'Contrast', contrasts(icon).vector, ...
-                                            'tail',     'two');  
+        [sFiles_GLM_ttest, redone_con] = nst_run_bst_proc([comment_glm_prefix{ifile} ' | con_t-+ ' contrasts(icon).label], redo, ...
+                                                          'process_nst_compute_ttest', sFiles_GLM{ifile}, [], ...
+                                                          'Contrast', contrasts(icon).vector, ...
+                                                          'tail',     'two');  
         % Plots
         data_tag = get_bst_file_tag(sFiles{ifile});
         %TODO: use current pval
@@ -195,18 +232,18 @@ for ifile=1:length(sFiles_GLM)
             view([89 -24]); %TODO: expose as option
             zoom(hFigSurfData, 1.3);
 
-            export_fig(fig_fn, '-transparent', '-r%d', options.fig_dpi);
+            export_fig(fig_fn, '-transparent', sprintf('-r%d', options.fig_dpi));
             close(hFigSurfData);
         end
         
-        redone_any_contrast = redone_any_contrast | redo;
+        redone_any_contrast = redone_any_contrast | redone_con;
     end
 end
 
 
 end
 
-function file_raw_fm = get_full_head_model(sfile_raw, options)
+function [file_raw_fm, redone] = get_sFile_for_full_head_model(sfile_raw, options)
 
 fm_subject = ['full_head_model_' options.PIPELINE_TAG];
 file_raw_fm = nst_get_bst_func_files(fm_subject, 'origin', 'Raw');
@@ -238,13 +275,15 @@ if isempty(file_raw_fm)
     file_raw_fm = bst_process('CallProcess', 'process_set_comment', sFile_in, [], ...
                             'tag',     'Raw', ...
                             'isindex', 0);
-    rmdir(tmp_dir, 's');                   
+    rmdir(tmp_dir, 's');
+    
 end
 
-% Compute head model for all pairs
-nst_run_bst_proc('head model [all pairs]', options.head_model.redo, ...
-                 'process_nst_import_head_model', file_raw_fm, [], ...
-                 'use_closest_wl', 1, 'use_all_pairs', 1);
+% Compute head model for all pairs if needed
+[dummy_out, redone] = nst_run_bst_proc('head model [all pairs]', options.head_model.redo, ...
+                                       'process_nst_import_head_model', file_raw_fm, [], ...
+                                       'use_closest_wl', 1, 'use_all_pairs', 1);
+
 end
 
 function options = setup(protocol_name)
@@ -277,6 +316,7 @@ options.tag_bad_chans.redo = 0;
 % options.tag_bad_chans.export_dir = handle_dir(fullfile('.', 'bad_chans_marking'));
 
 options.projection.redo = 0;
+options.projection.sparse_storage = 0;
 
 options.GLM.redo = 0;
 
@@ -284,8 +324,10 @@ options.contrast.redo = 0;
 options.contrast_plot.redo = 0;
 
 options.make_figs = 1;
-options.fig_dir = create_dir(fullfile('.', 'bad_chans_marking'));
+options.fig_dir = create_dir(fullfile('.', 'figs'));
 options.fig_dpi = 100;
+
+options.clean_preprocessings = 0;
 
 % Oblique view from the top
 % options.plot_3d_view_az = ;

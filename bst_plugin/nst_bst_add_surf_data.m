@@ -1,13 +1,18 @@
 function [sStudy, ResultFile] = nst_bst_add_surf_data(data, time, head_model, file_tag, comment, ...
-                                                      sInputs, sStudy, history_comment, surface_file)
+                                                      sInputs, sStudy, history_comment, surface_file, ...
+                                                      sparse_storage)
                                                   
                                                   
-if nargin < 9
+if nargin < 9 || isempty(surface_file)
     if ~isempty(head_model)
         surface_file =  file_short(head_model.SurfaceFile);
     else
         error('Surface file not defined');
     end
+end
+
+if nargin < 10
+    sparse_storage = 0;
 end
 
 %TODO: check consistency between data and nb of vertices
@@ -21,7 +26,11 @@ ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
 ResultsMat = db_template('resultsmat');
 ResultsMat.Comment       = comment;
 ResultsMat.Function      = '';
-ResultsMat.ImageGridAmp  = data;
+if ~sparse_storage
+    ResultsMat.ImageGridAmp  = data;
+else
+    ResultsMat.ImageGridAmp  = sparse(data);
+end
 ResultsMat.Time          = time;
 if ~isempty(sInputs)
     ResultsMat.DataFile  = sInputs.FileName;
