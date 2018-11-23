@@ -68,8 +68,8 @@ end
 subject_name = fileparts(fileparts(file_raw));
 fm_subject = ['full_head_model_' options.PIPELINE_TAG];
 if strcmp(subject_name, fm_subject) % TODO factorize filename logic
-    warning('Ignoring dummy subject %s used to store head model for all pairs', fm_subject);
-    varargout{1:nargout} = cell(1, nargout); 
+    warning('Ignoring dummy subject "%s" used to store head model for all pairs', fm_subject);
+    varargout = {}; 
     return;
 end
 
