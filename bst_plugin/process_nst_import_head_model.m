@@ -63,7 +63,16 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % === FWHM (kernel size)
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
-    sProcess.options.smoothing_fwhm.Value   = {0.5, 'mm', 2};
+    sProcess.options.smoothing_fwhm.Value   = {0, 'mm', 2};
+    
+    sProcess.options.force_median_spread.Comment = 'Force median spread';
+    sProcess.options.force_median_spread.Type    = 'checkbox';
+    sProcess.options.force_median_spread.Value   = 0; 
+    
+    sProcess.options.normalize_fluence.Comment = 'Normalize by source fluence at detector position';
+    sProcess.options.normalize_fluence.Type    = 'checkbox';
+    sProcess.options.normalize_fluence.Value   = 1;
+
     
     sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
     sProcess.options.sensitivity_threshold_pct.Type    = 'value';
@@ -125,6 +134,7 @@ do_grey_mask = sProcess.options.do_grey_mask.Value;
 use_closest_wl = sProcess.options.use_closest_wl.Value;
 use_all_pairs = sProcess.options.use_all_pairs.Value;
 sens_thresh_pct = sProcess.options.sensitivity_threshold_pct.Value{1};
+normalize_fluence = sProcess.options.normalize_fluence.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -312,9 +322,13 @@ for ipair=1:nb_pairs
             out_mri_nii(sVol, out_fn, 'float32');
         end
         
-        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                              det_reference_voxels_index{idet}{iwl}(2),...
-                                              det_reference_voxels_index{idet}{iwl}(3));
+        if normalize_fluence
+            ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
+                                                  det_reference_voxels_index{idet}{iwl}(2),...
+                                                  det_reference_voxels_index{idet}{iwl}(3));
+        else
+            ref_fluence = 1;
+        end
         
         separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
         if ref_fluence==0 && separation > separation_threshold
@@ -367,7 +381,6 @@ for ipair=1:nb_pairs
         if sProcess.options.smoothing_fwhm.Value{1} > 0
             FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
             % Load cortex mesh
-            [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
             cortex_mesh = sSubject.Surface(sSubject.iCortex).FileName;
             sCortex = in_tess_bst(cortex_mesh);
             if ipair ==1 && iwl ==1
@@ -409,6 +422,81 @@ sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
 sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
 
 end
+
+if sProcess.options.force_median_spread.Value
+    if ~exist('sCortex', 'var')
+        sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+        [tmp, sCortex.VertArea] = tess_area(sCortex.Vertices, sCortex.Faces);
+    end
+    
+    areas = zeros(nb_pairs, nb_wavelengths);
+    for ipair=1:nb_pairs
+        for iwl=1:nb_wavelengths
+            areas(ipair, iwl) = sum(sCortex.VertArea(squeeze(sensitivity_surf(ipair, iwl, :) > 0)));
+        end
+    end
+    median_area = median(areas(areas>0));
+    
+    for ipair=1:nb_pairs
+        for iwl=1:nb_wavelengths
+            area = areas(ipair, iwl);
+            if area > 0
+                vi_orig = find(sensitivity_surf(ipair, iwl, :) > 0);
+                if area > median_area
+                    [sorted_ss, vertex_stack] = sort(squeeze(sensitivity_surf(ipair, iwl, :)));
+                    vertex_stack = intersect(vertex_stack, vi_orig, 'stable');
+                    iv = 1;
+                    while sum(sCortex.VertArea(vertex_stack(iv:end))) > median_area
+                        iv = iv + 1;
+                    end
+                    sensitivity_surf(ipair, iwl, vertex_stack(1:iv)) = 0;
+                    
+%                         Geometrical shrinkage:
+%                         % Shrink one vertex at a time
+%                         % Remove a layer of connected vertices
+%                         Expanded = tess_scout_swell(vi, sCortex.VertConn);
+%                         viToRemove = tess_scout_swell(Expanded, sCortex.VertConn);
+%                         viToRemove = intersect(viToRemove, vi);
+%                         % Compute the distance from each point to the seed
+%                         distFromSeed = sqrt(sum(bst_bsxfun(@minus, sCortex.Vertices(viToRemove,:), seedXYZ) .^ 2, 2));
+%                         % Get the maximum distance
+%                         [maxVal, iMax] = max(distFromSeed);
+%                         iMax = iMax(1);
+%                         % Remove the farthest vertex from the scout vertices
+%                         vi = setdiff(vi, viToRemove(iMax));
+%                         area = sum(sCortex.VertArea(vi));
+%                         vi_removed(end+1) = iMax; %#ok<AGROW>
+%                         sensitivity_surf(ipair, iwl, vi_removed) = 0;
+                else
+                    seedXYZ = mean(sCortex.Vertices(vi_orig, :));
+                    to_add = [];
+                    vi_growth = vi_orig;
+                    while area < median_area
+                        % Grow one vertex at a time
+                        % Get closest neighbours
+                        viNew = setdiff(tess_scout_swell(vi_growth, sCortex.VertConn), vi_growth);
+                        if ~isempty(viNew)
+                            % Compute the distance from each point to the seed
+                            distFromSeed = sqrt(sum(bst_bsxfun(@minus, sCortex.Vertices(viNew,:), seedXYZ) .^ 2, 2));
+                            % Get the minimum distance
+                            [minVal, iMin] = min(distFromSeed);
+                            iMin = iMin(1);
+                            % Add the closest vertex to scout vertices
+                            vi_growth = union(vi_growth, viNew(iMin));
+                            area = sum(sCortex.VertArea(vi_growth));
+                            to_add(end+1) = viNew(iMin); %#ok<AGROW>
+                        else
+                            warning('Sensitivity cluster growth stopped before reaching target area');
+                            break;
+                        end
+                    end
+                    sensitivity_surf(ipair, iwl, to_add) = min(sensitivity_surf(ipair, iwl, vi_orig));
+                end
+            end
+        end
+    end
+end
+
 
 %% Outputs
 % Save the new head model
