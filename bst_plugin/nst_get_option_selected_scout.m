@@ -7,7 +7,7 @@ selection = options.(option_name).Value{1};
 scout_selection = [];
 if ~isstruct(selection)
     if isempty(options.(option_info).Value)
-        bst_error('Not scout selected');
+        bst_error('No scout selected');
         return
     end
     if ~isempty(options.(option_info).Value)
