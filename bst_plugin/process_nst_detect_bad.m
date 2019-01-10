@@ -20,6 +20,8 @@ function varargout = process_nst_detect_bad( varargin )
 %
 % Authors: Thomas Vincent, 2015-2016
 
+%TODO: output map of bad channels
+
 eval(macro_method);
 end
 
@@ -54,6 +56,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_max_sat_prop.Comment = 'Maximum proportion of saturating points';
     sProcess.options.option_max_sat_prop.Type    = 'value';
     sProcess.options.option_max_sat_prop.Value   = {1, '', 2};
+    
+    sProcess.options.option_min_sat_prop.Comment = 'Maximum proportion of flooring points';
+    sProcess.options.option_min_sat_prop.Type    = 'value';
+    sProcess.options.option_min_sat_prop.Value   = {1, '', 2};
+    
     %TODO: add distance criterion, scalp contact index and outlier
     % detection mentioned by Zhengchen.
 end
@@ -70,8 +77,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     do_remove_neg_channels = sProcess.options.option_remove_negative.Value;
     invalidate_paired_channels = sProcess.options.option_invalidate_paired_channels.Value;
     max_sat_prop = sProcess.options.option_max_sat_prop.Value{1};
-    
-    
+    min_sat_prop = sProcess.options.option_min_sat_prop.Value{1};
+
     nirs_data_full = in_bst(sInputs.FileName, [], 1, 0, 'no');
     channels = in_bst_channel(sInputs.ChannelFile);
     [nirs_ichans, tmp] = channel_find(channels.Channel, 'NIRS');
@@ -80,6 +87,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     [new_ChannelFlag, bad_chan_names] = Compute(nirs_data_full.F', channels, ...
                                                 nirs_data_full.ChannelFlag, ...
                                                 do_remove_neg_channels, max_sat_prop, ...
+                                                min_sat_prop, ...
                                                 invalidate_paired_channels, ...
                                                 nirs_chan_flags);
     
@@ -92,7 +100,7 @@ end
 %% ===== Compute =====
 function [channel_flags, removed_channel_names] = ...
     Compute(nirs_sig, channel_def, channel_flags, do_remove_neg_channels, ...
-            max_sat_prop, invalidate_paired_channels, nirs_chan_flags) %#ok<DEFNU>   
+            max_sat_prop, min_sat_prop, invalidate_paired_channels, nirs_chan_flags) %#ok<DEFNU>   
 %% Update the given channel flags to indicate which pairs are to be removed:
 %% - negative values
 %% - saturating 
@@ -144,18 +152,25 @@ function [channel_flags, removed_channel_names] = ...
         nirs_chan_flags = ones(size(channel_flags));
     end 
     
-    
     if do_remove_neg_channels
         neg_channels = any(nirs_sig < 0, 1);
         channel_flags(neg_channels) = -1;
     end
     
-    if max_sat_prop <= 1
-        saturating = nirs_sig == repmat(max(nirs_sig, [], 1), ...
+    if max_sat_prop < 1
+        ceiling = nirs_sig == repmat(max(nirs_sig, [], 1), ...
                                         size(nirs_sig, 1), 1);
-        prop_sat = sum(saturating, 1) / size(nirs_sig, 1);
-        channel_flags(prop_sat >= max_sat_prop) = -1;
+        prop_sat_ceil = sum(ceiling, 1) / size(nirs_sig, 1);
+        channel_flags(prop_sat_ceil >= max_sat_prop) = -1;
     end
+    
+    if min_sat_prop < 1
+        flooring = nirs_sig == repmat(min(nirs_sig, [], 1), ...
+                                        size(nirs_sig, 1), 1);
+        prop_sat_floor = sum(flooring, 1) / size(nirs_sig, 1);
+        channel_flags(prop_sat_floor >= min_sat_prop) = -1;
+    end
+    
     if invalidate_paired_channels
         channel_flags(~nirs_chan_flags) = 0; %chans to ignore, can be unpaired
         channel_flags = fix_chan_flags_wrt_pairs(channel_def.Channel, ...
