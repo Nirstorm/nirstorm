@@ -1,6 +1,6 @@
 function [sStudy, ResultFile] = nst_bst_add_surf_data(data, time, head_model, file_tag, comment, ...
                                                       sInputs, sStudy, history_comment, surface_file, ...
-                                                      sparse_storage)
+                                                      sparse_storage, extra)
                                                   
                                                   
 if nargin < 9 || isempty(surface_file)
@@ -13,6 +13,10 @@ end
 
 if nargin < 10
     sparse_storage = 0;
+end
+
+if nargin < 11 
+    extra = struct();
 end
 
 %TODO: check consistency between data and nb of vertices
@@ -49,6 +53,14 @@ ResultsMat.SurfaceFile   = surface_file;
 ResultsMat.GridLoc    = [];
 ResultsMat.GridOrient = [];
 ResultsMat.nAvg      = 1;
+
+% Add extra fields
+ extra_fields = fieldnames(extra);
+ for ifield = 1:length(extra_fields)
+%      assert(~isfield(ResultsMat, extra_fields{ifield}));
+     ResultsMat.(extra_fields{ifield}) = extra.(extra_fields{ifield});
+ end
+
 % History
 ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
 % Save new file structure
