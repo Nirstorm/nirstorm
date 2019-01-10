@@ -452,6 +452,7 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
 end
 
 function lpf = lpf_hrf(h, signal_length)
+% From NIRS_SPM / NIRS10
 h = [h; zeros(size(h))];
 g = abs(fft(h));
 h = real(ifft(g));
