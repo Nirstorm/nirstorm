@@ -22,6 +22,42 @@ classdef BstHelperTest < matlab.unittest.TestCase
     
     methods(Test)
 
+        function test_item_parsing(testCase)
+           
+           item_str = '';
+           item = nst_parse_bst_item_name(item_str);
+           
+           testCase.assertEmpty(item.condition);
+           testCase.assertEmpty(item.subject_name);
+           testCase.assertEmpty(item.comment);
+ 
+           item_str = 'data';
+           item = nst_parse_bst_item_name(item_str);
+           
+           testCase.assertEmpty(item.condition);
+           testCase.assertEmpty(item.subject_name);
+           testCase.assertMatches(item.comment, 'data');
+
+           item_str = 'cond/data';
+           item = nst_parse_bst_item_name(item_str);
+           
+           testCase.assertEmpty(item.subject_name);
+           testCase.assertMatches(item.condition, 'cond');
+           testCase.assertMatches(item.comment, 'data');
+           
+           item_str = 'subj/cond/data.mat';
+           item = nst_parse_bst_item_name(item_str);
+           
+           testCase.assertMatches(item.subject_name, 'subj');
+           testCase.assertMatches(item.condition, 'cond');
+           testCase.assertMatches(item.comment, 'data');
+
+           %TODO: validate error scenarios           
+%            item_str = '/waza//data';
+%            item = nst_parse_bst_item_name(item_str);
+%            
+        end
+        
         function test_run_proc_force_redo(testCase)
             global GlobalData
             
@@ -67,7 +103,7 @@ classdef BstHelperTest < matlab.unittest.TestCase
         end
 
         
-        function test_run_proc_new_cond_dont_redo(testCase)
+        function test_run_proc_new_cond_subject_dont_redo(testCase)
             global GlobalData
             
             %% Prepare data
@@ -81,12 +117,18 @@ classdef BstHelperTest < matlab.unittest.TestCase
                                         [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
                                     
             %% 1st proc call
+            output_subject = 'dummier';
             output_cond = 'new_cond';
             output_comment = 'dummy_resampled';
-            output_name = [output_cond '/' output_comment];
+            output_name = [output_subject '/' output_cond '/' output_comment];
             [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
 
             testCase.assertTrue(redone==1);
+            
+            assert(isempty(nst_get_bst_func_files('test_subject', 'dummy_raw', output_comment)));
+            assert(isempty(nst_get_bst_func_files('test_subject', output_cond, output_comment)));
+            prev_data_file = nst_get_bst_func_files(output_subject, output_cond, output_comment);
+            assert(~isempty(prev_data_file));
             
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-2,2}.Comment, 'Resample');
@@ -96,7 +138,8 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,2}.Comment, 'Move files');
             prev_report_nb_items = length(GlobalData.ProcessReports.Reports);
             
-            testCase.assertNotEmpty(nst_get_bst_func_files('test_subject', output_cond, output_comment));
+            listing = dir(file_fullpath(prev_data_file));
+            prev_data_date = listing.datenum;
             
             resampled_data = in_bst_data(sFilesOut);
             testCase.assertMatches(resampled_data.Comment, output_comment);
@@ -105,14 +148,19 @@ classdef BstHelperTest < matlab.unittest.TestCase
             %% Call proc again
             [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
             
+            assert(isempty(nst_get_bst_func_files('test_subject', 'dummy_raw', output_comment)));
+            assert(isempty(nst_get_bst_func_files('test_subject', output_cond, output_comment)));
+            
+            cur_data_file = nst_get_bst_func_files(output_subject, output_cond, output_comment);
+            listing = dir(file_fullpath(cur_data_file));
+            
+            testCase.assertMatches(cur_data_file, prev_data_file);
+            testCase.assertEqual(listing.datenum, prev_data_date);
+            
             testCase.assertTrue(redone==0);
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
-            testCase.assertEqual(length(GlobalData.ProcessReports.Reports), prev_report_nb_items+1);
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Move files'); %from previous call
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end,4}, ...
-                                   'Skipped execution of process_resample. Outputs found.');                    
+            testCase.assertEqual(length(GlobalData.ProcessReports.Reports), prev_report_nb_items);
         end 
         
         
@@ -183,6 +231,7 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Resample');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,1}, 'process');
             testCase.assertMatches(GlobalData.ProcessReports.Reports{end,2}.Comment, 'Set comment');
+            prev_report_nb_items = length(GlobalData.ProcessReports.Reports);
 
             resampled_data = in_bst_data(sFilesOut);
             testCase.assertMatches(resampled_data.Comment, output_name);
@@ -194,10 +243,8 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(redone==0);
             
             testCase.assertTrue(exist(file_fullpath(sFilesOut), 'file')==2);
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,1}, 'process');
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end-1,2}.Comment, 'Set comment'); %from previous call
-            testCase.assertMatches(GlobalData.ProcessReports.Reports{end,4}, ...
-                                   'Skipped execution of process_resample. Outputs found.');                    
+            testCase.assertEqual(length(GlobalData.ProcessReports.Reports), prev_report_nb_items);
+                  
         end        
         
         function test_run_proc_output_mismatch(testCase)
