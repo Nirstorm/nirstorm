@@ -33,13 +33,13 @@ classdef GLMTest < matlab.unittest.TestCase
             % Run GLM
             sGlmResults = cell(1, length(sHbCortex));
             for ihb=1:length(sHbCortex)
-                sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_compute_glm', sHbCortex(ihb), [], ...
+                sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_glm_fit', sHbCortex(ihb), [], ...
                                                 'stim_events',    strjoin(stim_event_names, ','), ...
                                                 'hrf_model',      1, ...  % CANONICAL
                                                 'trend',          1, ...
-                                                'fitting',        1, ...  % OLS
-                                                'save_residuals', 1, ...
-                                                'save_betas',     1);
+                                                'fitting',        1, ...  % OLS - precoloring
+                                                'save_residuals', 0, ...
+                                                'save_betas',     0);
             end
             
             % Check beta estimates, non-regression test at specific voxel
@@ -132,8 +132,8 @@ for icond=1:length(events)
     events(icond).times   = events(icond).samples .* dt;
 end
 
-hrf_types = process_nst_compute_glm('get_hrf_types');
-[X,names] = process_nst_compute_glm('make_design_matrix', time, events, ...
+hrf_types = process_nst_glm_fit('get_hrf_types');
+[X,names] = process_nst_glm_fit('make_design_matrix', time, events, ...
                                     hrf_types.CANONICAL, 25, 0);
 assert(all(strcmp(names, {events.label})));
 
@@ -254,7 +254,8 @@ db_add_data(sDummy.iStudy, dODFile, sDataOut);
 %% Project back on the cortex
 
 sdODInput = bst_process('GetInputStruct', dODFile);
+proj_methods = process_nst_cortical_projection('methods');
 hb_cortex = bst_process('CallProcess', ...
-                        'process_nst_cortical_projection_mne', sdODInput, []);
-                                       
+                        'process_nst_cortical_projection', sdODInput, [], ...
+                        'method', proj_methods.MNE);                  
 end

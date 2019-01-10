@@ -102,8 +102,10 @@ classdef ProjectionTest < matlab.unittest.TestCase
                 'timewindow', [0 (activ_window_samples(1)-1)*dt]);
             
             % Do projection
+            proj_methods = process_nst_cortical_projection('methods');
             result = bst_process('CallProcess', ...
-                'process_nst_cortical_projection_mne', nirs_dOD, []);
+                'process_nst_cortical_projection', nirs_dOD, [], ...
+                'method', proj_methods.MNE);
             
             r1 = in_bst_results(result(1).FileName);
             head_model_1 = in_bst_headmodel(r1.HeadModelFile);
