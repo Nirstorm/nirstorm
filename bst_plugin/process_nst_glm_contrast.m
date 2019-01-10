@@ -1,9 +1,6 @@
-function varargout = process_nst_compute_ttest( varargin )
-% process_nst_compute_ttest
-% Compute a ttest according to a spm-like constrast vector using 
-% t = cB / sqrt( c Cov(B) c^T )  
-%
-% B, cov(B) and the corresponding degrree of freedom are estimated inprocess_nst_compute_glm.
+function varargout = process_nst_glm_contrast( varargin )
+% process_nst_glm_contrast
+% Compute a contrast and its variance from a GLM result
 % 
 % 
 % @=============================================================================
@@ -24,7 +21,7 @@ function varargout = process_nst_compute_ttest( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2018
+% Authors: Edouard Delaire, Thomas Vincent 2018
 %  
 eval(macro_method);
 end
@@ -34,15 +31,15 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'GLM - intra subject contrast';
-    sProcess.Category    = 'Stat1'; %'Custom';
+    sProcess.Comment     = 'GLM - 1st level contrast';
+    sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1402;
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
     
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'matrix', 'matrix'};
+    sProcess.InputTypes  = {'data', 'results'};
     sProcess.OutputTypes = {'data', 'results'};
     
     sProcess.nInputs     = 1;
@@ -51,36 +48,35 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.Contrast.Comment = 'Contrast vector';
     sProcess.options.Contrast.Type    = 'text';
     sProcess.options.Contrast.Value   = '';
-    
-    % === tail for the ttest 
-    sProcess.options.tail.Comment  = {'One-tailed (-)', 'Two-tailed', 'One-tailed (+)', ''; ...
-                                      'one-', 'two', 'one+', ''};
-    sProcess.options.tail.Type     = 'radio_linelabel';
-    sProcess.options.tail.Value    = 'one+';
-
-    
-    
 end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) 
+function Comment = FormatComment(sProcess)  %#ok<DEFNU>
     Comment = sProcess.Comment;
     % Comment = [ Comment ' C = ' sProcess.options.Contrast.Value ]; 
 end
 
-function sOutput = Run(sProcess, sInputs)
-    sOutput = [];
+function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+    OutputFiles = [];
         
     if isempty(sProcess.options.Contrast.Value)
        error('Empty contrast');
     end
-    
-    glm_fit = in_bst_matrix(sInputs(1).FileName);
-    B = glm_fit.beta;
+     
+    glm_fit = in_bst_data(sInputs(1).FileName);
+    if isfield(glm_fit, 'SurfaceFile') && ~isempty(glm_fit.SurfaceFile)
+        surface_data = 1;
+        B = glm_fit.ImageGridAmp';
+    else
+        surface_data = 0;
+        B = glm_fit.F;
+    end
     covB = glm_fit.beta_cov;
-    df = glm_fit.df;        
-       
+    edf = glm_fit.edf;        
+    reg_names = glm_fit.reg_names;
+    mse_res = glm_fit.mse_residuals;
+    
     nb_regressors = size(B,1);
     nb_positions = size(B,2);
     
@@ -119,7 +115,7 @@ function sOutput = Run(sProcess, sInputs)
             
             
             %Find the position of the regressor            
-            ind = find(strcmp(glm_fit.Description,evt_name));
+            ind = find(strcmp(reg_names,evt_name));
             if( isempty(ind) || ~isnumeric(evt_coef) )
                bst_report('Error', sProcess, sInputs, [ 'Event ' evt_name ' has not been found']);
                return;
@@ -139,48 +135,29 @@ function sOutput = Run(sProcess, sInputs)
        C= [C zeros(1, nb_regressors - length(C)) ]; 
     end    
      
-    con_mat = C * B;
-    t_stat = zeros(1, nb_positions);
-    
-    %TODO: remove loop over positions
-    for i = 1:nb_positions
-        if all(covB(:,:,i)~=0) % skip positions where signal was null TODO: use proper masking
-            t_stat(i) = con_mat(i) / sqrt( C*covB(:,:,i)*transpose(C) ) ;
-        end
-    end
-    
-    p = process_test_parametric2('ComputePvalues', t_stat, df, 't', ...
-                                 sProcess.options.tail.Value );
-                             
-   % Formating a readable comment such as -Rest +Task
-    comment='T-test : ';
-    contrast='';
+    con_mat = C * B;    
+    con_cov = C * covB * C';
+    con_std = sqrt(mse_res .* con_cov);
+                                 
+    % Formating a readable comment such as -Rest +Task
+    comment = 'GLM con ';
+    contrast = '';
     for i=1:nb_regressors
         if ( C(i) < 0)
             if( C(i) == -1 )
-                contrast=[  contrast  ' - ' cell2mat(glm_fit.Description(i)) ' '];
+                contrast=[  contrast  ' - ' cell2mat(reg_names(i)) ' '];
             else
-                contrast=[  contrast num2str(C(i)) ' ' cell2mat(glm_fit.Description(i)) ' '];
+                contrast=[  contrast num2str(C(i)) ' ' cell2mat(reg_names(i)) ' '];
             end
         elseif ( C(i) > 0 )
             if( C(i) == 1)
-                contrast=[  contrast  ' + ' cell2mat(glm_fit.Description(i)) ' '];  
+                contrast=[  contrast  ' + ' cell2mat(reg_names(i)) ' '];  
             else
-                contrast=[  contrast  ' + ' num2str(C(i)) ' ' cell2mat(glm_fit.Description(i)) ' '];
+                contrast=[  contrast  ' + ' num2str(C(i)) ' ' cell2mat(reg_names(i)) ' '];
             end 
         end     
     end    
-    comment=[comment contrast];
-    switch sProcess.options.tail.Value 
-        case {'one-'}
-             comment=[ comment ' < 0 '];      
-        case {'two'}
-             comment=[ comment ' <> 0 ']; 
-        case { 'one+'}
-             comment=[ comment ' > 0 ']; 
-    end    
-    
-
+    comment = [comment contrast];
     
 %     iStudy = sInputs.iStudy;    
 %     [tmp, iSubject] = bst_get('Subject', sInputs(1).SubjectName);
@@ -189,52 +166,44 @@ function sOutput = Run(sProcess, sInputs)
 %     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
 %     db_set_channel(iChannelStudy, ChannelFile, 0, 0);
 %     output_fn = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
-    
-    % Output of statmap
-    sOutput = db_template('statmat');
-    sOutput.pmap         = reshape(p, nb_positions, 1); 
-    sOutput.tmap         = reshape(t_stat, nb_positions, 1);
-    sOutput.df           = ones(nb_positions, 1) * df;
-    sOutput.Correction   = 'no';
-    if isfield(glm_fit, 'SurfaceFile')
-        sOutput.Type = 'results';
-        sOutput.SurfaceFile = glm_fit.SurfaceFile;
-        sOutput.ChannelFlag = [];
-    else
-        sOutput.Type = 'data';
-        sOutput.ChannelFlag = ones(1,nb_positions); %TODO: use current channel flags
-        sOutput.Options.SensorTypes = 'NIRS';
-    end
-    sOutput.Time         = [1];
-    sOutput.ColormapType = 'stat2';
-    sOutput.DisplayUnits = 't';
-    sOutput.nComponents  = 1;
-    
-    sOutput.Comment = comment;
-    
-    sOutput = bst_history('add', sOutput, glm_fit.History, '');
-    sOutput = bst_history('add', sOutput, 'ttest computation', comment);
-    
-%     OutputFiles{1} = output_fn;
-%     save(OutputFiles{1}, '-struct', 'sOutput');
-%     db_add_data(iStudyIntra, OutputFiles{1}, sOutput);
 
-%         % Saving the cB Matrix
-% TODO: better save as either channel-space map or cortical map
-%     sOutput_b = db_template('matrixmat');
-%     sOutput_b.F           = con_mat';
-%     sOutput_b.Comment     = [contrast ' B' ];
-%     sOutput_b.Description = contrast;  
-%     sOutput_b.ChannelFlag =  B.ChannelFlag;
-%     sOutput_b.Time         = [1];
-%     sOutput_b.DataType     = 'recordings';
-%     sOutput_b.nAvg         = 1;
-%     sOutput_b.DisplayUnits = 'mmol.l-1'; %TODO: check scaling
-% 
-%     sOutput_b = bst_history('add', sOutput_b, B.History, '');
-%     sOutput_b = bst_history('add', sOutput_b, 'Subject Stat ', comment);
-%     
-%     OutputFiles{2} = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'data_cbeta_matrix');
-%     save(OutputFiles{2}, '-struct', 'sOutput_b');
-%     db_add_data(iStudyIntra, OutputFiles{2}, sOutput_b);
-end
+    extra_output.contrast_name = contrast;
+    extra_output.contrast_std = con_std;
+    extra_output.edf = edf;
+    extra_output.DisplayUnits = glm_fit.DisplayUnits;
+    
+    sStudy = bst_get('Study', sInputs(1).iStudy);
+
+    if surface_data
+        [sStudy, ResultFile] = nst_bst_add_surf_data(con_mat', 1, [], 'surf_glm_con', comment, ...
+                                                     [], sStudy, 'GLM', glm_fit.SurfaceFile, ...
+                                                     0, extra_output);
+        OutputFiles{end+1} = ResultFile;
+    else
+        %TODO: check channel-space output
+        sDataOut = db_template('data');
+        sDataOut.F            = con_mat;
+        sDataOut.Comment      = comment;
+        sDataOut.ChannelFlag  = glm_fit.ChannelFlag;
+        sDataOut.Time         = 1;
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = glm_fit.DisplayUnits; %TODO: check scaling
+        
+        % Add extra fields
+        extra_fields = fieldnames(extra_output);
+        for ifield = 1:length(extra_fields)
+            assert(~isfield(sDataOut, extra_fields{ifield}));
+            sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+        end
+        
+        % Save to bst database
+        glm_fn = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_glm');
+        sDataOut.FileName = file_short(glm_fn);
+        bst_save(glm_fn, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInput.iStudy, glm_fn, sDataOut);
+        OutputFiles{end+1} = glm_fn;
+    end
+
+ end

@@ -133,7 +133,12 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     sStudy = bst_get('Study', sInputs.iStudy);
         
     % Save time-series data
-    final_nirs = sDataIn.F;
+    final_nirs = nan(size(sDataIn.F)); % safe-guard to tag bad channels
+                                       % if a subsequent process ignores
+                                       % the ChannelFlag field
+                                       % Not 100% safe though because the
+                                       % process can use nan-ignoring
+                                       % functions
     final_nirs(to_keep, :) = nirs_dOD;
     sDataOut = db_template('data');
     sDataOut.F            = final_nirs;

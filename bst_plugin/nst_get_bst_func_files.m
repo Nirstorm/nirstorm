@@ -1,4 +1,4 @@
-function [file_names, file_data_types] = nst_get_bst_func_files(subject_name, condition_name, item_name, data_types, protocol_name)
+function [file_names, file_data_types] = nst_get_bst_func_files(subject_name, condition_name, item_name, data_types, protocol_name, sStudy)
 
 file_names = {};
 file_data_types = {};
@@ -11,17 +11,17 @@ else
     end
 end
 
-if nargin >= 5
+if nargin >= 5 && ~isempty(protocol_name)
     gui_brainstorm('SetCurrentProtocol', bst_get('Protocol', protocol_name));
 end
 
-sSubject = bst_get('Subject', subject_name, 1);
-if isempty(sSubject)
-    return;
+if nargin < 6
+    sSubject = bst_get('Subject', subject_name, 1);
+    if isempty(sSubject)
+        return;
+    end
+    sStudy = bst_get('StudyWithSubject', sSubject.FileName);
 end
-sStudy = bst_get('StudyWithSubject', sSubject.FileName);
-
-
 
 for i_study=1:length(sStudy)
     for i_cond=1:length(sStudy(i_study).Condition)

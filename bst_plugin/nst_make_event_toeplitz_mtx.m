@@ -28,5 +28,10 @@ function events_tpz = nst_make_event_toeplitz_mtx(events, nb_samples, nb_coeffs)
             binary_seq(samples(1):samples(2)) = 1;
         end    
         events_tpz{icondition} = toeplitz(binary_seq, [binary_seq(1) zeros(1, nb_coeffs-1)]);
+        if size(events_tpz{icondition}, 1) > nb_samples
+            warning('Truncate event regressor for %s, from %d to nb_samples=%d', ...
+                    events(icondition).label,  size(events_tpz{icondition}, 1), nb_samples);
+            events_tpz{icondition} = events_tpz{icondition}(1:nb_samples, :);
+        end
     end
 end

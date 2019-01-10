@@ -929,21 +929,24 @@ nb_wavelengths = length(channel_def.Nirs.Wavelengths);
 nb_samples = size(nirs, 1);
 
 pair_to_chans = containers.Map();
+formats = nst_get_formats();
+MTYPES = nst_measure_types();
 for ichan=1:length(channel_def.Channel)
     chan_name = channel_def.Channel(ichan).Name;
-    iwl = strfind(chan_name, 'WL'); 
-    pair_name = chan_name(1:iwl-1);
-    %TODO: keep only channel that are wavelength-related
-    wl = str2double(chan_name(iwl+2:end));
-    if pair_to_chans.isKey(pair_name)
-        wla = pair_to_chans(pair_name);
-    else
-        wla = zeros(1, nb_wavelengths);
+    [isrc, idet, measure, measure_type] = nst_unformat_channel(chan_name, 0);
+    if ~isnan(isrc)
+        assert(measure_type==MTYPES.WAVELENGTH);
+        pair_name = sprintf(formats.pair_fmt, isrc, idet);
+        if pair_to_chans.isKey(pair_name)
+            wla = pair_to_chans(pair_name);
+        else
+            wla = zeros(1, nb_wavelengths);
+        end
+        wla(channel_def.Nirs.Wavelengths==measure) = ichan;
+        pair_to_chans(pair_name) = wla;
     end
-    wla(channel_def.Nirs.Wavelengths==wl) = ichan;
-    pair_to_chans(pair_name) = wla;
 end
-nb_pairs = length(channel_def.Channel) / nb_wavelengths;
+nb_pairs = pair_to_chans.Count;
 pair_names = pair_to_chans.keys;
 pair_indexes = zeros(nb_pairs, nb_wavelengths);
 pair_loc = zeros(nb_pairs, 3, 2);

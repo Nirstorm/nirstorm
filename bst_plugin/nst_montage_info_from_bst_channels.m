@@ -1,10 +1,11 @@
-function montage_info = nst_montage_info_from_bst_channels(channel_def)
+function montage_info = nst_montage_info_from_bst_channels(channel_def, channel_flags)
 %% Explode channel data according to pairs, sources and detectors
 % Args
 %    - channel_def: struct array
 %        Definition of channels as given by brainstorm (see db_template('channeldesc'))
-%
-% TOCHECK WARNING: uses containers.Map which is available with matlab > v2008
+%   [- channel_flags]: 1D array of int
+%        Allow channel filtering (only keep channel_flags==1)
+% TOCHECK WARNING: uses containers.Map which is available only from matlab > v2008
 %
 %  Outputs: struct with following fields: 
 %     - pair_names: cell array of str, size: nb_pairs
@@ -15,7 +16,7 @@ function montage_info = nst_montage_info_from_bst_channels(channel_def)
 %         Input channel indexes grouped by pairs
 %     - pair_sd_indexes: matrix of double, size: nb_pairs x 2
 %         1-based continuous indexes of sources and detectors for each
-%         sources.
+%         pair.
 %     - src_pos:   nb_sources x 3
 %         Source coordinates, indexed by 1-based continuous index
 %         To access via source ID use field src_ids as:
@@ -34,9 +35,12 @@ function montage_info = nst_montage_info_from_bst_channels(channel_def)
 %     - det_chans: cellarray of 1d array of double, size: nb_sources
 %         Channel indexes to which the detector belongs (indexed by 1-based
 %         continuous index).
-% 
-% TODO: factorize some code with nst_unformat_channels,
-% nst_get_pair_indexes_from_names
+%
+% TODO: test channel flags
+
+if nargin < 2
+    channel_flags = ones(1, length(channel_def));
+end
 
 [isrcs, idets, chan_measures, measure_type] = nst_unformat_channels({channel_def.Name});
 measure_types = nst_measure_types();
@@ -52,7 +56,7 @@ src_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
 det_to_chans = containers.Map('KeyType', 'double', 'ValueType', 'any');
 det_coords_map = containers.Map('KeyType', 'double', 'ValueType', 'any');
 for ichan=1:length(channel_def)
-    if strcmp(channel_def(ichan).Type, 'NIRS')
+    if strcmp(channel_def(ichan).Type, 'NIRS') && channel_flags(ichan)==1
         chan_name = channel_def(ichan).Name;
         switch measure_type
             case measure_types.WAVELENGTH
@@ -124,8 +128,8 @@ montage_info.pair_names = pair_names;
 end
 
 function [isrc, idet] = split_pair_name(pair_name)
-pair_re = 'S([0-9]{1,2})D([0-9]{1,2})';
-toks = regexp(pair_name, pair_re , 'tokens');
-isrc = str2double(toks{1}{1});
-idet = str2double(toks{1}{2});
+formats = nst_get_formats();
+toks = regexp(pair_name, formats.pair_re , 'names');
+isrc = str2double(toks.src_id);
+idet = str2double(toks.det_id);
 end

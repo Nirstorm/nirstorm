@@ -83,7 +83,7 @@ sStudyA = bst_get('Study', sInputA.iStudy);
 HeadModelMat = db_template('headmodelmat');
 HeadModelMat.Gain           = sub_sensitivity_mat;
 HeadModelMat.HeadModelType  = 'surface';
-HeadModelMat.SurfaceFile    = sSubjectA.Surface(sSubjectA.iCortex).FileName;
+HeadModelMat.SurfaceFile    = parent_head_model.SurfaceFile;
 HeadModelMat.Comment       = 'NIRS head model';
 
 HeadModelMat.pair_names = pair_names;
