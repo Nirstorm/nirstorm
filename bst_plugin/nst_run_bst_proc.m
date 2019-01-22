@@ -102,20 +102,24 @@ if ~ischar(ProcessName)
    throw(MException('Nirstorm:BadArgType', 'ProcessName must be str'));  
 end
 
-if ~isstruct(sFiles)
-    if iscell(sFiles)
-        sFile1 = sFiles{1};
+if ~isempty(sFiles)
+    if ~isstruct(sFiles)
+        if iscell(sFiles)
+            sFile1 = sFiles{1};
+        else
+            sFile1 = sFiles;
+        end
+        [root, bfn] = fileparts(sFile1);
+        [root, condition_input1] = fileparts(root);
+        [root, subject_name_input1] = fileparts(root);
     else
-        sFile1 = sFiles;
+        subject_name_input1 = sFiles(1).SubjectName;
+        condition_input1 = sFiles(1).Condition;
     end
-    [root, bfn] = fileparts(sFile1);
-    [root, condition_input1] = fileparts(root);
-    [root, subject_name_input1] = fileparts(root);
 else
-    subject_name_input1 = sFiles(1).SubjectName;
-    condition_input1 = sFiles(1).Condition;
+    subject_name_input1 = [];
+    condition_input1 = [];
 end
-
 
 redone = 0;
 
@@ -139,40 +143,50 @@ for i_item=1:length(outputs)
     % Manage target condition folder
     % TODO: check if process has option for output subject
     subject_name = outputs(i_item).subject_name;
-    dest_condition_folder = bst_fullfile(subject_name, outputs(i_item).condition);
-    sSubject = bst_get('Subject', subject_name, 1);
-    if isempty(sSubject) % subject does not exist -> create it
-                         % TODO: lazy creation, when process has been run
-        db_add_subject(subject_name, []);
-    end
-    
-    [sStudy, iStudy] = bst_get('StudyWithCondition', dest_condition_folder);
-    if isempty(sStudy) % condition does not exist -> create it
-                       % TODO: lazy creation, when process has been run
-        iStudy = db_add_condition(subject_name, outputs(i_item).condition);
-        sStudy = bst_get('Study', iStudy);
-    end
-    outputs(i_item).sStudy = sStudy;
-    outputs(1).iStudy = iStudy;
-    
-    % Check if output exists in specified condition
-    [selected_files, file_type] = nst_get_bst_func_files(subject_name, outputs(i_item).condition, outputs(i_item).comment);
-    
-    if ~isempty(file_type) && ~iscell(file_type) && strcmp(file_type, 'HeadModel') && ...
-            ~strcmp(outputs(1).condition, condition_input1)
-        error('Moving of head model to new condition not supported');
-    end
-    
-    if ~isempty(selected_files) && ~ischar(selected_files) && length(selected_files) > 1
-        duplicates{end+1} = [outputs(i_item).condition '/' outputs(i_item).comment]; %#ok<AGROW>
-    end
-    if ~isempty(file_type)
-        sFilesOut_types{i_item} = file_type;
+    if ~isempty(subject_name)
+        dest_condition_folder = bst_fullfile(subject_name, outputs(i_item).condition);
+        sSubject = bst_get('Subject', subject_name, 1);
+        if isempty(sSubject) % subject does not exist -> create it
+                             % TODO: lazy creation, when process has been run
+            db_add_subject(subject_name, []);
+        end
+
+        [sStudy, iStudy] = bst_get('StudyWithCondition', dest_condition_folder);
+        if isempty(sStudy) % condition does not exist -> create it
+                           % TODO: lazy creation, when process has been run
+            iStudy = db_add_condition(subject_name, outputs(i_item).condition);
+            sStudy = bst_get('Study', iStudy);
+        end
+        outputs(i_item).sStudy = sStudy;
+        outputs(1).iStudy = iStudy;
+        
+         % Check if output exists in specified condition
+        [selected_files, file_type] = nst_get_bst_func_files(subject_name, outputs(i_item).condition, outputs(i_item).comment);
+
+        if ~isempty(file_type) && ~iscell(file_type) && strcmp(file_type, 'HeadModel') && ...
+                ~strcmp(outputs(1).condition, condition_input1)
+            error('Moving of head model to new condition not supported');
+        end
+
+        if ~isempty(selected_files) && ~ischar(selected_files) && length(selected_files) > 1
+            duplicates{end+1} = [outputs(i_item).condition '/' outputs(i_item).comment]; %#ok<AGROW>
+        end
+        if ~isempty(file_type)
+            sFilesOut_types{i_item} = file_type;
+        else
+            sFilesOut_types{i_item} = '';
+        end
+        sFilesOut{i_item} = selected_files;
+        
     else
+        outputs(i_item).sStudy = [];
+        outputs(1).iStudy = [];
+        
         sFilesOut_types{i_item} = '';
+        sFilesOut{i_item} = '';
     end
-    sFilesOut{i_item} = selected_files;
 end
+
 if ~isempty(duplicates)
     bst_error(sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', ')));
     sFilesOut = {};
@@ -185,6 +199,8 @@ if any(~existing) || force_redo
     if any(existing)
         if strcmp(sFilesOut_types{1}, 'HeadModel')
             assert(length(sFilesOut_types) == 1);
+            assert(~isempty(outputs(1).sStudy));
+            assert(~isempty(outputs(1).iStudy));
             prev_iHeadModel = strcmp({outputs(1).sStudy.HeadModel.FileName}, sFilesOut{1});
             outputs(1).sStudy = delete_head_model(outputs(1).sStudy, outputs(1).iStudy, prev_iHeadModel);
         else
@@ -197,7 +213,7 @@ if any(~existing) || force_redo
     
     % Special case for head model which is not returned in sFilesOut
     % -> keep track of iHeadmodel
-    if ~isempty(outputs)
+    if ~isempty(outputs) && ~isempty(outputs(1).sStudy)
         prev_iHeadmodel = outputs(1).sStudy.iHeadModel;
     else
         prev_iHeadmodel = [];
@@ -207,7 +223,7 @@ if any(~existing) || force_redo
     [sFilesOut, sFilesOut2, sInputs] = bst_process('CallProcess', ProcessName, sFiles, sFiles2, varargin{:});
     redone = 1;
     
-    if ~isempty(outputs)
+    if ~isempty(outputs) && ~isempty(outputs(1).sStudy)
         % Check if process created a new head model
         outputs(1).sStudy = bst_get('Study', outputs(1).iStudy);
         new_iHeadModel = setdiff(outputs(1).sStudy.iHeadModel, prev_iHeadmodel);
@@ -257,11 +273,24 @@ if any(~existing) || force_redo
                                    'folder', outputs(i_item).condition);
                 [sChan, iChan] = bst_get('ChannelForStudy',   sOut.iStudy);
                 
-                % Copy channel file along with data if needed
-                if isempty(sChan) %% && ismember(sOut.FileType, {'data', 'pdata'}) 
+                % Copy channel file along with data if available and  needed
+                if isempty(sChan) && ~isempty(sOutRenamed.ChannelFile) %% && ismember(sOut.FileType, {'data', 'pdata'}) 
                     ChannelMat = in_bst_channel(sOutRenamed.ChannelFile);
                     db_set_channel(iChan, ChannelMat, 0, 0);
                 end
+                
+                % If condition is left empty after moving -> delete it
+                [sOutStudy, sOutiStudy] = bst_get('StudyWithCondition', fileparts(sOutRenamed.FileName));
+                if all(cellfun(@(f) isempty(sOutStudy.(f)), {'Data', 'HeadModel', 'Result', ...
+                                                             'Stat', 'Image', 'NoiseCov', ...
+                                                             'Dipoles', 'Timefreq', 'Matrix'}))
+                    db_delete_studies(sOutiStudy);
+                    [sSubject, iSubject] = bst_get('Subject', sOutRenamed.SubjectName);
+                    panel_protocols('UpdateNode', 'Subject', iSubject);
+                end
+                
+                % If subject is left empty after moving -> delete it
+                % -> TODO
             else
                 sOut = sOutRenamed;
             end               
