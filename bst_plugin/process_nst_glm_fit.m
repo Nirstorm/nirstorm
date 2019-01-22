@@ -590,7 +590,7 @@ function signal= cpt_hrf_canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,rat
     assert( isvector(t)  )
 
     %signal=zeros( size(t_vect) );  
-    if nargin <  2, peakTime    = 6;end
+    if nargin <  2, peakTime    = 6.2;end % .2 to take into account small delay compared to spm_hrf. TODO: clarify
     if nargin <  3, uShootTime  = 16;end
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
