@@ -107,8 +107,6 @@ end
 
 function [hb_cortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
 
-%TODO: add second experimental condition
-
 dt = 0.1; %sec
 nb_samples = 6000;
 time = (0:(nb_samples-1))*dt;
@@ -134,7 +132,7 @@ end
 
 hrf_types = process_nst_glm_fit('get_hrf_types');
 [X,names] = process_nst_glm_fit('make_design_matrix', time, events, ...
-                                    hrf_types.CANONICAL, 25, 0);
+                                hrf_types.CANONICAL, 25, 0);
 assert(all(strcmp(names, {events.label})));
 
 %% Retrieve data
@@ -150,7 +148,7 @@ copyfile(data_fns{2}, fullfile(tmp_dir, 'optodes.txt'));
 %% Import data in brainstorm
 [subject_name, sSubject, iSubject] = bst_create_test_subject();
 % Use lowres mid as default surface: 
-db_surface_default(iSubject, 'Cortex', find(strcmp({sSubject.Surface.Comment}, 'mid_lowres'))); 
+db_surface_default(iSubject, 'Cortex', find(strcmp({sSubject.Surface.Comment}, 'cortex_lowres'))); 
 sDummy = utest_import_nirs_in_bst(nirs_fn, 0);
 
 %% Inject headmodel

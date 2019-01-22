@@ -84,26 +84,31 @@ for iInput=1:length(sInputs)
     end
     
     nirs = Compute(ChanneMat, sDataIn.F, time, events);
-    
-    cond_name = sInputs(iInput).Condition;
-    if strcmp(cond_name(1:4), '@raw')
-        cond_name = cond_name(5:end);
-    end
-    
-    if strfind(sInputs(iInput).Comment, 'Link to raw file')
-        suffix = '_raw';
-    else
-        suffix = ['_' sInputs(iInput).Comment];
-    end
+
     if ~exist(sProcess.options.outputdir.Value{1}, 'dir')
         bst_error(['Output folder "' sProcess.options.outputdir.Value{1} '" does not exist']);
     end
     nirs_fn = fullfile(sProcess.options.outputdir.Value{1}, ...
-                       protect_fn_str([cond_name suffix '.nirs']) );
+                       get_output_nirs_bfn(sInputs(iInput)));
     save(nirs_fn, '-struct', 'nirs');
 end
 end
 
+
+function nirs_bfn = get_output_nirs_bfn(sInput)
+cond_name = sInput.Condition;
+if strcmp(cond_name(1:4), '@raw')
+    cond_name = cond_name(5:end);
+end
+
+if strfind(sInput.Comment, 'Link to raw file')
+    suffix = '_raw';
+else
+    suffix = ['_' sInput.Comment];
+end
+
+nirs_bfn = protect_fn_str([cond_name suffix '.nirs']);
+end
 
 function nirs = Compute(channel_def, data, time, events)
 if size(time, 1) == 1

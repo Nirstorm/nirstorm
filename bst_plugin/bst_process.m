@@ -616,11 +616,13 @@ function OutputFile = ProcessFilter(sProcess, sInput)
         % Full output filename
         RawFileOut = bst_fullfile(newStudyPath, [rawBaseOut '.bst']);
         RawFileFormat = 'BST-BIN';
+        % Get input study (to copy the creation date)
+        sInputStudy = bst_get('AnyFile', sInput.FileName);
 
         % Get new condition name
         [tmp, ConditionName] = bst_fileparts(newStudyPath, 1);
         % Create output condition
-        iOutputStudy = db_add_condition(sInput.SubjectName, ConditionName);
+        iOutputStudy = db_add_condition(sInput.SubjectName, ConditionName, [], sInputStudy.DateOfStudy);
         if isempty(iOutputStudy)
             bst_report('Error', sProcess, sInput, ['Output folder could not be created:' 10 newPath]);
             return;
@@ -660,6 +662,12 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     OutputTFmask = [];
     % Get maximum size of a data block
     MaxSize = ProcessOptions.MaxBlockSize;
+    if isfield(ProcessOptions, 'LastMaxBlockSize') && MaxSize ~= ProcessOptions.LastMaxBlockSize
+        bst_report('Warning', sProcess, sInput, ['The memory block size was modified since the last process.' 10 ...
+            'If you encounter issues, be sure to revert it to its previous value in the Brainstorm preferences.']);
+        ProcessOptions.LastMaxBlockSize = MaxSize;
+        bst_set('ProcessOptions', ProcessOptions);
+    end
     % Split the block size in rows and columns
     if (nRow * nCol > MaxSize) && ~isempty(sProcess.processDim)
         % Split max block by row blocks
@@ -791,7 +799,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                     % Standard error
                     if ~isempty(sInput.Std)
                         tmp2(iRowProcess,:,:) = sInput.Std;
-                        sInput.A = tmp2;
+                        sInput.Std = tmp2;
                     end
                 end
             end
@@ -981,6 +989,9 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     % ChannelFlag 
      if isfield(sInput, 'ChannelFlag') && ~isempty(sInput.ChannelFlag)
         sMat.ChannelFlag = sInput.ChannelFlag;
+        if isRaw
+            sMat.F.channelflag = sInput.ChannelFlag;
+        end
     end
     % New events created in the process
     if isfield(sInput, 'Events') && ~isempty(sInput.Events) && ismember(sInput.FileType, {'data', 'raw', 'matrix'})
@@ -1210,10 +1221,10 @@ end
 
 %% ===== PROCESS: STAT =====
 function OutputFiles = ProcessStat(sProcess, sInputA, sInputB)
-    % Check inputs
-    if ~isempty(strfind(GetFileTag(sInputA(1).FileName), 'connect'))
-        bst_report('Warning', sProcess, sInputA, 'Statistical tests on connectivity results are not supported yet.');
-    end
+%     % Check inputs
+%     if ~isempty(strfind(GetFileTag(sInputA(1).FileName), 'connect'))
+%         bst_report('Warning', sProcess, sInputA, 'Statistical tests on connectivity results are not supported yet.');
+%     end
     
     % ===== GET OUTPUT STUDY =====
     % Display progress bar
@@ -1814,6 +1825,8 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
         'iStudy',        [], ...
         'Atlas',         [], ...
         'SurfaceFile',   [], ...
+        'HeadModelFile', [], ...
+        'HeadModelType', [], ...
         'GridLoc',       [], ...
         'GridAtlas',     [], ...
         'nComponents',   [], ...
@@ -1917,7 +1930,7 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
                 % Get the row names
                 sInput.RowNames = {ChannelMat.Channel(iRows).Name};
 
-            case {'results', 'link'}
+            case {'results', 'link', 'presults'}
                 % Norm/absolue values of the sources 
                 if OPTIONS.isNorm && isfield(sMat, 'ImageGridAmp') && ~isempty(sMat.ImageGridAmp)
                     sMat = process_source_flat('Compute', sMat, 'rms');
@@ -1975,6 +1988,14 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
                 else
                     sInput.Atlas = [];
                     sInput.RowNames = AllRowNames(iRows);
+                end
+                % Copy head model if it exists
+                if isfield(sMat, 'HeadModelFile') && ~isempty(sMat.HeadModelFile)
+                    sInput.HeadModelFile = sMat.HeadModelFile;
+                    sInput.HeadModelType = sMat.HeadModelType;
+                else
+                    sInput.HeadModelFile = [];
+                    sInput.HeadModelType = [];
                 end
                 
             case 'timefreq'
@@ -2058,7 +2079,11 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
     % Other values to return
     sInput.Time    = sMat.Time;
     sInput.Comment = sMat.Comment;
-    sInput.nAvg    = sMat.nAvg;
+    if isfield(sMat, 'nAvg') && ~isempty(sMat.nAvg)
+        sInput.nAvg = sMat.nAvg;
+    else
+        sInput.nAvg = 1;
+    end
     % Count output signals
     if ~isempty(sInput.ImagingKernel) 
         nSignals = size(sInput.ImagingKernel, 1);
@@ -2099,7 +2124,7 @@ end
 %         OutputFiles = bst_process('CallProcess', ProcessName, sInputs,   sInputs2,   OPTIONS)
 %         OutputFiles = bst_process('CallProcess', ProcessName, FileNames, FileNames2, OPTIONS)
 %         [OutputFiles, OutputFiles2] = bst_process('CallProcess', ...)
-function [OutputFiles, OutputFiles2] = CallProcess(sProcess, sInputs, sInputs2, varargin)
+function [OutputFiles, OutputFiles2, sInputs, sInputs2] = CallProcess(sProcess, sInputs, sInputs2, varargin) %ADDED TV -> avoid rebuilding sInputs afterwards
     % Check if Brainstorm is running
     if ~isappdata(0, 'BrainstormRunning')
         error('Please start Brainstorm before calling bst_process().');
@@ -2135,6 +2160,21 @@ function [OutputFiles, OutputFiles2] = CallProcess(sProcess, sInputs, sInputs2, 
     % Get files
     if ~isempty(sInputs2) && ~isstruct(sInputs2)
         sInputs2 = GetInputStruct(sInputs2);
+    end
+    % Remove the options that are not matching the type of the inputs
+    if isfield(sProcess, 'options') && ~isempty(sProcess.options) && isstruct(sProcess.options)
+        optNames = fieldnames(sProcess.options);
+        for iOpt = 1:length(optNames)
+            if ~isfield(sProcess.options.(optNames{iOpt}), 'InputTypes')
+                continue;
+            elseif ismember(sInputs(1).FileType, sProcess.options.(optNames{iOpt}).InputTypes)
+                continue;
+            elseif ~isempty(sInputs2) && ismember(sInputs2(1).FileType, sProcess.options.(optNames{iOpt}).InputTypes)
+                continue;
+            else
+                sProcess.options = rmfield(sProcess.options, optNames{iOpt});
+            end
+        end
     end
     % Get options
     for i = 1:2:length(varargin)

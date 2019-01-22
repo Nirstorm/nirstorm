@@ -3,7 +3,7 @@ nst_format_pval.m
 nst_get_formats.m
 nst_filter_table.m
 nst_make_basic_contrasts.m
-nst_ppl_1st_level_surface_template_V1.m
+nst_ppl_surface_template_V1.m
 nst_make_event_toeplitz_mtx.m
 nst_make_event_regressors.m
 process_nst_sub_headmodel.m

@@ -124,14 +124,15 @@ switch method
 end
 
 nb_vertices = size(sensitivity_surf, 3);
+hb_types = get_hb_types();
 
 pinv_ext = pinv(ext_coeffs);
 pdata_hbo = zeros(nb_vertices, nb_samples);
 pdata_hbr = zeros(nb_vertices, nb_samples);
 for ivox=1:nb_vertices
    hb_sigs = pinv_ext * pdata_dOD_proj([ivox ivox+nb_vertices], :);
-   pdata_hbo(ivox,:) = hb_sigs(1, :);
-   pdata_hbr(ivox,:) = hb_sigs(2, :);
+   pdata_hbo(ivox,:) = hb_sigs(strcmp(hb_types, 'HbO'), :);
+   pdata_hbr(ivox,:) = hb_sigs(strcmp(hb_types, 'HbR'), :);
 end
 
 extra.DisplayUnits = 'mol.l-1';
@@ -181,6 +182,11 @@ end
 %
 % end
 
+end
+
+function hb_types = get_hb_types()
+% Return Hb type order as used for the cols of the matrix of exctinction coeffs
+hb_types = {'HbO', 'HbR'};
 end
 
 function save_chan_data(chan_data, sDataIn, iStudy, sStudy, comment, tag)
