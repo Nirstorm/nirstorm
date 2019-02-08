@@ -23,7 +23,7 @@ function events_tpz = nst_make_event_toeplitz_mtx(events, nb_samples, nb_coeffs)
     events_tpz = cell(1, length(events));
     for icondition=1:length(events)
         binary_seq = zeros(nb_samples, 1);
-        for ievent=1:length(events(icondition).samples)
+        for ievent=1:size(events(icondition).samples, 2)
             samples = events(icondition).samples(:, ievent);
             binary_seq(samples(1):samples(2)) = 1;
         end    
