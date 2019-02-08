@@ -174,7 +174,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     all_event_names = {DataMat.Events.label};
     events_found = ismember(selected_event_names, all_event_names);
     if ~all(events_found)
-        bst_error(sprintf('Event names "%s" not found in "%s"', ...
+        bst_error(sprintf('Event names "%s" not found (available events: "%s")', ...
                           strjoin(selected_event_names(~events_found), ', '), ...
                           strjoin(all_event_names, ',')));
         return;
@@ -304,6 +304,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     end
     
     if save_residuals
+        residual = Y - X*B; % WARNING: residuals are not consistent with beta variances -> start trimming not taken into account
         % Saving the residual matrix.
         output_tag = sprintf('ir%d_glm_res', sInput.iItem);
         output_comment = [output_prefix '- residuals'];
@@ -337,7 +338,6 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     
     if save_fit
         fit = X*B;
-        % Saving the residual matrix.
         output_tag = sprintf('ir%d_glm_fit', sInput.iItem);
         output_comment = [output_prefix '- signal fit'];
         if surface_data
@@ -590,7 +590,7 @@ function signal= cpt_hrf_canonical(t,peakTime,uShootTime,peakDisp,uShootDisp,rat
     assert( isvector(t)  )
 
     %signal=zeros( size(t_vect) );  
-    if nargin <  2, peakTime    = 6.2;end % .2 to take into account small delay compared to spm_hrf. TODO: clarify
+    if nargin <  2, peakTime    = 6.2;end % maybe 6.2 to take into account small delay compared to spm_hrf. TODO: clarify
     if nargin <  3, uShootTime  = 16;end
     if nargin <  4, peakDisp    = 1;end
     if nargin <  5, uShootDisp  = 1;end
