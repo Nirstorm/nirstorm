@@ -128,7 +128,7 @@ end
 
 function lines = readlines(fn)
 f = fopen(fn);             
-lines = textscan(f,'%s','delimiter','\n');
+lines = textscan(f,'%s','delimiter',char(10)); %#ok<*CHARTEN>
 lines = lines{1};
 fclose(f);
 end
