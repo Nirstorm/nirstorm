@@ -110,9 +110,10 @@ param.sensors.cov.flag_cov = 1;
 param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];
 
 all_methods = methods();
-method = sProcess.options.method.Value{1};
-
-switch method
+i_method = sProcess.options.method.Value{1};
+method_names = fieldnames(all_methods);
+mtag = get_method_tag(method_names{i_method});
+switch i_method
     case all_methods.Sensitivity_based_interpolation
         [pdata_dOD_proj, mixing_mat] = sensitivity_based_interpolation(nirs_sig_wl1, nirs_sig_wl2, ...
                                                                        sensitivity_surf);
@@ -137,13 +138,13 @@ end
 
 extra.DisplayUnits = 'mol.l-1';
 [sStudy, ResultFile] = nst_bst_add_surf_data(pdata_hbo, sDataIn.Time, ...
-    head_model, 'hbo_proj', 'HbO cortex', ...
+    head_model, 'hbo_proj', sprintf('HbO cortex (%s)', mtag), ...
     sInputs, sStudy,  'Projected HbO signals', [], sProcess.options.sparse_storage.Value, ...
     extra);
 OutputFiles{end+1} = ResultFile;
 
 [sStudy, ResultFile] = nst_bst_add_surf_data(pdata_hbr, sDataIn.Time, ...
-    head_model, 'hbr_proj', 'HbR cortex' , ...
+    head_model, 'hbr_proj', sprintf('HbR cortex (%s)', mtag) , ...
     sInputs, sStudy, 'Projected HbR signals', [], sProcess.options.sparse_storage.Value, ...
     extra);
 OutputFiles{end+1} = ResultFile;
@@ -157,7 +158,7 @@ if sProcess.options.save_mixing_mat.Value
     i_chans = [montage_info.pair_ichans(:,1) ; montage_info.pair_ichans(:,2)];
     chan_data = zeros(size(sDataIn.F,1), nb_vertices);
     chan_data(i_chans, :) = mixing_mat';
-    save_chan_data(chan_data, sDataIn, sInputs.iStudy, sStudy, 'Mixings', 'mixing');
+    save_chan_data(chan_data, sDataIn, sInputs.iStudy, sStudy, sprintf('Mixings (%s)', mtag), 'mixing');
 end
 
 %     OutputFiles{end+1} = ResultFile;
@@ -199,7 +200,7 @@ function save_chan_data(chan_data, sDataIn, iStudy, sStudy, comment, tag)
     sDataOut.DataType     = 'recordings'; 
     sDataOut.nAvg         = 1;
     sDataOut.Events       = [];
-    sDataOut.DisplayUnits = 'na';
+    sDataOut.DisplayUnits = 'U.A.';
 
     % Generate a new file name in the same folder
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_' tag]);
@@ -230,13 +231,14 @@ A_w2(:,:) = mat_A(:,2,:);
 data_topo = [data_w1 ; data_w2]; % (nb_pairs*nb_wls) x nSamples
 
 flag_show_l_curve = 0;
-param.inverse.Tikkonov.lambda{1} = 0.005;
+param.inverse.Tikkonov.lambda{1} = 0.1;
 
 %g=[A_w1*ex(1,1) A_w1*ex(1,2); A_w2*ex(2,1) A_w2*ex(2,2)]; % (nb_pairs*nb_wls) x (nb_vertices*2)
 
 g=blkdiag(A_w1,A_w2); % (nb_pairs*nb_wls) x (nb_vertices*nb_wls)
 I=speye(size(g,1));
-S=svd(g); %[U,S,V] = svd(g);
+% S=svd(g); %[U,S,V] = svd(g);
+S = svd(g*g');
 if flag_show_l_curve && numel(param.inverse.Tikkonov.lambda{1}) > 1
     % L curve
     %---------------------
@@ -314,5 +316,16 @@ enum.Sensitivity_based_interpolation = 1;
 enum.MNE = 2;
 end
 
+function tag = get_method_tag(method_name)
+
+if length(method_name) <= 3
+    tag = method_name;
+else
+    tag = strjoin(cellfun(@(s) s(1), strsplit('Sensitivity_based_interpolation', '_'), ...
+                    'UniformOutput', 0), ...
+                  '');
+end
+
+end
 
 

@@ -195,7 +195,7 @@ end
 existing = cellfun(@(s) ~isempty(s), sFilesOut);
 
 %% Run the process if needed
-if any(~existing) || force_redo
+if isempty(outputs) || any(~existing) || force_redo
     if any(existing)
         if strcmp(sFilesOut_types{1}, 'HeadModel')
             assert(length(sFilesOut_types) == 1);

@@ -47,10 +47,9 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %     Return:
 %         FILES_RAW: brainstorm file pathes to imported data.
 %
-% [GLM_CON_FILES, REDONE_GLM, PREPROC_FOLDER, GLM_FOLDER] = 
-%         NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, SUBJECT_NAMES)
+%  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
-%     Apply pipeline to given data FILES_RAW.
+%     Apply pipeline to given group(s) of subjects.
 %     ASSUME: all subjects in a given protocol have the same template
 %             anatomy. See NST_PPL_SURFACE_TEMPLATE_V1('import')
 %
@@ -95,6 +94,8 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % - wiki page
 % - utest
 % 
+global GlobalData;
+
 assert(ischar(action));
 
 %TODO check options when given
@@ -121,23 +122,29 @@ switch action
         varargout{2} = redone;
         return;
     case 'analyse'
-        subject_names = arg1;
-        if nargin < 4
-            force_redo = 0;
-        else
-            force_redo = arg2;
-        end
     otherwise
         error('Unknown action: %s', action);
 end
 
-if isempty(subject_names)
-    error('Empty input subject list');
+if isempty(arg1)
+    error('Empty input group or subjects definition');
+else
+    if isstruct(arg1)
+        groups = arg1;
+        assert(isfield(groups, 'label'));
+        assert(isfield(groups, 'subject_names'));
+    else
+        groups.label = '';
+        groups.subject_names = arg1;
+    end
+    %TODO: check groups -> warn if they are overlapping
 end
 
 if strcmp(options.save_fig_method, 'export_fig') && ~function_exists('export_fig')
     error('"export_fig" not found. Can be installed from "https://github.com/altmany/export_fig"');
 end
+
+force_redo = options.redo_all;
 
 protocol_info = bst_get('ProtocolInfo');
 if protocol_info.UseDefaultAnat~=1
@@ -158,132 +165,172 @@ create_dir(options.tag_bad_channels.export_dir);
 
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
-file_raw1 = nst_get_bst_func_files(subject_names{1}, ['origin' get_ppl_tag()], 'Raw');
+file_raw1 = nst_get_bst_func_files(groups(1).subject_names{1}, ['origin' get_ppl_tag()], 'Raw');
+if isempty(file_raw1)
+    error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                  groups(1).subject_names{1})); %#ok<SPERR>
+end
 [sFile_raw_fhm, fm_subject, fhm_redone] = get_sFile_for_full_head_model(file_raw1, options, force_redo);
 
 %% Within-subject analyses
-redo_group = options.GLM_group.redo;
-for isubject=1:length(subject_names)
-    
-    subject_name = subject_names{isubject};
-    
-    % Check if given subject is dummy one created to hold full head model    
-    if strcmp(subject_name, fm_subject)
-        warning('Ignoring dummy subject "%s" used to store head model for all pairs', fm_subject);
-        continue;
+for igroup=1:length(groups)
+    redo_group = options.GLM_group.redo;
+    subject_names = groups(igroup).subject_names;
+    group_label = groups(igroup).label;
+    for isubject=1:length(subject_names)
+
+        subject_name = subject_names{isubject};
+
+        % Check if given subject is dummy one created to hold full head model    
+        if strcmp(subject_name, fm_subject)
+            warning('Ignoring dummy subject "%s" used to store head model for all pairs', fm_subject);
+            continue;
+        end
+
+        file_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
+        if isempty(file_raw)
+            error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                          subject_name)); %#ok<SPERR>
+        end
+        
+        % Run preprocessings
+        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
+
+        % Run 1st level GLM
+        [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
+                                                                                  redone_preprocs | force_redo);
+
+        if isubject==1
+            all_sFiles_con = cell(size(sFiles_con, 1), size(sFiles_con, 2), length(subject_names));
+        end
+        all_sFiles_con(:,:,isubject) = sFiles_con;
+
+        if options.clean_preprocessings
+            full_preproc_folder = fileparts(sFiles_preprocessed{1});
+            [sStudy, iStudy] = bst_get('StudyWithCondition', full_preproc_folder);
+            db_delete_studies(iStudy);
+        end
+
+        redo_group = redo_group | redone_any_contrast;
     end
 
-    file_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
 
-    % Run preprocessings
-    [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
-    
-    % Run 1st level GLM
-    [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
-                                                                              redone_preprocs | force_redo);
 
-    if isubject==1
-        all_sFiles_con = cell(size(sFiles_con, 1), size(sFiles_con, 2), length(subject_names));
+    %% Group-level analysis
+    if length(subject_names) <= 2
+       if ~isempty(group_label)
+           group_msg = [' of ' group_label];
+       else
+           group_msg = '';
+       end
+       warning('Not enough data for group analysis%s.\n', group_msg);
+       return;
     end
-    all_sFiles_con(:,:,isubject) = sFiles_con;
-                                                                                                                                             
-    if options.clean_preprocessings
-        full_preproc_folder = fileparts(sFiles_preprocessed{1});
-        [sStudy, iStudy] = bst_get('StudyWithCondition', full_preproc_folder);
-        db_delete_studies(iStudy);
-    end
-    
-    redo_group = redo_group | redone_any_contrast;
-end
+    sSubjectDefault = bst_get('Subject', 0); %TODO: use this also for 1st level
+    all_sFiles_subj_zmat = cell(size(all_sFiles_con, 1), size(all_sFiles_con, 2));
+    all_sFiles_subj_zmat_con_concat = cell(1, size(all_sFiles_con, 1));
 
+    stacking_types = process_nst_concat_matrices('get_stacking_types');
+    contrasts = options.GLM_1st_level.contrasts;
+    if options.GLM_group.do
+        if ~isempty(group_label) 
+            group_condition_name = [group_label '_'];
+        else
+            group_condition_name = '';
+        end
+        group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
+        for ihb=1:size(all_sFiles_con, 1)
+            for icon=1:size(all_sFiles_con, 2)
+                % TODO: use pipeline tag to name condition folder
+                item_comment = ['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label];
+                [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
+                                                                'process_nst_glm_group_ttest', all_sFiles_con(ihb, icon, :), [], ...
+                                                                'tail', 'two');
+                fig_bfn = sprintf('group_%s_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
+                              group_label, hb_types{ihb}, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
+                              nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
+                              contrasts(icon).label);
+                fig_fn = fullfile(options.fig_dir, fig_bfn);
+                if options.make_figs && options.GLM_group.contrast_tstat.plot.do && ...
+                    (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))
+                    hFigSurfData = view_surface_data(sSubjectDefault.Surface(sSubjectDefault.iCortex).FileName, ...
+                                                     sFile_GLM_gp_ttest, 'NIRS', 'NewFigure');
+                    StatThreshOptions = bst_get('StatThreshOptions');
+                    StatThreshOptions.pThreshold = options.GLM_group.contrast_tstat.plot.pvalue_threshold;
+                    StatThreshOptions.Correction = options.GLM_group.contrast_tstat.plot.pvalue_mcc_method;
+                    bst_set('StatThreshOptions', StatThreshOptions);
 
+                    % TODO: set surface smoothing
+                    % TODO: set better colormap that does not span values betwn -3 and 3
+                    % TODO: factorize map plotting
+                    if ~isempty(options.fig_background)
+                        bst_figures('SetBackgroundColor', hFigSurfData, options.fig_background);
+                    end
+                    bst_colormaps('SetDisplayColorbar', 'stat2', 0);
+                    view(options.fig_cortex_view);
+                    zoom(hFigSurfData, options.fig_cortex_zoom);
+                    nst_save_figure(fig_fn, options, hFigSurfData);
 
-%% Group-level analysis
-if length(subject_names) <= 2
-   warning('Not enough data for group analysis.\n');
-   return;
-end
-sSubjectDefault = bst_get('Subject', 0); %TODO: use this also for 1st level
-all_sFiles_subj_zmat = cell(size(all_sFiles_con, 1), size(all_sFiles_con, 2));
-all_sFiles_subj_zmat_con_concat = cell(1, size(all_sFiles_con, 1));
+                    % Save colorbar
+                    [root, bfn, ext] = fileparts(fig_fn);
+                    colbar_fig_fn = fullfile(root, [bfn '_colobar' ext]);
+                    bst_colormaps('SetDisplayColorbar', 'stat2', 1);
+                    hColorbar = findobj(GlobalData.CurrentFigure.Last, '-depth', 1, 'Tag', 'Colorbar');
+                    set(hColorbar, 'XColor', [0 0 0]);
+                    set(hColorbar, 'YColor', [0 0 0]);
+                    options_colbar = options;
+                    options_colbar.export_fig_dpi = 500;
+                    nst_save_figure(colbar_fig_fn, options_colbar, hColorbar);
 
-stacking_types = process_nst_concat_matrices('get_stacking_types');
-contrasts = options.GLM_1st_level.contrasts;
-if options.GLM_group.do
-    for ihb=1:size(all_sFiles_con, 1)
-        for icon=1:size(all_sFiles_con, 2)
-            % TODO: use pipeline tag to name condition folder
-            item_comment = ['Group analysis/GLM' get_ppl_tag() '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label];
-            [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
-                                                            'process_nst_glm_group_ttest', all_sFiles_con(ihb, icon, :), [], ...
-                                                            'tail', 'two');
-            fig_bfn = sprintf('group_%s_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
-                          options.GLM_group.label, hb_types{ihb}, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
-                          nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
-                          contrasts(icon).label);
-            fig_fn = fullfile(options.fig_dir, fig_bfn);
-            if options.make_figs && options.GLM_group.contrast_tstat.plot.do && ...
-                (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))
-                hFigSurfData = view_surface_data(sSubjectDefault.Surface(sSubjectDefault.iCortex).FileName, ...
-                                                 sFile_GLM_gp_ttest, 'NIRS', 'NewFigure');
-                StatThreshOptions = bst_get('StatThreshOptions');
-                StatThreshOptions.pThreshold = options.GLM_group.contrast_tstat.plot.pvalue_threshold;
-                StatThreshOptions.Correction = options.GLM_group.contrast_tstat.plot.pvalue_mcc_method;
-                bst_set('StatThreshOptions', StatThreshOptions);
-
-                % TODO: set surface smoothing
-                % TODO: set better colormap that does not span values betwn -3 and 3
-                % TODO: factorize map plotting
-                if ~isempty(options.fig_background)
-                    bst_figures('SetBackgroundColor', hFigSurfData, options.fig_background);
+                    close(hFigSurfData);
                 end
-                bst_colormaps('SetDisplayColorbar', 'stat2', 0);
-                view(options.fig_cortex_view);
-                zoom(hFigSurfData, options.fig_cortex_zoom);
-                nst_save_figure(fig_fn, options, hFigSurfData);
-                close(hFigSurfData);
+
+                if options.GLM_group.rois_summary.do
+                    [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
+                                                                redone | options.GLM_group.rois_summary.redo, ...
+                                                                'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
+                                                                'do_atlas_inter', 1, ...
+                                                                'min_atlas_roi_size', 3, ...
+                                                                'atlas', options.GLM_group.rois_summary.atlas);
+                     % TODO: switch between matrix output (atlas-based) or map output (full mask)                                       
+                     [sFile_subj_zmat, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con ' contrasts(icon).label ' | masked z-scores'], ...
+                                                                   redone | options.GLM_group.rois_summary.redo, ...
+                                                                   'process_nst_glm_group_subjs_zmat', ...
+                                                                   all_sFiles_con(ihb, icon, :), sFile_gp_mask);
+                     all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
+                end
             end
-            
-            if options.GLM_group.group_activity_rois.do
-                [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/GLM' get_ppl_tag() '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
-                                                            redone | options.GLM_group.group_activity_rois.redo, ...
-                                                            'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
-                                                            'do_atlas_inter', 1, ...
-                                                            'min_atlas_roi_size', 3, ...
-                                                            'atlas', options.GLM_group.group_activity_rois.atlas);
-                 % TODO: switch between matrix output (atlas-based) or map output (full mask)                                       
-                 [sFile_subj_zmat, redone] = nst_run_bst_proc(['Group analysis/GLM' get_ppl_tag() '/' hb_types{ihb} ' | con ' contrasts(icon).label ' | masked z-scores'], ...
-                                                               redone | options.GLM_group.group_activity_rois.redo, ...
-                                                               'process_nst_glm_group_subjs_zmat', ...
-                                                               all_sFiles_con(ihb, icon, :), sFile_gp_mask);
-                 all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
+            if options.GLM_group.rois_summary.do
+                [sFile_concat, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' masked z-scores'], ...
+                                                         redone | options.GLM_group.rois_summary.redo, ...
+                                                         'process_nst_concat_matrices', ...
+                                                          all_sFiles_subj_zmat(ihb, :), [], ...
+                                                         'stacking_type', stacking_types.column);
+                all_sFiles_subj_zmat_con_concat{ihb} = sFile_concat;
             end
         end
-        if options.GLM_group.group_activity_rois.do
-            [sFile_concat, redone] = nst_run_bst_proc(['Group analysis/GLM' get_ppl_tag() '/' hb_types{ihb} ' masked z-scores'], ...
-                                                     redone | options.GLM_group.group_activity_rois.redo, ...
-                                                     'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat(ihb, :), [], ...
-                                                     'stacking_type', stacking_types.column);
-            all_sFiles_subj_zmat_con_concat{ihb} = sFile_concat;
+
+        if options.GLM_group.rois_summary.do
+            hb_prefixes = strjoin(cellfun(@(c) [options.GLM_group.rois_summary.matrix_col_prefix '_'  c '_'], ...
+                                          hb_types, 'UniformOutput', 0), ',');
+            [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/all masked zscores'], ...
+                                                         redone | options.GLM_group.rois_summary.redo, ...
+                                                         'process_nst_concat_matrices', ...
+                                                          all_sFiles_subj_zmat_con_concat, [], ...
+                                                         'prefixes', hb_prefixes, ...
+                                                         'stacking_type', stacking_types.column);
+            if isempty(group_label)
+                group_prefix = '';
+            else
+                group_prefix = [group_label '_'];
+            end
+            csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
+                              [group_prefix 'z-scores.csv']);
+            nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
+                             'process_nst_save_matrix_csv', ...
+                             sFile_table_zscores, [], ...
+                             'csv_file', {csv_fn, 'ASCII-CSV'});
         end
-    end
-    
-    if options.GLM_group.group_activity_rois.do
-        hb_prefixes = strjoin(cellfun(@(c) [options.GLM_group.group_activity_rois.matrix_col_prefix '_'  c '_'], ...
-                                      hb_types, 'UniformOutput', 0), ',');
-        [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/GLM' get_ppl_tag() '/all masked zscores'], ...
-                                                     redone | options.GLM_group.group_activity_rois.redo, ...
-                                                     'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat_con_concat, [], ...
-                                                     'prefixes', hb_prefixes, ...
-                                                     'stacking_type', stacking_types.column);
-        csv_fn = fullfile(options.GLM_group.group_activity_rois.csv_export_output_dir, ...
-                          [options.GLM_group.label, '_z-scores.csv']);
-        nst_run_bst_proc({}, redone | options.GLM_group.group_activity_rois.redo, ...
-                         'process_nst_save_matrix_csv', ...
-                         sFile_table_zscores, [], ...
-                         'csv_file', {csv_fn, 'ASCII-CSV'});
     end
 end
 
@@ -294,25 +341,25 @@ if prev_iCortex ~= iCortex
    panel_protocols('RepaintTree');
 end
 
-if nargout >= 1
-    varargout{1} = sFiles_con;
-end
-
-if nargout >= 2
-    varargout{2} = redone_any_contrast;
-end
-
-if nargout >= 3
-    varargout{3} = sFiles_GLM;
-end
-
-if nargout >= 4 
-    varargout{4} = glm_folder;
-end
-
-if nargout >= 5 && ~options.clean_preprocessings
-    varargout{5} = preproc_folder;
-end
+% if nargout >= 1
+%     varargout{1} = sFiles_con;
+% end
+% 
+% if nargout >= 2
+%     varargout{2} = redone_any_contrast;
+% end
+% 
+% if nargout >= 3
+%     varargout{3} = sFiles_GLM;
+% end
+% 
+% if nargout >= 4 
+%     varargout{4} = glm_folder;
+% end
+% 
+% if nargout >= 5 && ~options.clean_preprocessings
+%     varargout{5} = preproc_folder;
+% end
 
 end
 
@@ -378,10 +425,7 @@ redo_parent = redo_parent | options.head_model.redo;
                                   
 % Project and convert to d[HbX]
 redo_parent = redo_parent | options.projection.redo;
-proj_methods = process_nst_cortical_projection('methods');
-%TODO: expose as option?
-proj_method = proj_methods.Sensitivity_based_interpolation;
-% proj_method = proj_methods.MNE;
+proj_method =  options.projection.method;
 [sFilesHbProj, redo_parent] = nst_run_bst_proc({[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex']},  redo_parent, ... 
                                                 'process_nst_cortical_projection', sFile_dOD_filtered, [], ...
                                                 'method', proj_method, ...
@@ -477,7 +521,7 @@ for ifile=1:length(sFiles_GLM)
                     bst_figures('SetBackgroundColor', hFigSurfData, options.fig_background);
                 end
                 bst_colormaps('SetDisplayColorbar', 'stat2', 0);
-                view(options.fig_cortex_view); %TODO: expose as option
+                view(options.fig_cortex_view);
                 zoom(hFigSurfData, options.fig_cortex_zoom);
                 nst_save_figure(fig_fn, options, hFigSurfData);
                 close(hFigSurfData);
@@ -551,7 +595,7 @@ end
                                        'process_nst_import_head_model', file_raw_fm, [], ...
                                        'use_closest_wl', 1, 'use_all_pairs', 1, ...
                                        'force_median_spread', 0, ...
-                                       'normalize_fluence', 0, ...
+                                       'normalize_fluence', 1, ...
                                        'smoothing_fwhm', 0);
 
 end
@@ -586,6 +630,9 @@ options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
 options.tag_bad_channels.export_dir = fullfile('.', 'moco_marking');
 
 options.projection.redo = 0;
+proj_methods = process_nst_cortical_projection('methods');
+options.projection.method = proj_methods.Sensitivity_based_interpolation; % proj_methods.MNE;
+
 options.projection.sparse_storage = 0;
 
 options.clean_preprocessings = 0;
@@ -604,13 +651,12 @@ options.GLM_1st_level.contrast_tstat.plot.redo = 0;
 options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold = 0.05;
 options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method = 'none';
 
-options.GLM_group.label = 'group';
 options.GLM_group.do = 1;
 options.GLM_group.redo = 0;
-options.GLM_group.group_activity_rois.do = 0;
-options.GLM_group.group_activity_rois.atlas = 'MarsAtlas';
-options.GLM_group.group_activity_rois.matrix_col_prefix = '';
-options.GLM_group.group_activity_rois.csv_export_output_dir = 'results';
+options.GLM_group.rois_summary.do = 0;
+options.GLM_group.rois_summary.atlas = 'MarsAtlas';
+options.GLM_group.rois_summary.matrix_col_prefix = '';
+options.GLM_group.rois_summary.csv_export_output_dir = 'results';
 
 options.make_figs = 1;
 options.save_fig_method = 'saveas'; % 'saveas', 'export_fig'
