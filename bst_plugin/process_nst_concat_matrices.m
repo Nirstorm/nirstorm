@@ -69,7 +69,7 @@ stacking_types = get_stacking_types();
 stacking_type_int = sProcess.options.stacking_type.Value{1};
 stacking_type_str = sProcess.options.stacking_type.Value{2}{stacking_type_int};
 
-[varying_comment, common_prefix, common_suffix] = str_remove_common({sInputs.Comment});
+[varying_comment, common_prefix, common_suffix] = str_remove_common({sInputs.Comment}, 1);
 
 if ~isempty(sProcess.options.prefixes.Value)
     prefixes = cellfun(@strtrim, strsplit(sProcess.options.prefixes.Value, ','),...

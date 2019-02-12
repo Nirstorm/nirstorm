@@ -162,6 +162,7 @@ panel_protocols('RepaintTree');
 create_dir(options.fig_dir);
 create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
+create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
 
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
@@ -311,8 +312,12 @@ for igroup=1:length(groups)
         end
 
         if options.GLM_group.rois_summary.do
-            hb_prefixes = strjoin(cellfun(@(c) [options.GLM_group.rois_summary.matrix_col_prefix '_'  c '_'], ...
-                                          hb_types, 'UniformOutput', 0), ',');
+            if ~isempty(options.GLM_group.rois_summary.matrix_col_prefix)
+                col_prefix = [options.GLM_group.rois_summary.matrix_col_prefix '_'];
+            else
+                col_prefix = '';
+            end
+            hb_prefixes = strjoin(cellfun(@(c) [col_prefix  c '_'], hb_types, 'UniformOutput', 0), ',');
             [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/all masked zscores'], ...
                                                          redone | options.GLM_group.rois_summary.redo, ...
                                                          'process_nst_concat_matrices', ...
@@ -767,7 +772,7 @@ if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
     warning('Data folder should not be part of nirstorm source folders (%s)', folder);
 end
 
-if ~exist(folder, 'dir')
+if ~isempty(folder) && ~exist(folder, 'dir')
     mkdir(folder);
 end
 
