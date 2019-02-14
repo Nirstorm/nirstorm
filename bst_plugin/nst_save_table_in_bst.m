@@ -31,7 +31,9 @@ if ~isempty(t.Row)
 else
     MatNew.RowNames = arrayfun(@(n) sprintf('row_%d', n), 1:nrows, 'UniformOutput', 0);
 end
-MatNew.ColNames = t.Properties.VariableNames;
+MatNew.RowNames = line_vector(MatNew.RowNames);
+MatNew.ColNames = line_vector(t.Properties.VariableNames);
+
 
 sSubject = bst_get('Subject', subject_name, 1);
 if isempty(sSubject)
@@ -55,4 +57,10 @@ sFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'matrix_ta
 bst_save(sFile, MatNew, 'v6');
 % Register in database
 db_add_data(iStudy, sFile, MatNew);
+end
+
+function v = line_vector(v)
+if size(v, 2) == 1 && size(v, 1) > 1
+    v = v';
+end
 end
