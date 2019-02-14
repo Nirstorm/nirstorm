@@ -45,9 +45,11 @@ sProcess.options.stacking_type.Value   = {choices.column,...
     fieldnames(choices)};
 
 
-sProcess.options.prefixes.Comment = 'Row or Column prefixes (comma-separated)';
-sProcess.options.prefixes.Type = 'text';
-sProcess.options.prefixes.Value = '';
+% TODO: use dedicated process to add a prefix to col or row names
+% -> cannot easily manage it here since nb of rows/cols can be variable
+% sProcess.options.prefixes.Comment = 'Row or Column prefixes (comma-separated)';
+% sProcess.options.prefixes.Type = 'text';
+% sProcess.options.prefixes.Value = '';
 
 end
 
@@ -64,6 +66,7 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+OutputFiles = {};
 
 stacking_types = get_stacking_types();
 stacking_type_int = sProcess.options.stacking_type.Value{1};
@@ -71,18 +74,18 @@ stacking_type_str = sProcess.options.stacking_type.Value{2}{stacking_type_int};
 
 [varying_comment, common_prefix, common_suffix] = str_remove_common({sInputs.Comment}, 1);
 
-if ~isempty(sProcess.options.prefixes.Value)
-    prefixes = cellfun(@strtrim, strsplit(sProcess.options.prefixes.Value, ','),...
-        'UniformOutput', 0);
-    
-    if length(sInputs) ~= length(prefixes)
-        error('Number of prefixes not equal to number of inputs');
-    end
-elseif ~isempty(varying_comment) && length(varying_comment)==length(sInputs)
-    prefixes = cellfun(@(c) [c '_'], varying_comment, 'UniformOutput', 0);
-else
-    prefixes = repmat({''}, 1, length(sInputs));
-end
+% if ~isempty(sProcess.options.prefixes.Value)
+%     prefixes = cellfun(@strtrim, strsplit(sProcess.options.prefixes.Value, ','),...
+%         'UniformOutput', 0);
+%     
+%     if length(sInputs) ~= length(prefixes)
+%         error('Number of prefixes not equal to number of inputs');
+%     end
+% elseif ~isempty(varying_comment) && length(varying_comment)==length(sInputs)
+%     prefixes = cellfun(@(c) [c '_'], varying_comment, 'UniformOutput', 0);
+% else
+%     prefixes = repmat({''}, 1, length(sInputs));
+% end
 
 switch stacking_type_int
     case stacking_types.row
@@ -93,32 +96,26 @@ end
 
 % Load the first file, as the reference
 MatRef = in_bst_matrix(sInputs(1).FileName);
-[row_names_ref, col_names_ref, sfreq_ref, time_ref] = get_axes_info(MatRef);
-nb_rows_ref = length(row_names_ref);
-nb_cols_ref = length(col_names_ref);
+[row_names_ref, col_names_ref] = get_axes_info(MatRef);
+row_names = row_names_ref;
+col_names = col_names_ref;
 
-% Allocate concatenated items
-switch stacking_type_int
-    case stacking_types.row
-        nb_cats = nb_rows_ref * length(sInputs);
-        values = zeros(nb_cats, nb_cols_ref);
-        row_names = cell(1, nb_cats);
-        row_names(1:nb_rows_ref) = cellfun(@(c) [prefixes{1} c], row_names_ref, 'UniformOutput', 0);
-        col_names = col_names_ref;
-        time = zeros(1, nb_cats);
-        time(1:nb_rows_ref) = time_ref;
-    case stacking_types.column
-        nb_cats = nb_cols_ref * length(sInputs);
-        values = zeros(nb_rows_ref, nb_cats);
-        row_names = row_names_ref;
-        col_names = cell(1, nb_cats);
-        col_names(1:nb_cols_ref) =  cellfun(@(c) [prefixes{1} c], col_names_ref, 'UniformOutput', 0);
-        time = time_ref;
+if ~isempty(MatRef.Time)
+   warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
+                   sInputs(1).FileName));
 end
-values_std = zeros(size(values));
 
-values(1:size(MatRef.Value, 1), 1:size(MatRef.Value, 2)) = MatRef.Value;
-values_std(1:size(MatRef.Std, 1), 1:size(MatRef.Std, 2)) = MatRef.Std;
+if ~isempty(MatRef.Description)
+   warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
+                   sInputs(1).FileName));
+end
+
+if isfield(MatRef, 'Events') && ~isempty(MatRef.Events)
+   warning('Events field not empty in "%s". It will be dropped.', sInputs(1).FileName);
+end
+    
+values = MatRef.Value;
+values_std = MatRef.Std;
 
 MatNew = db_template('matrix');
 
@@ -127,87 +124,77 @@ MatNew = bst_history('add', MatNew, 'concat', ...
                      sprintf('Contatenate %ss from files:', stacking_type_str));
 MatNew = bst_history('add', MatNew, 'concat', [' - ' sInputs(1).FileName]);
 
-% Loop over remaining input files
-for iInput = 2:length(sInputs)
-    % Load the next file
+for iInput=2:length(sInputs)
     MatToCat = in_bst_matrix(sInputs(iInput).FileName);
+
+    if ~isempty(MatToCat.Time)
+       warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
+                       sInputs(iInput).FileName));
+    end
+
+    if ~isempty(MatToCat.Description)
+       warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
+                       sInputs(iInput).FileName));
+    end    
+    
+    if isfield(MatToCat, 'Events') && ~isempty(MatToCat.Events)
+       warning(sprintf('Events field not empty in "%s". It will be dropped.', ...
+                       sInputs(iInput).FileName));
+    end
     
     % Check consistency
-    [row_names_new, col_names_new, sfreq_new, time_new] = get_axes_info(MatToCat);
-    
-    if stacking_type_int==stacking_types.row && ...
-            (length(col_names_new) ~= length(col_names_ref) || ...
-            ~all(strcmp(col_names_new, col_names_new)))
-        bst_report('Error', sProcess, sInputs(iInput), ['This file has columns incompatible with the first one: "' sInputs(iInput).FileName '".']);
-        return;
-    elseif stacking_type_int==stacking_types.column && ...
-            (length(row_names_new) ~= length(row_names_ref) || ...
-            ~all(strcmp(row_names_new, row_names_new)))
-        bst_report('Error', sProcess, sInputs(iInput), ['This file has rows incompatible with the first one: "' sInputs(iInput).FileName '".']);
-        return;
-    end
-    
-    % Concatenate the events
-    if isfield(MatToCat, 'Events') && ~isempty(MatToCat.Events)
-        if isempty(sfreq_new)
-            bst_report('Warning', sProcess, sInputs(iInput), ...
-                ['Events of this file are skipped because time is not defined: "' sInputs(iInput).FileName '".']);
-        else
-            % Add the events to the new file
-            if isempty(MatRef.Events)
-                MatRef.Events = MatToCat.Events;
-            else
-                % Trick import_events() to work for event concatenation
-                sFile.events = MatNew.Events;
-                sFile.prop.sfreq = sfreq_new;
-                sFile = import_events(sFile, [], MatToCat.Events);
-                MatNew.Events = sFile.events;
-            end
+    [row_names_new, col_names_new] = get_axes_info(MatToCat);
+
+    if stacking_type_int==stacking_types.row
+        if (length(col_names_new) ~= length(col_names_ref) || ...
+            ~all(strcmp(col_names_new, col_names_ref)))
+            msg = ['This file has columns incompatible with the first one: "' sInputs(iInput).FileName '".'];
+            throw(MException('Nirstorm:IncompatibleMatrices', msg)); 
         end
+        
+%         common_rows = ismember(row_names_new, row_names_ref);
+%         if any(common_rows)
+%             bst_report('Error', sProcess, sInputs(iInput), ['This file has common rows with the first one: "' sInputs(iInput).FileName '".']);
+%             return;
+%         end
+        values = [values ; MatToCat.Value];
+        values_std = [values_std ; MatToCat.Std];
+        row_names = [row_names row_names_new];  
+    elseif stacking_type_int==stacking_types.column
+        if (length(row_names_new) ~= length(row_names_ref) || ...
+                ~all(strcmp(row_names_new, row_names_ref)))
+            msg = ['This file has rows incompatible with the first one: "' sInputs(iInput).FileName '".'];
+            throw(MException('Nirstorm:IncompatibleMatrices', msg));
+        end
+%         common_cols = ismember(col_names_new, col_names_ref);
+%         if any(common_cols)
+%             bst_report('Error', sProcess, sInputs(iInput), ['This file has common columns with the first one: "' sInputs(iInput).FileName '".']);
+%             return;
+%         end
+        
+        values = [values MatToCat.Value];
+        values_std = [values_std MatToCat.Std];
+        col_names = [col_names col_names_new];
     end
-    
-    % Concatenate the data matrices
-    switch stacking_type_int
-        case stacking_types.row
-            irow = (nb_rows_ref*(iInput-1)+1):nb_rows_ref*iInput;
-            values(irow, :) = MatToCat.Value;
-            if isfield(MatToCat, 'Std') && ~isempty(MatToCat.Std)
-                values_std(irow, :) = MatToCat.Std;
-            end
-            row_names(irow) = cellfun(@(c) [prefixes{iInput} c], row_names_new, 'UniformOutput', 0);
-            
-            if stacking_type == stacking_types.row && ~isempty(time_ref)
-                % Concatenate Time axis 
-                time(irow) = time_new + time(irow(end)-1);
-            end
-            
-        case stacking_types.column
-            icol = (nb_cols_ref*(iInput-1)+1):nb_cols_ref*iInput;
-            values(:, icol) = MatToCat.Value;
-            col_names(icol) =  cellfun(@(c) [prefixes{iInput} c], col_names_new, 'UniformOutput', 0);
-            if isfield(MatToCat, 'Std') && ~isempty(MatToCat.Std)
-                values_std(:, icol) = MatToCat.Std;
-            end
-    end
-    
-    % History field
+       
     MatNew = bst_history('add', MatNew, 'concat', [' - ' sInputs(iInput).FileName]);
+    
 end
 
 MatNew.Value = values;
 MatNew.Std = values_std;
 MatNew.RowNames = row_names;
-MatNew.Time = time;
+MatNew.Time = [];
 MatNew.ColNames = col_names;
-MatNew.Description = col_names;
+MatNew.Description = [];
 MatNew.DisplayUnits = MatRef.DisplayUnits; % TODO check unit consistency across inputs
 
 % Output file tag
 fileTag = 'matrix_concat';
 
 % Set comment
-MatNew.Comment = [common_prefix, common_suffix, ...
-                  sprintf(' | concat (%d) %ss', nb_cats, stacking_type_str)];
+MatNew.Comment = [common_prefix, strjoin(varying_comment, ' '), common_suffix, ...
+                  sprintf(' | concat %ss (%d files) ', stacking_type_str, length(sInputs))];
 % Get output filename
 OutputFiles{1} = bst_process('GetNewFilename', bst_fileparts(sInputs(1).FileName), fileTag);
 % Save file
@@ -245,4 +232,14 @@ else
     error('Cannot resolve matrix column names');
 end
 
+row_names = line_vector(row_names);
+col_names = line_vector(col_names);
+
+end
+
+
+function v = line_vector(v)
+if size(v, 2) == 1 && size(v, 1) > 1
+    v = v';
+end
 end
