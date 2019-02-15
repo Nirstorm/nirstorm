@@ -115,13 +115,13 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     
     DataMat = db_template('resultsmat');
 
-    DataMat.Atlas = atlas;
-    DataMat.fov_mask = fov_mask';
+    DataMat.from_atlas = atlas;
+    DataMat.fov_mask = fov_mask;
     DataMat.fov_roi_indexes = fov_roi_indexes;
     
     DataMat.contrast_name = ResultsMat.contrast_name;
     
-    DataMat.ImageGridAmp  = func_mask';
+    DataMat.ImageGridAmp  = func_mask;
     DataMat.ImagingKernel = [];
     DataMat.Comment       = comment;
     DataMat.Function      = 'pthresh';
