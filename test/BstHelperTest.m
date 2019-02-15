@@ -22,6 +22,59 @@ classdef BstHelperTest < matlab.unittest.TestCase
     
     methods(Test)
 
+        function test_str_remove_common(testCase)
+           
+            sl1 = {'common_prefix var1_group common_suffix', ...
+                   'common_prefix var2_group common_suffix', ...
+                   'common_prefix var3_group common_suffix'};
+            
+            [strList, commonBegin, commonEnd] = str_remove_common(sl1);
+            testCase.assertEqual(length(sl1), length(strList));
+            testCase.assertMatches(strList{1}, '1');
+            testCase.assertMatches(strList{2}, '2');
+            testCase.assertMatches(strList{3}, '3');
+            
+            testCase.assertMatches(commonBegin, 'common_prefix var');
+            testCase.assertMatches(commonEnd, '_group common_suffix');
+            
+            [strList, commonBegin, commonEnd] = str_remove_common(sl1, 1);
+            testCase.assertEqual(length(sl1), length(strList));
+            testCase.assertMatches(strList{1}, 'var1');
+            testCase.assertMatches(strList{2}, 'var2');
+            testCase.assertMatches(strList{3}, 'var3');
+            
+            testCase.assertMatches(commonBegin, 'common_prefix ');
+            testCase.assertMatches(commonEnd, '_group common_suffix');
+            
+            [strList, commonBegin, commonEnd] = str_remove_common(sl1, 1, ' ');
+            testCase.assertEqual(length(sl1), length(strList));
+            testCase.assertMatches(strList{1}, 'var1_group');
+            testCase.assertMatches(strList{2}, 'var2_group');
+            testCase.assertMatches(strList{3}, 'var3_group');
+            
+            testCase.assertMatches(commonBegin, 'common_prefix ');
+            testCase.assertMatches(commonEnd, ' common_suffix');
+                
+            sl2 = {'var1_group', 'var2_group', 'var3_group'};
+            [strList, commonBegin, commonEnd] = str_remove_common(sl2, 1);
+            testCase.assertEqual(length(sl2), length(strList));
+            testCase.assertMatches(strList{1}, 'var1');
+            testCase.assertMatches(strList{2}, 'var2');
+            testCase.assertMatches(strList{3}, 'var3');
+            
+            testCase.assertEmpty(commonBegin);
+            testCase.assertMatches(commonEnd, '_group');
+            
+            [strList, commonBegin, commonEnd] = str_remove_common(sl2, 1, ' ');
+            testCase.assertEqual(length(sl2), length(strList));
+            testCase.assertMatches(strList{1}, 'var1_group');
+            testCase.assertMatches(strList{2}, 'var2_group');
+            testCase.assertMatches(strList{3}, 'var3_group');
+            
+            testCase.assertEmpty(commonBegin, '');
+            testCase.assertEmpty(commonEnd, '');  
+        end
+        
         function test_item_parsing(testCase)
            
            item_str = '';

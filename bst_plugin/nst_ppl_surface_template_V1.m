@@ -162,6 +162,7 @@ panel_protocols('RepaintTree');
 create_dir(options.fig_dir);
 create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
+create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
 
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
@@ -173,7 +174,11 @@ end
 [sFile_raw_fhm, fm_subject, fhm_redone] = get_sFile_for_full_head_model(file_raw1, options, force_redo);
 
 %% Within-subject analyses
-for igroup=1:length(groups)
+nb_groups = length(groups);
+all_sFile_table_zscores = cell(1, nb_groups);
+group_condition_names = cell(1, nb_groups);
+any_rois_summary_redone = 0;
+for igroup=1:nb_groups
     redo_group = options.GLM_group.redo;
     subject_names = groups(igroup).subject_names;
     group_label = groups(igroup).label;
@@ -239,6 +244,7 @@ for igroup=1:length(groups)
             group_condition_name = '';
         end
         group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
+        group_condition_names{igroup} = group_condition_name;
         for ihb=1:size(all_sFiles_con, 1)
             for icon=1:size(all_sFiles_con, 2)
                 % TODO: use pipeline tag to name condition folder
@@ -299,40 +305,97 @@ for igroup=1:length(groups)
                                                                    all_sFiles_con(ihb, icon, :), sFile_gp_mask);
                      all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
                 end
+                
+                if redone
+                    % Set contrast name as prefix for each ROI column                   
+                    bst_process('CallProcess', 'process_nst_prefix_matrix', ...
+                                sFile_subj_zmat, [], 'col_prefixes', [contrasts(icon).label '_']);
+                end
+                
             end
             if options.GLM_group.rois_summary.do
+                % Concatenate across contrasts
                 [sFile_concat, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' masked z-scores'], ...
                                                          redone | options.GLM_group.rois_summary.redo, ...
                                                          'process_nst_concat_matrices', ...
                                                           all_sFiles_subj_zmat(ihb, :), [], ...
                                                          'stacking_type', stacking_types.column);
                 all_sFiles_subj_zmat_con_concat{ihb} = sFile_concat;
+                
+                if redone
+                    % Set Hb type as prefix for all columns. Add user-defined col prefix
+                    if ~isempty(options.GLM_group.rois_summary.matrix_col_prefix)
+                        col_prefix = [options.GLM_group.rois_summary.matrix_col_prefix '_'];
+                    else
+                        col_prefix = '';
+                    end
+                    bst_process('CallProcess', 'process_nst_prefix_matrix', ...
+                                sFile_concat, [], 'col_prefixes', [col_prefix hb_types{ihb} '_']);
+                end
             end
         end
 
         if options.GLM_group.rois_summary.do
-            hb_prefixes = strjoin(cellfun(@(c) [options.GLM_group.rois_summary.matrix_col_prefix '_'  c '_'], ...
-                                          hb_types, 'UniformOutput', 0), ',');
+
             [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/all masked zscores'], ...
                                                          redone | options.GLM_group.rois_summary.redo, ...
                                                          'process_nst_concat_matrices', ...
                                                           all_sFiles_subj_zmat_con_concat, [], ...
-                                                         'prefixes', hb_prefixes, ...
                                                          'stacking_type', stacking_types.column);
-            if isempty(group_label)
-                group_prefix = '';
-            else
-                group_prefix = [group_label '_'];
+
+            all_sFile_table_zscores{igroup} = sFile_table_zscores;
+            any_rois_summary_redone = any_rois_summary_redone | redone;
+            
+
+            
+            if redone && isempty(options.GLM_group.rois_summary.stack_groups)
+                % Group results will not be stacked so save each group data separately
+                if isempty(group_label)
+                    group_prefix = '';
+                else
+                    group_prefix = [group_label '_'];
+                end
+                csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
+                                  [group_prefix 'z-scores.csv']);
+                bst_process('CallProcess', 'process_nst_save_matrix_csv', ...
+                            sFile_table_zscores, [], ...
+                            'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 0, ...
+                            'csv_file', {csv_fn, 'ASCII-CSV'});
             end
-            csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
-                              [group_prefix 'z-scores.csv']);
-            nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
-                             'process_nst_save_matrix_csv', ...
-                             sFile_table_zscores, [], ...
-                             'csv_file', {csv_fn, 'ASCII-CSV'});
         end
-    end
+    end    
 end
+
+if options.GLM_group.do && options.GLM_group.rois_summary.do && ...
+        ~isempty(options.GLM_group.rois_summary.stack_groups)
+    
+    % Concatenate all group results and save as CSV
+    
+    % TODO: move checks to global option checks
+    assert(size(options.GLM_group.rois_summary.stack_groups, 1) == 1);
+    assert(length(unique(options.GLM_group.rois_summary.stack_groups)) == length(options.GLM_group.rois_summary.stack_groups));
+    assert(isempty(setdiff(options.GLM_group.rois_summary.stack_groups, 1:nb_groups)));
+    
+    [varying, common_pref, common_suf] = str_remove_common(group_condition_names);
+    stacked_group_cond_name = [common_pref strjoin(varying, '_') common_suf];
+    [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' stacked_group_cond_name '/all groups masked zscores'], ...
+                                                        any_rois_summary_redone | options.GLM_group.rois_summary.redo, ...
+                                                        'process_nst_concat_matrices', ...
+                                                        all_sFile_table_zscores(options.GLM_group.rois_summary.stack_groups), [], ...
+                                                        'stacking_type', stacking_types.row);
+
+    [varying_label, common_prefix, common_suffix] = str_remove_common({groups(options.GLM_group.rois_summary.stack_groups).label}, 1);
+    varying_label(cellfun(@isempty, varying_label)) = {''};
+    
+    csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
+                      [common_prefix strjoin(varying_label, '_') common_suffix '_z-scores.csv']);
+    nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
+        'process_nst_save_matrix_csv', ...
+        sFile_table_zscores, [], ...
+        'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 1, ...
+        'csv_file', {csv_fn, 'ASCII-CSV'});
+end
+
 
 %% Finalize
 if prev_iCortex ~= iCortex
@@ -657,6 +720,7 @@ options.GLM_group.rois_summary.do = 0;
 options.GLM_group.rois_summary.atlas = 'MarsAtlas';
 options.GLM_group.rois_summary.matrix_col_prefix = '';
 options.GLM_group.rois_summary.csv_export_output_dir = 'results';
+options.GLM_group.rois_summary.stack_groups = [];
 
 options.make_figs = 1;
 options.save_fig_method = 'saveas'; % 'saveas', 'export_fig'
@@ -767,7 +831,7 @@ if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
     warning('Data folder should not be part of nirstorm source folders (%s)', folder);
 end
 
-if ~exist(folder, 'dir')
+if ~isempty(folder) && ~exist(folder, 'dir')
     mkdir(folder);
 end
 

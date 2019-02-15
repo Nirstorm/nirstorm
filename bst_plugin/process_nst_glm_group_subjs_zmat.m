@@ -72,7 +72,7 @@ function [OutputFiles1, OutputFiles2]  = Run(sProcess, sInputs1, sInput2) %#ok<D
   
     % Define set of ROIs
     if isfield(mask_data, 'fov_roi_indexes') && ~isempty(mask_data.fov_roi_indexes) && ...
-            ~isempty(mask_data.Atlas)
+            ~isempty(mask_data.from_atlas)
         roi_indexes = mask_data.fov_roi_indexes;
     else
         roi_indexes = sort(unique(mask));
@@ -80,8 +80,8 @@ function [OutputFiles1, OutputFiles2]  = Run(sProcess, sInputs1, sInput2) %#ok<D
             roi_indexes = roi_indexes(2:end);
         end
     end
-    if  ~isempty(mask_data.Atlas)
-        roi_names = {mask_data.Atlas.Scouts(roi_indexes).Label};
+    if  ~isempty(mask_data.from_atlas)
+        roi_names = {mask_data.from_atlas.Scouts(roi_indexes).Label};
     else
         roi_names = arrayfun(@(n) num2str(n), roi_indexes, 'UniformOutput', 0);
     end
@@ -100,6 +100,8 @@ function [OutputFiles1, OutputFiles2]  = Run(sProcess, sInputs1, sInput2) %#ok<D
         end
     end
 
+    
+    
     % Save
     DataMat = db_template('matrixmat');
     DataMat.Value = all_roi_z;

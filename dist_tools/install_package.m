@@ -114,7 +114,7 @@ for iop=1:length(operations)
                                                   'try', ...
                                           sprintf('    rmdir(''%s'');', fileparts(operation.file1)),...
                                                   'catch', ...
-                                                  'end'}, '\n');
+                                                  'end'}, char(10));
             case 'move'
                 content{end+1} = sprintf('movefile(''%s'', ''%s'');\n', operation.file1, operation.file2);
             otherwise
@@ -128,7 +128,7 @@ end
 [rr, bfn, ext] = fileparts(script_fn);
 func_header = sprintf('function %s()', bfn);
 content = [func_header content 'end'];
-content = sprintf('%s\n', strjoin_(content, '\n'));
+content = sprintf('%s\n', strjoin_(content, char(10)));
 if ~dry
     fout = fopen(script_fn, 'w');
     fprintf(fout, content);
@@ -147,21 +147,21 @@ code = {sprintf('if ~exist(fullfile(pwd, ''%s''), ''file'')', fn), ...
         sprintf('        warning(''DistPackage:BrokenLink'', [fullfile(pwd, ''%s'') ''seems to be a broken link'']);',fn),...        
                 '    end',...
                 'end'};
-code = strjoin_(code, '\n');
+code = strjoin_(code, char(10));
 end
 
 function code = code_check_file_doesnt_exist(fn)
 code = {sprintf('if exist(fullfile(pwd,''%s''), ''file'')', fn), ...
         sprintf('    throw(MException(''DistPackage:FileExists'',''File "%s" exists''));',fn),...
         'end'};
-code = strjoin_(code, '\n');
+code = strjoin_(code, char(10));
 end
 
 function code = code_check_not_windows()
 code = {'if ~isempty(strfind(computer, ''WIN''))', ...
         '    throw(MException(''DistPackage:BadOperation'', ''windows not supported''));', ...
         'end'};
-code = strjoin_(code, '\n');
+code = strjoin_(code, char(10));
 end
 
 function [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, target_matlab_ver)
@@ -225,7 +225,7 @@ end
 end
 
 function fns = read_manifest(manifest_fn)
-fns = cellfun(@(fn) strtrim(fn), strsplit_(fileread(manifest_fn), '\n'), 'UniformOutput', false);
+fns = cellfun(@(fn) strtrim(fn), strsplit_(fileread(manifest_fn), char(10)), 'UniformOutput', false);
 fns = fns(~cellfun(@isempty, fns));
 [root, ignore_bfn, ignore_ext] = fileparts(manifest_fn);
 files_not_found = cellfun(@(fn) ~exist(fullfile(root, fn), 'file'), fns);
@@ -233,7 +233,7 @@ if any(files_not_found)
     fns_not_found = cellfun(@(fn) protect_path(fn), fns(files_not_found), 'UniformOutput', false);
     throw(MException('DistPackage:FileNotFound', ...
                      sprintf('Non-existing files from %s:\n%s', ...
-                             protect_path(manifest_fn), strjoin_(fns_not_found, '\n'))));
+                             protect_path(manifest_fn), strjoin_(fns_not_found, char(10)))));
 end
 end
 
@@ -313,7 +313,7 @@ if ~exist(version_fn, 'file')
 end
 
 content = fileread(version_fn);
-if ~isempty(content) && strcmp(sprintf('\n'), content(end))
+if ~isempty(content) && strcmp(sprintf(char(10)), content(end))
     content = content(1:(end-1));
 end
 version_tag = strtrim(content);
