@@ -122,54 +122,54 @@ classdef ConcatMatrixTest < matlab.unittest.TestCase
             testCase.assertMatches(warning_msg, 'Events field not empty.*');
            
             
-            extra = struct();
-            extra.Time = 1:nrows;
-            sFile_t5 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table5', extra);
-            sFile_t6 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table6');
-            
-            bst_process('CallProcess', 'process_nst_concat_matrices', ...
-                        {sFile_t5, sFile_t6}, [], ...
-                        'stacking_type', stacking_types.column);
-
-            [warning_msg, warning_msg_id] = lastwarn;
-            testCase.assertMatches(warning_msg, 'Time field not empty.*');
+%             extra = struct();
+%             extra.Time = 1:nrows;
+%             sFile_t5 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table5', extra);
+%             sFile_t6 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table6');
+%             
+%             bst_process('CallProcess', 'process_nst_concat_matrices', ...
+%                         {sFile_t5, sFile_t6}, [], ...
+%                         'stacking_type', stacking_types.column);
+% 
+%             [warning_msg, warning_msg_id] = lastwarn;
+%             testCase.assertMatches(warning_msg, 'Time field not empty.*');
  
-            sFile_t7 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table7');
-            sFile_t8 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table8', extra);
-            
-            bst_process('CallProcess', 'process_nst_concat_matrices', ...
-                        {sFile_t7, sFile_t8}, [], ...
-                        'stacking_type', stacking_types.column);
-            
-            
-            [warning_msg, warning_msg_id] = lastwarn;
-            testCase.assertMatches(warning_msg, 'Time field not empty.*');
-            
-            
-            
-            extra = struct();
-            extra.Description = t1_col_names;
-            sFile_t9 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table9', extra);
-            sFile_t10 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table10');
-            
-            bst_process('CallProcess', 'process_nst_concat_matrices', ...
-                        {sFile_t9, sFile_t10}, [], ...
-                        'stacking_type', stacking_types.column);
-
-            [warning_msg, warning_msg_id] = lastwarn;
-            testCase.assertMatches(warning_msg, 'Description field not empty.*');
- 
-            extra.Description = t2_col_names;
-            sFile_t11 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table11');
-            sFile_t12 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table12', extra);
-            
-            bst_process('CallProcess', 'process_nst_concat_matrices', ...
-                        {sFile_t11, sFile_t12}, [], ...
-                        'stacking_type', stacking_types.column);
+%             sFile_t7 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table7');
+%             sFile_t8 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table8', extra);
+%             
+%             bst_process('CallProcess', 'process_nst_concat_matrices', ...
+%                         {sFile_t7, sFile_t8}, [], ...
+%                         'stacking_type', stacking_types.column);
+%             
+%             
+%             [warning_msg, warning_msg_id] = lastwarn;
+%             testCase.assertMatches(warning_msg, 'Time field not empty.*');
             
             
-            [warning_msg, warning_msg_id] = lastwarn;
-            testCase.assertMatches(warning_msg, 'Description field not empty.*');
+            
+%             extra = struct();
+%             extra.Description = t1_col_names;
+%             sFile_t9 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table9', extra);
+%             sFile_t10 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table10');
+%             
+%             bst_process('CallProcess', 'process_nst_concat_matrices', ...
+%                         {sFile_t9, sFile_t10}, [], ...
+%                         'stacking_type', stacking_types.column);
+% 
+%             [warning_msg, warning_msg_id] = lastwarn;
+%             testCase.assertMatches(warning_msg, 'Description field not empty.*');
+%  
+%             extra.Description = t2_col_names;
+%             sFile_t11 = nst_save_table_in_bst(t1, subject_name, 'condition', 'table11');
+%             sFile_t12 = nst_save_table_in_bst(t2, subject_name, 'condition', 'table12', extra);
+%             
+%             bst_process('CallProcess', 'process_nst_concat_matrices', ...
+%                         {sFile_t11, sFile_t12}, [], ...
+%                         'stacking_type', stacking_types.column);
+%             
+%             
+%             [warning_msg, warning_msg_id] = lastwarn;
+%             testCase.assertMatches(warning_msg, 'Description field not empty.*');
             
         end
         

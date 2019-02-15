@@ -73,6 +73,7 @@ stacking_type_int = sProcess.options.stacking_type.Value{1};
 stacking_type_str = sProcess.options.stacking_type.Value{2}{stacking_type_int};
 
 [varying_comment, common_prefix, common_suffix] = str_remove_common({sInputs.Comment}, 1);
+varying_comment(cellfun(@isempty, varying_comment)) = {''};
 
 % if ~isempty(sProcess.options.prefixes.Value)
 %     prefixes = cellfun(@strtrim, strsplit(sProcess.options.prefixes.Value, ','),...
@@ -100,15 +101,15 @@ MatRef = in_bst_matrix(sInputs(1).FileName);
 row_names = row_names_ref;
 col_names = col_names_ref;
 
-if ~isempty(MatRef.Time)
-   warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
-                   sInputs(1).FileName));
-end
-
-if ~isempty(MatRef.Description)
-   warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
-                   sInputs(1).FileName));
-end
+% if ~isempty(MatRef.Time)
+%    warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
+%                    sInputs(1).FileName));
+% end
+% 
+% if ~isempty(MatRef.Description)
+%    warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
+%                    sInputs(1).FileName));
+% end
 
 if isfield(MatRef, 'Events') && ~isempty(MatRef.Events)
    warning('Events field not empty in "%s". It will be dropped.', sInputs(1).FileName);
@@ -116,6 +117,8 @@ end
     
 values = MatRef.Value;
 values_std = MatRef.Std;
+time = MatRef.Time;
+description = MatRef.Description;
 
 MatNew = db_template('matrix');
 
@@ -127,15 +130,15 @@ MatNew = bst_history('add', MatNew, 'concat', [' - ' sInputs(1).FileName]);
 for iInput=2:length(sInputs)
     MatToCat = in_bst_matrix(sInputs(iInput).FileName);
 
-    if ~isempty(MatToCat.Time)
-       warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
-                       sInputs(iInput).FileName));
-    end
-
-    if ~isempty(MatToCat.Description)
-       warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
-                       sInputs(iInput).FileName));
-    end    
+%     if ~isempty(MatToCat.Time)
+%        warning(sprintf('Time field not empty in "%s". It will be dropped.\n Consider using field RowName.', ...
+%                        sInputs(iInput).FileName));
+%     end
+% 
+%     if ~isempty(MatToCat.Description)
+%        warning(sprintf('Description field not empty in "%s". It will be dropped.\n Consider using field ColName.', ...
+%                        sInputs(iInput).FileName));
+%     end    
     
     if isfield(MatToCat, 'Events') && ~isempty(MatToCat.Events)
        warning(sprintf('Events field not empty in "%s". It will be dropped.', ...
@@ -159,7 +162,8 @@ for iInput=2:length(sInputs)
 %         end
         values = [values ; MatToCat.Value];
         values_std = [values_std ; MatToCat.Std];
-        row_names = [row_names row_names_new];  
+        row_names = [row_names row_names_new];
+        time = [time MatToCat.Time];
     elseif stacking_type_int==stacking_types.column
         if (length(row_names_new) ~= length(row_names_ref) || ...
                 ~all(strcmp(row_names_new, row_names_ref)))
@@ -175,6 +179,7 @@ for iInput=2:length(sInputs)
         values = [values MatToCat.Value];
         values_std = [values_std MatToCat.Std];
         col_names = [col_names col_names_new];
+        description = [description MatToCat.Description];
     end
        
     MatNew = bst_history('add', MatNew, 'concat', [' - ' sInputs(iInput).FileName]);
@@ -184,9 +189,9 @@ end
 MatNew.Value = values;
 MatNew.Std = values_std;
 MatNew.RowNames = row_names;
-MatNew.Time = [];
+MatNew.Time = time;
 MatNew.ColNames = col_names;
-MatNew.Description = [];
+MatNew.Description = description;
 MatNew.DisplayUnits = MatRef.DisplayUnits; % TODO check unit consistency across inputs
 
 % Output file tag

@@ -1,5 +1,4 @@
 function varargout = process_nst_save_matrix_csv( varargin )
-
 % @=============================================================================
 % This software is part of the Brainstorm software:
 % http://neuroimage.usc.edu/brainstorm
@@ -53,6 +52,14 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.csv_file.Comment = 'CSV file:';
     sProcess.options.csv_file.Type    = 'filename';
     sProcess.options.csv_file.Value   = SelectOptions;
+    
+    sProcess.options.ignore_cols_all_zeros.Comment = 'Ignore all-zero columns';
+    sProcess.options.ignore_cols_all_zeros.Type    = 'checkbox';
+    sProcess.options.ignore_cols_all_zeros.Value   =  0;
+    
+    sProcess.options.ignore_rows_all_zeros.Comment = 'Ignore all-zero rows';
+    sProcess.options.ignore_rows_all_zeros.Type    = 'checkbox';
+    sProcess.options.ignore_rows_all_zeros.Value   =  0;
 end
 
 %% ===== FORMAT COMMENT =====
@@ -70,52 +77,21 @@ assert(length(sInput)==1);
 assert(~isempty(sProcess.options.csv_file.Value{1}));
 
 DataMat = in_bst_matrix(sInput.FileName);
+if  sProcess.options.ignore_rows_all_zeros.Value
+    rows_to_keep = any(DataMat.Value ~= 0, 2)';
+else
+    rows_to_keep = 1:size(DataMat.Value, 1);
+end
+if  sProcess.options.ignore_cols_all_zeros.Value
+    cols_to_keep = any(DataMat.Value ~= 0, 1);
+else
+    cols_to_keep = 1:size(DataMat.Value, 2);
+end
+
 [row_names, col_names] = process_nst_concat_matrices('get_axes_info', DataMat);
-table_out = array2table(DataMat.Value, 'VariableNames', col_names, ...
-                        'RowNames', row_names);
+table_out = array2table(DataMat.Value(rows_to_keep, cols_to_keep), ...
+                        'VariableNames', DataMat.ColNames(cols_to_keep), ...
+                        'RowNames', DataMat.RowNames(rows_to_keep));
 writetable(table_out, sProcess.options.csv_file.Value{1}, ...
            'Delimiter', ',', 'WriteRowNames', 1);
-end
-
-
-function nirs = Compute(channel_def, data, time, events)
-if size(time, 1) == 1
-    nirs.t = time';
-else
-    nirs.t = time;
-end
-if size(data, 2) ~= length(channel_def.Channel)
-    data = data';
-end
-
-montage_info = nst_montage_info_from_bst_channels(channel_def.Channel);
-pair_ichans = montage_info.pair_ichans;
-src_coords = montage_info.src_pos;
-det_coords = montage_info.det_pos;
-pair_sd_indexes =  montage_info.pair_sd_indexes;
-
-if isfield(channel_def.Nirs, 'Wavelengths')
-    nirs.SD.Lambda = channel_def.Nirs.Wavelengths;
-else
-    nirs.SD.Lambda = channel_def.Nirs.Hb;
-end
-ichan = 1;
-for imeasure=1:length(nirs.SD.Lambda)
-    for ipair=1:size(pair_sd_indexes, 1)
-        nirs.ml(ichan, 1) = pair_sd_indexes(ipair, 1);
-        nirs.ml(ichan, 2) = pair_sd_indexes(ipair, 2);
-        nirs.ml(ichan, 3) = 1;
-        nirs.ml(ichan, 4) = imeasure;
-        nirs.d(:, ichan) = data(:, pair_ichans(ipair, imeasure));
-        ichan = ichan + 1;
-    end
-end
-
-nirs.SD.MeasList = nirs.ml;
-nirs.SD.SrcPos = src_coords;
-nirs.SD.nSrcs = size(src_coords, 1);
-nirs.SD.DetPos = det_coords;
-nirs.SD.nDets = size(det_coords, 1);
-nirs.aux = data(:, strcmp({channel_def.Channel.Type}, 'NIRS_AUX'));
-nirs.events = events;
 end

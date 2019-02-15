@@ -32,8 +32,9 @@ else
     MatNew.RowNames = arrayfun(@(n) sprintf('row_%d', n), 1:nrows, 'UniformOutput', 0);
 end
 MatNew.RowNames = line_vector(MatNew.RowNames);
+MatNew.Time = 1:length(MatNew.RowNames);
 MatNew.ColNames = line_vector(t.Properties.VariableNames);
-
+MatNew.Description = MatNew.ColNames;
 
 sSubject = bst_get('Subject', subject_name, 1);
 if isempty(sSubject)

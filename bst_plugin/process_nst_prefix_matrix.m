@@ -114,6 +114,8 @@ for icol=1:length(MatData.ColNames)
     MatData.ColNames{icol} = [col_prefixes{icol} MatData.ColNames{icol}];
 end
 
+MatData.Description = MatData.ColNames;
+
 %TODO: allow saving in new file
 
 % Get output filename
