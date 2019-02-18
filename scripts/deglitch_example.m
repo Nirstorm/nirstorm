@@ -16,7 +16,7 @@ grad = diff(signal_tmp);
 abs_grad = abs(grad);
 std_agrad = std(abs_grad);
 glitch_canditates = [zeros(1, nb_draws) ; (abs_grad > std_factor_thresh * std_agrad) .* sign(grad)];
-glitch_flags = [abs(diff(glitch_canditates))==2 ; zeros(1, nb_draws)] & glitch_canditates;
+glitch_flags = [abs(diff(glitch_canditates))==2 ; false(1, nb_draws)] & glitch_canditates;
 glitch_flags = glitch_flags(2:end-1, :); % remove mirrored edges
 
 %% Clean glitches

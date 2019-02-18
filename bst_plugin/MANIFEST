@@ -1,3 +1,4 @@
+process_nst_deglitch.m
 process_nst_prefix_matrix.m
 nst_save_table_in_bst.m
 nst_parse_bst_item_name.m
