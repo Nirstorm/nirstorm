@@ -200,11 +200,11 @@ for igroup=1:nb_groups
         
         % Run preprocessings
         [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
-
+        
         % Run 1st level GLM
         [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
                                                                                   redone_preprocs | force_redo);
-
+        
         if isubject==1
             all_sFiles_con = cell(size(sFiles_con, 1), size(sFiles_con, 2), length(subject_names));
         end
@@ -445,10 +445,21 @@ nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process
 
 % TODO: export bad channel tagging information
 
+% Deglitching
+if options.deglitch.do
+    redo_parent = force_redo | options.deglitch.redo;
+    sFile_deglitched = nst_run_bst_proc([preproc_folder 'Deglitched'], redo_parent, ...
+                             'process_nst_deglitch', sFile_raw, [], ...
+                             'factor_std_grad', options.deglitch.agrad_std_factor);
+else
+    redo_parent = force_redo;
+    sFile_deglitched = sFile_raw;
+end
+
 % Motion correction
-redo_parent = force_redo | options.moco.redo;
+redo_parent = redo_parent | options.moco.redo;
 [sFileMoco, redo_parent] = nst_run_bst_proc([preproc_folder 'Motion-corrected'], redo_parent, ...
-                             'process_nst_motion_correction', sFile_raw, [], ...
+                             'process_nst_motion_correction', sFile_deglitched, [], ...
                              'option_event_name', 'movement_artefacts');
                          
 % Resample to 5Hz (save some space)
@@ -674,6 +685,10 @@ options.head_model.surface = 'cortex_lowres';
 options.sci.redo = 0;
 
 options.head_model.redo = 0;
+
+options.deglitch.do = 0;
+options.deglitch.redo = 0;
+options.deglitch.agrad_std_factor = 2.5;
 
 options.moco.redo = 0;
 options.moco.export_dir = fullfile('.', 'moco_marking');
