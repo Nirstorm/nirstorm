@@ -39,7 +39,15 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.InputTypes  = {'raw', 'data'};
     sProcess.OutputTypes = {'raw', 'data'};
     
-    % TODO: option to only tag as events
+    sProcess.options.factor_std_grad.Comment = 'Variation threshold: ';
+    sProcess.options.factor_std_grad.Type    = 'value';
+    sProcess.options.factor_std_grad.Value   = {2.5, '* std(gradient)', 2}; % last if nb of subunit digits, use 0 for integer
+    
+%     sProcess.options.tag_only.Comment = 'Only mark glitches as events';
+%     sProcess.options.tag_only.Type    = 'checkbox';
+%     sProcess.options.tag_only.Value   =  0;
+
+%TODO: apply only to NIRS channels
 end
 
 %% ===== FORMAT COMMENT =====
@@ -49,16 +57,18 @@ end
 
 %% ===== RUN =====
 function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
-
-sInputs.A = Compute(sInputs.A);
-
-% TODO: manage detecting only
+sInputs.A = Compute(sInputs.A, sProcess.options.factor_std_grad.Value{1});
 end
 
 %% ===== Compute =====
-function [nirs_deglitched, glitch_flags] = Compute(nirs_sig)
+function [nirs_deglitched, glitch_flags] = Compute(nirs_sig, std_factor_thresh)
+
+if nargin < 2
+    std_factor_thresh = 2.5;
+end
+
 [nb_positions, nb_samples] = size(nirs_sig);
-glitch_flags = detect_glitches(nirs_sig);
+glitch_flags = detect_glitches(nirs_sig, std_factor_thresh);
 nirs_deglitched = nirs_sig;
 for ipos=1:nb_positions
     nirs_deglitched(ipos, glitch_flags(ipos, :)) = repmat(mean(nirs_sig(ipos, :)), ...
@@ -91,9 +101,21 @@ end
 signal_tmp = [nirs_sig(:, 2)  nirs_sig  nirs_sig(:, end-1)]; % mirror edges
 grad = diff(signal_tmp, 1, 2);
 abs_grad = abs(grad);
-std_agrad = std(abs_grad, 0, 2);
+
+% Robust standard deviation of absolute gradient
+% -> clip values within 1% to 99% of total range, to remove extreme values
+% then compute reference std of absolute gradient over these clipped values
+
+sorted_signal = sort(signal_tmp, 2);
+thresh_low = sorted_signal(:, round(nb_samples*0.01));
+thresh_high = sorted_signal(:, round(nb_samples*0.99));
+for ipos=1:size(signal_tmp, 1)
+    signal_tmp(ipos, signal_tmp(ipos, :) < thresh_low(ipos)) = thresh_low(ipos);
+    signal_tmp(ipos, signal_tmp(ipos, :) > thresh_high(ipos)) = thresh_high(ipos);
+end
+std_agrad = std(abs(diff(signal_tmp, 1, 2)), 0, 2);
+
 glitch_canditates = [zeros(nb_pos, 1) (abs_grad > std_factor_thresh * std_agrad) .* sign(grad)];
 glitch_flags = [abs(diff(glitch_canditates, 1, 2))==2 false(nb_pos, 1)] & glitch_canditates;
 glitch_flags = glitch_flags(:, 2:end-1); % remove mirrored edges
-
 end

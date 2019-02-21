@@ -22,6 +22,27 @@ classdef DeglitchTest < matlab.unittest.TestCase
     
     methods(Test)
 
+        function test_detection(testCase)
+            
+            % Request utest data -> time-series + ground-truth marking
+            deglitch_fn = utest_request_data({'artifacts','glitch_data.mat'});
+            deglitch_data = load(deglitch_fn);
+            
+            glitch_flags = process_nst_deglitch('detect_glitches', deglitch_data.nirs_signal);
+            
+            if 0
+                for ipos=1:size(deglitch_data.nirs_signal, 1)
+                    figure(); hold on;
+                    plot(deglitch_data.nirs_signal(ipos, :), 'g', 'LineWidth', 3);
+                    glitches_idx = find(glitch_flags(ipos, :));
+                    plot(glitches_idx, deglitch_data.nirs_signal(ipos,glitches_idx), 'or', 'MarkerSize', 8);
+                end
+            end
+            
+            % Check against ground-truth markings
+            testCase.assertTrue(all(glitch_flags(:)==deglitch_data.glitch_flags(:)));
+        end        
+         
         function test_deglitch(testCase)
             
             % Request utest data -> time-series + ground-truth marking
@@ -52,27 +73,14 @@ classdef DeglitchTest < matlab.unittest.TestCase
                 
                 if 0
                     figure(); hold on;
-                    plot(deglitch_data.nirs_signal(ipos, :), 'k', 'LineWidth', 3);
+                    plot(deglitch_data.nirs_signal(ipos, :), 'g', 'LineWidth', 3);
                     plot(signal_clean, 'b', 'LineWidth', 2);
                     plot(deglitched_signal(ipos, :), 'r');
+                    plot(glitches_idx, deglitch_data.nirs_signal(ipos,glitches_idx), 'or', 'MarkerSize', 8);
                 end
                 
                 testCase.assertTrue(all_close(signal_clean, deglitched_signal(ipos, :)));
             end        
-        end
-        
-        function test_detection(testCase)
-            
-            % Request utest data -> time-series + ground-truth marking
-            deglitch_fn = utest_request_data({'artifacts','glitch_data.mat'});
-            deglitch_data = load(deglitch_fn);
-            
-            glitch_flags = process_nst_deglitch('detect_glitches', deglitch_data.nirs_signal);
-            
-            % Check against ground-truth markings
-            testCase.assertTrue(all(glitch_flags(:)==deglitch_data.glitch_flags(:)));
-        end
-       
-        
+        end 
     end
 end
