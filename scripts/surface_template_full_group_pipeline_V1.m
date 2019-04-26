@@ -1,4 +1,5 @@
 function surface_template_full_group_pipeline_V1()
+
  % Example for the template- and surface-based full pipeline, using the
  % function NST_PPL_SURFACE_TEMPLATE_V1
  
@@ -30,11 +31,11 @@ data_fns = nst_request_files({ {'sample_data', 'template_group_tapping', 'S01', 
                              1, nst_get_repository_url(), 1e6, root_folder);
 nirs_fns = data_fns(1:nb_subjects);
 
- %% Import data
- options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options
+%% Import data
+options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options
  
 [sFiles, reimported] = nst_ppl_surface_template_V1('import', options, nirs_fns, ...
-                                                    subject_names);
+                                                   subject_names);
 % Read events
 for ifile=1:length(sFiles)
     % Process: Read from channel
@@ -48,6 +49,7 @@ for ifile=1:length(sFiles)
         'dest', 'MOTOR');
 end
 
+% TODO: ensure that template is available
 % http://www.thomasvincent.xyz/nst_data/template/Colin27_4NIRS_Jan19.zip
 
 %% Run pipeline
