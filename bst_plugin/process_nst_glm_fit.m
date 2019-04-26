@@ -71,11 +71,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.fitting.Value   = {1, {'OLS - precoloring', 'AR-IRLS' }};
     
     sProcess.options.hpf_low_cutoff.Comment = 'Low cut-off frequency: ';
-    sProcess.options.hpf_low_cutoff.Type    = 'Value';
+    sProcess.options.hpf_low_cutoff.Type    = 'value';
     sProcess.options.hpf_low_cutoff.Value   = {0.01, 'sec', 2};
     
     sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
-    sProcess.options.trim_start.Type    = 'Value';
+    sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
     
     % Separator
