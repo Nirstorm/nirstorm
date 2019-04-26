@@ -12,10 +12,11 @@ region of interest
 
 ## Authors
 
- * ''Thomas Vincent, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
+ * ''Thomas Vincent, EPIC center, Montreal Heart Institute, Montreal, Canada''
  * ''Zhengchen Cai, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
  * ''Alexis Machado, Multimodal Functional Imaging Lab., Biomedical Engineering Dpt, McGill University, Montreal, Canada''
  * ''Edouard Delaire, Laboratoire d'Imagerie Biomédicale et CENIR-ICM, Paris, France''
+ * ''Robert Stojan, Sportpsychology, Chemnitz University of Technology, Germany''
  * ''Louis Bherer, Centre de recherche EPIC, Institut de Cardiologie de Montréal, Montréal, Canada''
  * ''Jean-Marc Lina, Electrical Engineering Dpt, Ecole de Technologie Supérieure, Montréal, Canada''
  * ''Christophe Grova, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
