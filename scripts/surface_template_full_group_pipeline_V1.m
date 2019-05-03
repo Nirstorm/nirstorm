@@ -19,11 +19,42 @@ function surface_template_full_group_pipeline_V1()
     mkdir(root_folder);
  end
  
+%% Setup brainstorm
+if ~brainstorm('status')
+    % Start brainstorm without the GUI if not already running
+    brainstorm nogui
+end
+
+%% Check Protocol
+protocol_name = 'TestSurfaceTemplateGroupPipelineV1';
+
+if isempty(bst_get('Protocol', protocol_name))
+    gui_brainstorm('CreateProtocol', protocol_name, 1, 0);
+end
+
+% Set template for all subjects
+% TODO: make a helper function nst_set_default_template_anatomy()
+sTemplates = bst_get('AnatomyDefaults');
+iTemplate = strcmpi('Colin27_4NIRS_Jan19', {sTemplates.Name});
+if ~any(iTemplate)
+    template_bfn = 'Colin27_4NIRS_Jan19.zip';
+    template_tmp_fn = nst_request_files({{'template', template_bfn}}, 1, ...
+                                        nst_get_repository_url(), 18e6, root_folder);
+    % Copy to .brainstorm/defaults/anatomy
+    copyfile(template_tmp_fn{1}, ...
+             fullfile(bst_get('BrainstormUserDir'), 'defaults', 'anatomy'));
+    % Remove temporary file
+    rmdir(template_tmp_fn, 's');
+end
+db_set_template(0, sTemplates(iTemplate), 0);
+db_save();
+ 
  %% Fetch data
 subject_names = {'Subject01', 'Subject02', 'Subject03', 'Subject04', ...
                  'Subject05', 'Subject06', 'Subject07', 'Subject08', ...
                  'Subject09', 'Subject10', };
 nb_subjects = length(subject_names);
+% TODO: resolve file names from Subject names
 data_fns = nst_request_files({ {'sample_data', 'template_group_tapping', 'Subject01', 'S01_tapping.nirs'}, ...
                                {'sample_data', 'template_group_tapping', 'Subject02', 'S02_tapping.nirs'}, ...
                                {'sample_data', 'template_group_tapping', 'Subject03', 'S03_tapping.nirs'}, ...
@@ -49,6 +80,7 @@ data_fns = nst_request_files({ {'sample_data', 'template_group_tapping', 'Subjec
 nirs_fns = data_fns(1:nb_subjects);
 
 %% Import data
+
 options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options
  
 [sFiles, reimported] = nst_ppl_surface_template_V1('import', options, nirs_fns, ...
