@@ -364,10 +364,8 @@ for iNew = 1:length(newEvents)
     end
     % Make sure that the sample indices are round values
     if ~isempty(newEvents(iNew).samples)
-        newEvents(iNew).samples = round(newEvents(iNew).samples);
         newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
     else
-        newEvents(iNew).samples = round(newEvents(iNew).times .* sFile.prop.sfreq);
         newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
     end
     % If event does not exist yet: add it at the end of the list
@@ -385,13 +383,11 @@ for iNew = 1:length(newEvents)
         %TODO, tell FT that if events are extended and were previously
         % single then bug -> FIX IT
         sFile.events(iEvt).times      = [sFile.events(iEvt).times, newEvents(iNew).times];
-        sFile.events(iEvt).samples    = [sFile.events(iEvt).samples, newEvents(iNew).samples];
         sFile.events(iEvt).epochs     = [sFile.events(iEvt).epochs, newEvents(iNew).epochs];
         sFile.events(iEvt).reactTimes = [sFile.events(iEvt).reactTimes, newEvents(iNew).reactTimes];
         % Sort by sample indices
         if (size(sFile.events(iEvt).samples, 2) > 1)
             [tmp__, iSort] = unique(sFile.events(iEvt).samples(1,:));
-            sFile.events(iEvt).samples = sFile.events(iEvt).samples(:,iSort);
             sFile.events(iEvt).times   = sFile.events(iEvt).times(:,iSort);
             sFile.events(iEvt).epochs  = sFile.events(iEvt).epochs(iSort);
             if ~isempty(sFile.events(iEvt).reactTimes)
