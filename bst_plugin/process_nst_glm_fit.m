@@ -185,7 +185,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     % TODO: also handle single events for event-related design
     isExtended = false(1,length(ievents));
     for ievt=1:length(ievents)
-        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).samples, 1) == 2);
+        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).times, 1) == 2);
     end
     if ~all(isExtended)
          bst_error(sprintf('Simple events not supported: %s ', ...
