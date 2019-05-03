@@ -265,7 +265,8 @@ for igroup=1:nb_groups
                               nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
                               contrasts(icon).label);
                 fig_fn = fullfile(options.fig_dir, fig_bfn);
-                if options.make_figs && options.GLM_group.contrast_tstat.plot.do && ...
+                if ~isempty(options.fig_dir) && options.make_figs && ...
+                    options.GLM_group.contrast_tstat.plot.do && ...
                     (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))   
                     plot_stat(sFile_GLM_gp_ttest, fig_fn, options, 0, 1, sSubjectDefault);
                 end
@@ -388,7 +389,7 @@ if options.GLM_group.do && options.GLM_group.rois_summary.do
         all_sFile_table_zscores{igroup} = sFile_table_zscores;
         any_rois_summary_redone = any_rois_summary_redone | redone;
 
-        if redone
+        if redone && ~isempty(options.GLM_group.rois_summary.csv_export_output_dir)
             % Save each group data separately
             if isempty(group_label)
                 group_prefix = '';
@@ -417,14 +418,16 @@ if options.GLM_group.do && options.GLM_group.rois_summary.do
     [varying_label, common_prefix, common_suffix] = str_remove_common({groups.label}, 1);
     varying_label(cellfun(@isempty, varying_label)) = {''};
     
-    % Save as CSV
-    csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
-                      [common_prefix strjoin(varying_label, '_') common_suffix '_z-scores.csv']);
-    nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
-                    'process_nst_save_matrix_csv', ...
-                    sFile_table_zscores, [], ...
-                    'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 1, ...
-                    'csv_file', {csv_fn, 'ASCII-CSV'});
+    if ~isempty(options.GLM_group.rois_summary.csv_export_output_dir)
+        % Save as CSV
+        csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
+                          [common_prefix strjoin(varying_label, '_') common_suffix '_z-scores.csv']);
+        nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
+                        'process_nst_save_matrix_csv', ...
+                        sFile_table_zscores, [], ...
+                        'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 1, ...
+                        'csv_file', {csv_fn, 'ASCII-CSV'});
+    end
 end
 
 
@@ -478,7 +481,7 @@ nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process
 
 fig_bfn = sprintf('%s_%s_signals_raw.png', SubjectName, data_tag);
 fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
-if options.make_figs && options.plot_raw_signals.do && ...
+if ~isempty(options.fig_dir) && options.make_figs && options.plot_raw_signals.do && ...
         (force_redo || options.plot_raw_signals.redo || ~exist(fig_fn, 'file'))
    plot_signals(sFile_raw, fig_fn, options);
 end
@@ -617,7 +620,8 @@ for ifile=1:length(sFiles_GLM)
                 nst_format_pval(options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold), ...
                 contrasts(icon).label);
             fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
-            if options.make_figs && options.GLM_1st_level.contrast_tstat.plot.do && ...
+            if ~isempty(options.fig_dir) && options.make_figs && ...
+                    options.GLM_1st_level.contrast_tstat.plot.do && ...
                     (redo || options.GLM_1st_level.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))
                 hFigSurfData = view_surface_data(sSubject.Surface(sSubject.iCortex).FileName, ...
                     sFile_GLM_ttest, 'NIRS', 'NewFigure');
@@ -729,8 +733,10 @@ options.deglitch.redo = 0;
 options.deglitch.agrad_std_factor = 2.5;
 
 options.moco.redo = 0;
-options.moco.export_dir = fullfile('.', 'moco_marking');
-
+options.moco.export_dir = ''; % Where to export motion correction events manually tagged (for backup) 
+                              % -> will be exported before running the analysis
+                              % -> will be reimported everytime the importation
+                              %    stage is run
 options.resample.redo = 0;
 options.resample.freq = 5; % Hz
 
@@ -743,7 +749,11 @@ options.high_pass_filter.low_cutoff = 0.01; %Hz
 options.tag_bad_channels.redo = 0;
 options.tag_bad_channels.max_prop_sat_ceil = 1; % no tagging
 options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
-options.tag_bad_channels.export_dir = fullfile('.', 'moco_marking');
+options.tag_bad_channels.export_dir = ''; % Where to export bad channel taggings (backup) 
+                                          % -> will be exported before
+                                          %    running the analysis
+                                          % -> will be reimported everytime 
+                                          %    the importation stage is run 
 
 options.projection.redo = 0;
 proj_methods = process_nst_cortical_projection('methods');
@@ -772,7 +782,7 @@ options.GLM_group.redo = 0;
 options.GLM_group.rois_summary.do = 0;
 options.GLM_group.rois_summary.atlas = 'MarsAtlas';
 options.GLM_group.rois_summary.matrix_col_prefix = '';
-options.GLM_group.rois_summary.csv_export_output_dir = 'results';
+options.GLM_group.rois_summary.csv_export_output_dir = '';
 mask_combinations = get_mask_combinations();
 options.GLM_group.rois_summary.group_masks_combination = mask_combinations.none; % mask_combinations.intersection, mask_combinations.union
 options.GLM_group.rois_summary.group_masks_combine_contrasts = 0; 
@@ -780,7 +790,7 @@ options.GLM_group.rois_summary.group_masks_combine_contrasts = 0;
 options.make_figs = 1;
 options.save_fig_method = 'saveas'; % 'saveas', 'export_fig'
 options.export_fig_dpi = 90;
-options.fig_dir = fullfile('.', 'figs');
+options.fig_dir = '';
 options.fig_background = []; % use default background
 options.fig_cortex_view = [89 -24]; % Azimuth and Elevation
                                     % to adjust them manually, right-click on fig 
@@ -887,7 +897,7 @@ function folder = create_dir(folder)
 if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
         exist(fullfile(folder, '..', 'nst_install.m'), 'file') || ...
         exist(fullfile(folder, '..', '..', 'nst_install.m'), 'file')
-    warning('Data folder should not be part of nirstorm source folders (%s)', folder);
+    warning('Processing folder should not be part of nirstorm source folders (%s)', folder);
 end
 
 if ~isempty(folder) && ~exist(folder, 'dir')
