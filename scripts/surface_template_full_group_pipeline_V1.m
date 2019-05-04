@@ -1,7 +1,22 @@
 function surface_template_full_group_pipeline_V1()
 
  % Example for the template- and surface-based full pipeline, using the
- % function NST_PPL_SURFACE_TEMPLATE_V1
+ % function NST_PPL_SURFACE_TEMPLATE_V1.
+ %
+ % This script downloads some sample data for 10 "dummy" subjects, as well as
+ % the Colin27_4NIRS template if not available (total less than 50 Mb, 
+ % the user is asked for download confirmation).
+ %
+ % Data are imported in a dedicated protocol, using specific name convention
+ % handled by NST_PPL_SURFACE_TEMPLATE_V1.
+ % Preprocessings and processings are then run until group-level analysis.
+ % See NST_PPL_SURFACE_TEMPLATE_V1 for more details.
+ %
+ % This script illustrates a fully functional analysis pipeline that can
+ % serve as a basis for another custom study.
+ %
+ % For a more detailed description, see the wiki page:
+ % TODO: add wiki page
  
  %% Define experiment folder
  % where example data will downloaded and result figures will be stored
@@ -85,21 +100,19 @@ options = nst_ppl_surface_template_V1('get_options'); % get default pipeline opt
  
 [sFiles, reimported] = nst_ppl_surface_template_V1('import', options, nirs_fns, ...
                                                    subject_names);
-% Read events
+% Read events as extended
 for ifile=1:length(sFiles)
+    % TODO: use extended events
     % Process: Read from channel
     bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
-        'stimchan',  'NIRS_AUX', ...
-        'trackmode', 3, ...  % Value: detect the changes of channel value
-        'zero',      0);
+                'stimchan',  'NIRS_AUX', ...
+                'trackmode', 3, ...  % Value: detect the changes of channel value
+                'zero',      0);
     % Process: Rename event (standard_fix>standard)
     bst_process('CallProcess', 'process_evt_rename', sFiles{ifile}, [], ...
-        'src',  'AUX1', ...
-        'dest', 'MOTOR');
+                'src',  'AUX1', ...
+                'dest', 'motor');
 end
-
-% TODO: ensure that template is available
-% http://www.thomasvincent.xyz/nst_data/template/Colin27_4NIRS_Jan19.zip
 
 %% Run pipeline
 % Can be in another script if manual markings are required
