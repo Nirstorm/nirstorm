@@ -479,12 +479,13 @@ nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process
 
 % TODO: export bad channel tagging information
 
-fig_bfn = sprintf('%s_%s_signals_raw.png', SubjectName, data_tag);
-fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
-if ~isempty(options.fig_dir) && options.make_figs && options.plot_raw_signals.do && ...
-        (force_redo || options.plot_raw_signals.redo || ~exist(fig_fn, 'file'))
-   plot_signals(sFile_raw, fig_fn, options);
-end
+% TODO: plot raw input signals
+% fig_bfn = sprintf('%s_%s_signals_raw.png', SubjectName, data_tag);
+% fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
+% if ~isempty(options.fig_dir) && options.make_figs && options.plot_raw_signals.do && ...
+%         (force_redo || options.plot_raw_signals.redo || ~exist(fig_fn, 'file'))
+%    plot_signals(sFile_raw, fig_fn, options);
+% end
 
 % Deglitching
 if options.deglitch.do
@@ -741,7 +742,7 @@ options.resample.redo = 0;
 options.resample.freq = 5; % Hz
 
 options.dOD.redo = 0;
-options.dOD.baseline_def = 0; % 0: mean, 1: median
+options.dOD.baseline_def = 1; % 1: mean, 2: median
 
 options.high_pass_filter.redo = 0;
 options.high_pass_filter.low_cutoff = 0.01; %Hz
@@ -779,6 +780,12 @@ options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method = 'none';
 
 options.GLM_group.do = 1;
 options.GLM_group.redo = 0;
+
+options.GLM_group.contrast_tstat.plot.do = 1;
+options.GLM_group.contrast_tstat.plot.redo = 0;
+options.GLM_group.contrast_tstat.plot.pvalue_threshold = 0.001;
+options.GLM_group.contrast_tstat.plot.pvalue_mcc_method = 'none';
+
 options.GLM_group.rois_summary.do = 0;
 options.GLM_group.rois_summary.atlas = 'MarsAtlas';
 options.GLM_group.rois_summary.matrix_col_prefix = '';
@@ -894,14 +901,16 @@ function folder = create_dir(folder)
 % Check that folder is not a subfolder of nirstorm sources (encourage good practice
 % not to store data in source code folders)
 
-if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
-        exist(fullfile(folder, '..', 'nst_install.m'), 'file') || ...
-        exist(fullfile(folder, '..', '..', 'nst_install.m'), 'file')
-    warning('Processing folder should not be part of nirstorm source folders (%s)', folder);
-end
+if ~isempty(folder)
+    if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
+            exist(fullfile(folder, '..', 'nst_install.m'), 'file') || ...
+            exist(fullfile(folder, '..', '..', 'nst_install.m'), 'file')
+        warning('Processing folder should not be part of nirstorm source folders (%s)', folder);
+    end
 
-if ~isempty(folder) && ~exist(folder, 'dir')
-    mkdir(folder);
+    if ~exist(folder, 'dir')
+        mkdir(folder);
+    end
 end
 
 end

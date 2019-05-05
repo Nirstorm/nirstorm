@@ -198,11 +198,7 @@ else
     else
         message = 'Nothing to download';        
     end
-    if confirm_download && bst_interactive
-        java_dialog('msgbox', message, download_title);
-    else
-        fprintf('Nirstorm:RequestFiles >>> %s\n', message);
-    end
+    fprintf('Nirstorm:RequestFiles >>> %s\n', message);
 end
 
 if ~isempty(downloads_failed)

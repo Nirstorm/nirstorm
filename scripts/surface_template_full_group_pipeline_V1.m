@@ -3,14 +3,22 @@ function surface_template_full_group_pipeline_V1()
  % Example for the template- and surface-based full pipeline, using the
  % function NST_PPL_SURFACE_TEMPLATE_V1.
  %
- % This script downloads some sample data for 10 "dummy" subjects, as well as
- % the Colin27_4NIRS template if not available (total less than 50 Mb, 
- % the user is asked for download confirmation).
+ % This script downloads some sample data of 10 "dummy" subjects (27 Mb), 
+ % as well as the Colin27_4NIRS template (19 Mb) if not available.
+ % For the analysis part, precomputed fluence data are also downloaded.
+ % Total max amount of data to download: 50 Mb, the user is asked for download 
+ % confirmation.
  %
  % Data are imported in a dedicated protocol, using specific name convention
  % handled by NST_PPL_SURFACE_TEMPLATE_V1.
- % Preprocessings and processings are then run until group-level analysis.
- % See NST_PPL_SURFACE_TEMPLATE_V1 for more details.
+ % Preprocessings and processings are then run until group-level analysis:
+ %          1) Resampling to 5hz
+ %          2) Detect bad channels
+ %          3) Convert to delta optical density
+ %          4) High pass filter
+ %          5) Project on the cortical surface using head
+ %          6) 1st level GLM (pre-coloring)
+ %          7 level GLM with MFX contrast t-maps
  %
  % This script illustrates a fully functional analysis pipeline that can
  % serve as a basis for another custom study.
@@ -95,36 +103,33 @@ data_fns = nst_request_files({ {'sample_data', 'template_group_tapping', 'Subjec
 nirs_fns = data_fns(1:nb_subjects);
 
 %% Import data
+options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options 
+[sFiles, imported] = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
 
-options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options
- 
-[sFiles, reimported] = nst_ppl_surface_template_V1('import', options, nirs_fns, ...
-                                                   subject_names);
-% Read events as extended
+% Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
-    % TODO: use extended events
-    % Process: Read from channel
-    bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
-                'stimchan',  'NIRS_AUX', ...
-                'trackmode', 3, ...  % Value: detect the changes of channel value
-                'zero',      0);
-    % Process: Rename event (standard_fix>standard)
-    bst_process('CallProcess', 'process_evt_rename', sFiles{ifile}, [], ...
-                'src',  'AUX1', ...
-                'dest', 'motor');
+    if imported(ifile)
+        % Read events from aux channel
+        bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
+                    'stimchan',  'NIRS_AUX', ...
+                    'trackmode', 3, ...  % Value: detect the changes of channel value
+                    'zero',      0);
+        % Rename event AUX1 -> motor
+        bst_process('CallProcess', 'process_evt_rename', sFiles{ifile}, [], ...
+                    'src',  'AUX1', ...
+                    'dest', 'motor');
+        % Convert to extended event-> add duration of 30 sec to all motor events
+        bst_process('CallProcess', 'process_evt_extended', sFiles{ifile}, [], ...
+                    'eventname',  'motor', ...
+                    'timewindow', [0, 30]);
+    end
 end
 
 %% Run pipeline
-% Can be in another script if manual markings are required
-
-% Specify directories for saving manual markings (not yet implemented)
-%   options.moco.export_dir = 'path/to/store/motion_events'
-%   options.tag_bad_channels.export_dir = 'path/to/store/bad_channels'
-
-options.GLM_1st_level.contrasts(1).name = 'motor';
-options.GLM_1st_level.contrasts(1).vector = [1 0];
+options.GLM_1st_level.stimulation_events = {'motor'};
+options.GLM_1st_level.contrasts(1).label = 'motor';
+options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a string
 
 % Run the pipeline (and  save user markings):
 nst_ppl_surface_template_V1('analyse', options, subject_names); % Run the full pipeline
-
 end
