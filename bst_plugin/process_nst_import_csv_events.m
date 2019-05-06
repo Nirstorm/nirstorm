@@ -363,11 +363,11 @@ for iNew = 1:length(newEvents)
         iEvt = [];
     end
     % Make sure that the sample indices are round values
-    if ~isempty(newEvents(iNew).samples)
-        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
-    else
-        newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
-    end
+    %if ~isempty(newEvents(iNew).samples)
+    %    newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+    %else
+    %    newEvents(iNew).times   = newEvents(iNew).samples ./ sFile.prop.sfreq;
+    %end
     % If event does not exist yet: add it at the end of the list
     if isempty(iEvt)
         if isempty(sFile.events)
