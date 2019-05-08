@@ -54,7 +54,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
             assert(length(events) == 1);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - 1482333540.553) <= nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - 1482333570.823) <= nirs_dt);
@@ -78,7 +78,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             all_onsets = [events.times];
             assert(all(all(all_onsets > 1482333369.446 - nirs_dt)));
             assert(all(all(all_onsets < 1482334222.724 + nirs_dt)));
@@ -238,7 +238,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - (1482333540.553 + offset)) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - (1482333570.823 + offset)) < nirs_dt);
             utest_reset_bst();
@@ -261,7 +261,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - (1482333540.553 - 1482333369.446 + 50)) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - (1482333570.823 - 1482333369.446 + 50)) < nirs_dt);
             utest_reset_bst();
@@ -297,7 +297,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'clicGaudio')).times(1, 1) - 23.7) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'clicGaudio')).times(2, 1) - 25.7) < nirs_dt);
             utest_reset_bst();
@@ -360,7 +360,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 1);
+            assert(size(events(1).times, 1) == 1);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1) - 1482333540.553) < nirs_dt);
             utest_reset_bst();
             
@@ -382,7 +382,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - 1482333540.553) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - 1482333570.823) < nirs_dt);
             utest_reset_bst();
@@ -418,7 +418,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - 1482333540553) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - 1482333570823) < nirs_dt);
             utest_reset_bst();
@@ -441,7 +441,7 @@ classdef CSVImportTest < matlab.unittest.TestCase
                 'confirm_importation', 0);
             assert(~isempty(sFiles_processed));
             events = get_events(sFiles_processed);
-            assert(size(events(1).samples, 1) == 2);
+            assert(size(events(1).times, 1) == 2);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(1, 1) - 1482333.540553) < nirs_dt);
             assert(abs(events(strcmp({events.label}, 'DMNirs')).times(2, 1) - 1482333.570823) < nirs_dt);
             utest_reset_bst();
