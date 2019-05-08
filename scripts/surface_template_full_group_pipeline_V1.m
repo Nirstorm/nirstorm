@@ -132,4 +132,5 @@ options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a string
 
 % Run the pipeline (and  save user markings):
 nst_ppl_surface_template_V1('analyse', options, subject_names); % Run the full pipeline
+%TODO: full reload of GUI tree at end of pipeline
 end
