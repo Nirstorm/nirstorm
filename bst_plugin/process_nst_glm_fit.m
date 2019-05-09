@@ -508,8 +508,7 @@ function [X, names, hrf] = make_design_matrix(time, events, hrf_type, hrf_durati
     end
     
     %% Make stimulus-induced design matrix
-    n_samples = length(time);
-    X = nst_make_event_regressors(events, hrf, n_samples);
+    X = nst_make_event_regressors(events, hrf, time);
     names = {events.label};
     
     %% Add trend function
