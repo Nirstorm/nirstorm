@@ -22,6 +22,54 @@ classdef CSVImportTest < matlab.unittest.TestCase
     
     methods(Test)
         
+        function test_csv_import_event_merge(testCase)
+            paradigm_fn = utest_request_data({'lesca_data','lesca_task_data_block.xls'});
+            paradigm_file_sel = {paradigm_fn, 'CSV'};
+            nirs_fn = utest_request_data({'dummy.nirs'});
+            nirs = load(nirs_fn, '-mat');
+            nirs_dt = diff(nirs.t(1:2));
+            
+            sFiles_dummy = utest_import_nirs_in_bst(nirs_fn);
+
+            event_orig = db_template('event');
+            event_orig.label = 'DMNirs';
+            event_orig.times = [10 ; 15];
+            event_orig.epochs     = ones(1, size(event_orig.times, 2));
+            event_orig.channels   = cell(1, size(event_orig.times, 2));
+            event_orig.notes      = cell(1, size(event_orig.times, 2));
+            process_nst_import_csv_events('import_events', [], sFiles_dummy, event_orig);
+            
+            trial_span_types = process_nst_import_csv_events('get_trial_spans_opt');
+            time_units = process_nst_import_csv_events('get_time_units_opt');
+            time_origin_types = process_nst_import_csv_events('get_time_origin_opt');
+            
+            sFiles_processed = bst_process('CallProcess', ...
+                'process_nst_import_csv_events', ...
+                sFiles_dummy, [], ...
+                'evtfile', paradigm_file_sel, ...
+                'delimiter', '\t', ...
+                'trial_label_column', 'blockType', ...
+                'trial_start_column', 'blockClockBegin', ...
+                'span_type', trial_span_types.START_END, ...
+                'trial_end_column', 'blockClockEnd', ...
+                'time_unit', time_units.MILLISECOND, ...
+                'time_origin_type', time_origin_types.OFFSET, ...
+                'time_origin_offset_sec', {0.0, '', 0}, ...
+                'entry_filters', 'dbCurrentSessionId=22555,blockType=DMNirs', ...
+                'max_events', 1000, ...
+                'confirm_importation', 0);
+            assert(~isempty(sFiles_processed));
+            events = get_events(sFiles_processed);
+            assert(length(events) == 1);
+            assert(size(events(1).times, 1) == 2);
+            
+            i_evt = strcmp({events.label}, 'DMNirs');
+            assert(events(i_evt).times(1, 1) == event_orig.times(1, 1));
+            assert(events(i_evt).times(2, 1) == event_orig.times(2, 1));
+            assert(abs(events(i_evt).times(1, 2) - 1482333540.553) <= nirs_dt);
+            assert(abs(events(i_evt).times(2, 2) - 1482333570.823) <= nirs_dt);
+        end
+        
         function test_csv_import_filters(testCase)
             global GlobalData;
             
