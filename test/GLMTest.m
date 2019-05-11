@@ -44,25 +44,33 @@ classdef GLMTest < matlab.unittest.TestCase
             
             % Check beta estimates, non-regression test at specific voxel
             % where esimtates are the most accurate
+            
+            % TODO: better handle unit conversion
+            %glm_results_hbo = nst_convert_unit(glm_results_hbo, 'mol.l-1', 'mumol.l-1');
+            beta_map_hb = beta_map_hb * 1e6; %convert to mumol
             glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
             poi_activ = 4491; % for condition 1
-            testCase.assertTrue( abs(beta_map_hb(1, 1, poi_activ)-glm_results_hbo.beta(1,poi_activ)) < 1e-6);
+            testCase.assertTrue( abs(beta_map_hb(1, 1, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 1)) < 5);
             poi_activ = 4890; % for condition 2
-            testCase.assertTrue( abs(beta_map_hb(1, 2, poi_activ)-glm_results_hbo.beta(2,poi_activ)) < 3.5e-7);
+            testCase.assertTrue( abs(beta_map_hb(1, 2, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 2)) < 1);
             
             glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
             poi_activ = 4539; % for condition 1
-            testCase.assertTrue( abs(beta_map_hb(2, 1, poi_activ)-glm_results_hbr.beta(1,poi_activ)) < 2e-7);
+            testCase.assertTrue( abs(beta_map_hb(2, 1, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 1)) < 2);
             poi_activ = 4780; % for condition 2
-            testCase.assertTrue( abs(beta_map_hb(2, 2, poi_activ)-glm_results_hbr.beta(2,poi_activ)) < 2e-7);
+            testCase.assertTrue( abs(beta_map_hb(2, 2, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 2)) < 0.2);
 
             % Check activation detection (p-val thresholding)
-            stat_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_compute_ttest', ...
-                                       sGlmResults{1}, [], ...
-                                       'Contrast', '[1 0]');
-            stat_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_compute_ttest', ...
-                                       sGlmResults{1}, [], ...
-                                       'Contrast', '[0 1]');
+            con_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{1}, [], ...
+                                                  'Contrast', '[1 0]');
+            stat_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
+                                                  con_sResults_stim1_hbo, [], ...
+                                                  'tail', 'two');
+            con_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{2}, [], ...
+                                                  'Contrast', '[0 1]');
+            stat_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
+                                                  con_sResults_stim2_hbo, [], ...
+                                                  'tail', 'two');
                                    
             stat_results_stim1_hbo = in_bst_results(stat_sResults_stim1_hbo.FileName);
             stat_results_stim2_hbo = in_bst_results(stat_sResults_stim2_hbo.FileName);
@@ -89,6 +97,7 @@ classdef GLMTest < matlab.unittest.TestCase
             
             % Test that all truely activated vertices are detected 
             % limit to vertices not too deep (<3cm)
+            %TODO: check activation tests again
             max_depth = 0.03; % meter
             testCase.assertTrue(all(pmask_stim1_hbo(activation_mask_stim1_hbo & depth<max_depth)==1));
             testCase.assertTrue(all(pmask_stim2_hbo(activation_mask_stim2_hbo & depth<max_depth)==1));
@@ -105,7 +114,15 @@ classdef GLMTest < matlab.unittest.TestCase
     
 end
 
+function converted = nst_convert_unit(values, unit_in, unit_out)
+%TODO: test & doc
+assert(units_homogeneous(unit_in, unit_out));
+converted = values/get_unit_factor(unit_in) * get_unit_factor(unit_out);
+end
+
 function [hb_cortex, beta_map_hb, activation_scout, stim_event_names] = dOD_from_simulated_cortical_activation(tmp_dir)
+
+% Returned beta_map_hb is in mol.l-1
 
 dt = 0.1; %sec
 nb_samples = 6000;
@@ -148,7 +165,7 @@ copyfile(data_fns{2}, fullfile(tmp_dir, 'optodes.txt'));
 %% Import data in brainstorm
 [subject_name, sSubject, iSubject] = bst_create_test_subject();
 % Use lowres mid as default surface: 
-db_surface_default(iSubject, 'Cortex', find(strcmp({sSubject.Surface.Comment}, 'cortex_lowres'))); 
+db_surface_default(iSubject, 'Cortex', find(strcmp({sSubject.Surface.Comment}, 'mid_lowres'))); 
 sDummy = utest_import_nirs_in_bst(nirs_fn, 0);
 
 %% Inject headmodel

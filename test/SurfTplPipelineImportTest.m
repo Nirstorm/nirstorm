@@ -23,10 +23,11 @@ classdef SurfTplPipelineImportTest < matlab.unittest.TestCase
     methods(Test)
         
         function test_import_subjects(testCase)
-            nirs_fns = simulate_nirs();
-            options = nst_ppl_surface_template_V1('setup');
-            options.moco.export_dir = fullfile(testCase.tmp_dir, 'moco');
-            sFilesRaw = nst_ppl_surface_template_V1('import', {'data1.nirs', 'data2.nirs'}, {'subj1', 'subj2'});
+            % TODO
+%             nirs_fns = simulate_nirs();
+%             options = nst_ppl_surface_template_V1('setup');
+%             options.moco.export_dir = fullfile(testCase.tmp_dir, 'moco');
+%             sFilesRaw = nst_ppl_surface_template_V1('import', {'data1.nirs', 'data2.nirs'}, {'subj1', 'subj2'});
 
 
         end
