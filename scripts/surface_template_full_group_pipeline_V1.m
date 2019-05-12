@@ -128,7 +128,7 @@ end
 %% Run pipeline
 options.GLM_1st_level.stimulation_events = {'motor'};
 options.GLM_1st_level.contrasts(1).label = 'motor';
-options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a string
+options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a vector of weights, as a string 
 
 % Run the pipeline (and  save user markings):
 nst_ppl_surface_template_V1('analyse', options, subject_names); % Run the full pipeline

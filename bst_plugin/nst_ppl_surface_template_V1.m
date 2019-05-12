@@ -2,7 +2,12 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %NST_PPL_SURFACE_TEMPLATE_V1
 % Manage a full template- and surface-based pipeline starting from raw NIRS data
 % up to GLM group analysis (if enough subjects).
-% Can keep track of user-defined markings outside of brainstorm db 
+%
+% IMPORTANT: although each subject has its own optode coordinate file during importation,
+% the same optode coordinates are used for all subjects. These coordinates
+% are the one from the first given subject.
+%
+% This pipeline can keep track of user-defined markings outside of brainstorm db 
 % such as movement events and bad channels. This allows to safely flush all
 % brainstorm data while keeping markings.
 % 
@@ -708,13 +713,17 @@ else
 end
 
 % Compute head model for all pairs if needed
+% Here the montage coordinates of one single subject are used to compute the 
+% head model. Then this "template" head model will be used to create the head model 
+% for any other subject. Going from the template head model to another head
+% model only uses pairing information, and thus ignores subject-specific
+% montage coordinates (see process_nst_sub_headmodel).
 [dummy_out, redone] = nst_run_bst_proc(head_model_comment, options.head_model.redo || force_redo, ...
                                        'process_nst_import_head_model', file_raw_fm, [], ...
                                        'use_closest_wl', 1, 'use_all_pairs', 1, ...
                                        'force_median_spread', 0, ...
                                        'normalize_fluence', 1, ...
                                        'smoothing_fwhm', 0);
-
 end
 
 function options = get_options()
