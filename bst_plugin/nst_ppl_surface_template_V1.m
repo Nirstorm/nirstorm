@@ -121,7 +121,20 @@ switch action
     case 'rois_summary.get_mask_combinations'
         varargout{1} = get_mask_combinations();
         return;
-    case 'import'
+        
+    case 'import_mri'
+        if nargin >= 4
+            subject_names = arg2;
+        else
+            subject_names = cell(size(arg1));
+            subject_names(:) = {''};
+        end
+        
+        [imported_files, redone] = import_mri_files(arg1, subject_names, options);
+        varargout{1} = imported_files;
+        varargout{2} = redone;
+        return;
+    case 'import_nirs'
         if nargin >= 4
             subject_names = arg2;
         else
@@ -730,7 +743,13 @@ function options = get_options()
 
 options.redo_all = 0;
 
+
 options.import.redo = 0;
+
+options.mri.nvertices = 2500;
+options.mri.folder_type='FreeSurfer'; 
+options.mri.aseg=1;  %Import ASEG atlas (FreeSurfer only)
+
 
 options.head_model.surface = 'cortex_lowres';
 
@@ -828,6 +847,55 @@ operations = process_nst_combine_masks('get_mask_combinations');
 operations.none = length(fieldnames(operations)) + 1;
 end
 
+
+function [files_in, redone_imports] = import_mri_files(mri_folders, subject_names, options)
+files_in = cell(size(mri_folders));
+redone_imports = zeros(size(mri_folders));
+for ifile=1:length(mri_folders)
+    %% Import data
+    mri_folder = mri_folders{ifile};
+    if isempty(subject_names{ifile})
+        [root, subject_name, ext] = fileparts(nirs_fn);
+    else
+        subject_name = subject_names{ifile};
+    end
+    
+    sSubject = bst_get('Subject', subject_name, 1);
+    if isempty(sSubject)
+        [sSubject, iSubject] = db_add_subject(subject_name, [], 0, 0);
+    end
+    
+    redone=options.import.redo && size(sSubject.Surface,2) >= 1;
+    if redone  || ~size(sSubject.Surface,2)
+        fiducial_file=fullfile(mri_folder,'fiducials.mat');
+        if exist(fiducial_file,'file')
+            fiducials=load(fiducial_file);
+            bst_process('CallProcess', 'process_import_anatomy', [], [], ... 
+                                   'subjectname', subject_name, ...
+                                   'mrifile',     {mri_folder, options.mri.folder_type}, ...
+                                   'nvertices',   options.mri.nvertices, ...
+                                   'nas', fiducials.NAS, ...
+                                   'lpa', fiducials.LPA, ...
+                                   'rpa', fiducials.RPA, ...
+                                   'ac' , fiducials.AC,  ...
+                                   'pc' , fiducials.PC,  ...
+                                   'ih' , fiducials.IH,  ...
+                                   'aseg',options.mri.aseg );
+        else
+            bst_process('CallProcess', 'process_import_anatomy', [], [], ... 
+                                   'subjectname', subject_name, ...
+                                   'mrifile',     {mri_folder, options.mri.folder_type}, ...
+                                   'nvertices',   options.mri.nvertices, ...
+                                   'aseg',options.mri.aseg );
+
+        end
+    end
+    %Todo: remesh head model.
+    redone_imports(ifile) = redone;
+    files_in{ifile} = mri_folder;
+end
+
+end
 function [files_in, redone_imports] = import_nirs_files(nirs_fns, subject_names, options)
 files_in = cell(size(nirs_fns));
 redone_imports = zeros(size(nirs_fns));
