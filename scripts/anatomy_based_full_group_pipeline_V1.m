@@ -50,14 +50,15 @@ end
 protocol_name = 'TestAnatomyBasedGroupPipelineV1';
 
 if isempty(bst_get('Protocol', protocol_name))
-    gui_brainstorm('CreateProtocol', protocol_name, 1, 0);
+    % Might need a fix
+    gui_brainstorm('CreateProtocol', protocol_name, 0, 0);
 end
 db_save();
  %% Fetch data
 subject_names = {'S01',               ...
-                 'S04', 'S05',        ...
-                 'S07', 'S08', 'S09', ...
-                 'S10', 'S11'};
+                  'S04', 'S05',        ...
+                  'S07', 'S08', 'S09', ...
+                  'S10', 'S11'};
              
 nb_subjects = length(subject_names);
 % TODO: resolve file names from Subject names
@@ -77,12 +78,23 @@ mri_folders=data_fns(1:nb_subjects);
 nirs_fns = data_fns((1+nb_subjects):2*nb_subjects);
 
 %% Import data
-options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options 
 
+options = nst_ppl_surface_template_V1('get_options');
 
-[sFiles, imported] = nst_ppl_surface_template_V1('import_mri', options, mri_folders, subject_names);
+options.import.useDefaultAnat=0;
+options.import.mri_folder_type='FreeSurfer';
+options.import.nvertices = 2500;
+options.import.aseg=1;
 
-[sFiles, imported] = nst_ppl_surface_template_V1('import_nirs', options, nirs_fns, subject_names);
+options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subjects);
+
+for i=1:nb_subjects
+    options.import.subject{i}.name=subject_names{i};
+    options.import.subject{i}.nirs_fn=nirs_fns{i};
+    options.import.subject{i}.mri_folder=mri_folders{i};
+end    
+
+[sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
 
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
