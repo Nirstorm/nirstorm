@@ -56,9 +56,9 @@ end
 db_save();
  %% Fetch data
 subject_names = {'S01',               ...
-                  'S04', 'S05',        ...
-                  'S07', 'S08', 'S09', ...
-                  'S10', 'S11'};
+                 'S04', 'S05',        ...
+                 'S07', 'S08', 'S09', ...
+                 'S10', 'S11'};
              
 nb_subjects = length(subject_names);
 % TODO: resolve file names from Subject names
@@ -76,7 +76,7 @@ data_fns = nst_request_files(requested_files, ...
                          
 mri_folders=data_fns(1:nb_subjects);
 nirs_fns = data_fns((1+nb_subjects):2*nb_subjects);
-
+headpoints=data_fns((1+3*nb_subjects):4*nb_subjects);
 %% Import data
 
 options = nst_ppl_surface_template_V1('get_options');
@@ -92,6 +92,7 @@ for i=1:nb_subjects
     options.import.subject{i}.name=subject_names{i};
     options.import.subject{i}.nirs_fn=nirs_fns{i};
     options.import.subject{i}.mri_folder=mri_folders{i};
+    options.import.subject{i}.additional_headpoints=headpoints{i};
 end    
 
 [sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
@@ -99,17 +100,6 @@ end
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
     if imported(ifile)
-        
-        % Import head points
-        bst_process('CallProcess', 'process_headpoints_add', sFiles{ifile}, [], ...
-        'channelfile', {data_fns{ifile+2*nb_subjects}, 'ASCII_NXYZ'}, ...
-        'fixunits',    0.1, ...
-        'vox2ras',     1);
-
-        %  Refine registration
-        bst_process('CallProcess', 'process_headpoints_refine', sFiles{ifile}, []);
-        
-        
         % Read events from aux channel
         bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
                     'stimchan',  'NIRS_AUX', ...
@@ -123,6 +113,7 @@ for ifile=1:length(sFiles)
         bst_process('CallProcess', 'process_evt_extended', sFiles{ifile}, [], ...
                     'eventname',  'motor', ...
                     'timewindow', [0, 30]);
+
     end
 end
 

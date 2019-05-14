@@ -746,6 +746,7 @@ options.import.aseg=1;
 options.import.subject{1}.name='';
 options.import.subject{1}.nirs_fn='';
 options.import.subject{1}.mri_folder='';
+options.import.subject{1}.additional_headpoints='';
 
 
 
@@ -965,6 +966,19 @@ condition = ['origin' get_ppl_tag()];
                                        'usessp',       0, ...
                                        'freq',         [], ...
                                        'baseline',     []);
+%% If available import additional headpoints, and refine the registration
+if redone && ~isempty(subject.additional_headpoints)  && exist(subject.additional_headpoints)
+    % Import head points
+    bst_process('CallProcess', 'process_headpoints_add', file_in, [], ...
+                'channelfile', {subject.additional_headpoints, 'ASCII_NXYZ'}, ...
+                'fixunits',    0.1, ...
+                'vox2ras',     1);
+
+    %  Refine registration
+    bst_process('CallProcess', 'process_headpoints_refine', file_in, []);
+    
+end 
+
 %% Manage movement event markings TODO
 if redone
     evt_formats = bst_get('FileFilters', 'events');
@@ -1018,7 +1032,7 @@ function [files_in, redone_imports] = import_subjects(options)
         [imported_files, redone] = import_nirs_file(options,i);
         
         files_in{i} = imported_files;
-        redone_imports(i)=redone;
+        redone_imports(i)=redone; %to fix
     end
 
 end

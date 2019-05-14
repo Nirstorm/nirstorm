@@ -99,23 +99,14 @@ options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subject
 for i=1:nb_subjects
     options.import.subject{i}.name=subject_names{i};
     options.import.subject{i}.nirs_fn=data_fns{i};
+    options.import.subject{i}.additional_headpoints=data_fns{i+2*nb_subjects};
 end    
 
 [sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
 
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
-    if imported(ifile)
-        
-        % Import head points
-        bst_process('CallProcess', 'process_headpoints_add', sFiles{ifile}, [], ...
-        'channelfile', {data_fns{ifile+2*nb_subjects}, 'ASCII_NXYZ'}, ...
-        'fixunits',    0.1, ...
-        'vox2ras',     1);
-
-        %  Refine registration
-        bst_process('CallProcess', 'process_headpoints_refine', sFiles{ifile}, []);
-        
+    if imported(ifile)       
         % Read events from aux channel
         bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
                     'stimchan',  'NIRS_AUX', ...
