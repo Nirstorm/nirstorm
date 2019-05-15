@@ -1,7 +1,11 @@
-function [subject_name, sSubject, iSubject] = bst_create_test_subject(template_name)
+function [subject_name, sSubject, iSubject] = bst_create_test_subject(template_name, use_default_anatomy)
 
 if nargin < 1
     template_name = 'Colin27_4NIRS_lowres';
+end
+
+if nargin < 2
+    use_default_anatomy = 0;
 end
 
 %% Ensure that nst_utest protocol exists
@@ -16,7 +20,7 @@ if exist(nst_protocol_dir, 'dir')
 end
 
 % Create new protocol
-gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
+gui_brainstorm('CreateProtocol', ProtocolName, use_default_anatomy, 0);
 
 % Add test subject
 subject_name = 'test_subject';

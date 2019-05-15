@@ -21,7 +21,78 @@ classdef BstHelperTest < matlab.unittest.TestCase
     end
     
     methods(Test)
+        
+        function test_set_template_default_anat_not_available(testCase)
+            %% Ensure that nst_utest protocol exists
+            ProtocolName = 'nst_utest';
+            % Delete existing protocol
+            db_dir = bst_get('BrainstormDbDir');
+            gui_brainstorm('DeleteProtocol', ProtocolName);
 
+            nst_protocol_dir = fullfile(db_dir, ProtocolName);
+            if exist(nst_protocol_dir, 'dir')
+                rmdir(nst_protocol_dir, 's');
+            end
+
+            % Create new protocol with default anatomy for all subjects
+            gui_brainstorm('CreateProtocol', ProtocolName, 1, 0);
+            
+            % Make sure template is not available locally
+            template_name = 'Dummy_4NIRS';
+            template_mri_comment = 'MRI: Dummy 4NIRS';
+            template_fn = fullfile(bst_get('BrainstormUserDir'), 'defaults', 'anatomy', [template_name '.zip']);
+            if exist(template_fn, 'file')
+                delete(template_fn);
+            end
+            
+            nst_bst_set_template_anatomy(template_name, 0, 0);
+            
+            sSubject = bst_get('Subject', 0);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+
+        function test_set_template_default_anat_already_available(testCase)
+            %% Ensure that nst_utest protocol exists
+            ProtocolName = 'nst_utest';
+            % Delete existing protocol
+            db_dir = bst_get('BrainstormDbDir');
+            gui_brainstorm('DeleteProtocol', ProtocolName);
+
+            nst_protocol_dir = fullfile(db_dir, ProtocolName);
+            if exist(nst_protocol_dir, 'dir')
+                rmdir(nst_protocol_dir, 's');
+            end
+
+            % Create new protocol with default anatomy for all subjects
+            gui_brainstorm('CreateProtocol', ProtocolName, 1, 0);
+            
+            % Make sure template is available locally
+            template_name = 'Dummy_4NIRS';
+            template_bfn = [template_name '.zip'];
+            bst_anat_dir = fullfile(bst_get('BrainstormUserDir'), 'defaults', 'anatomy');
+            template_fn = fullfile(bst_anat_dir, template_bfn);
+            if ~exist(template_fn, 'file')
+                template_url = [nst_get_repository_url() '/template/' template_bfn];
+                nst_download(template_url, template_fn);
+            end
+            template_mri_comment = 'MRI: Dummy 4NIRS';            
+            nst_bst_set_template_anatomy(template_name, 0, 0);
+            
+            sSubject = bst_get('Subject', 0);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+ 
+        function test_set_template_anat(testCase)
+            [subject_name, sSubject, iSubject] = bst_create_test_subject('');
+            
+            template_name = 'Dummy_4NIRS';
+            template_mri_comment = 'MRI: Dummy 4NIRS';
+            nst_bst_set_template_anatomy(template_name, iSubject, 0);
+            
+            sSubject = bst_get('Subject', iSubject);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+        
         function test_str_remove_common(testCase)
            
             sl1 = {'common_prefix var1_group common_suffix', ...
