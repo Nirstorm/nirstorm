@@ -52,12 +52,12 @@ nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
 
 %% Import data
 options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options 
-[sFiles, imported] = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
+sFiles = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
 
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
-    if imported(ifile)
-        % Read events from aux channel
+    evt_data = load(file_fullpath(sFiles{ifile}), 'Events');
+    if ~any(strcmp({evt_data.Events.label}, 'motor')) % Insure that events were not already loaded
         bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
                     'stimchan',  'NIRS_AUX', ...
                     'trackmode', 3, ...  % Value: detect the changes of channel value
