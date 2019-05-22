@@ -1,3 +1,5 @@
+nst_bst_save_events.m
+nst_bst_load_events.m
 nst_io_fetch_sample_data.m
 nst_bst_set_template_anatomy.m
 nst_core_get_available_templates.m
