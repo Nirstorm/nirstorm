@@ -36,10 +36,13 @@ if ~brainstorm('status')
 end
 
 %% Check Protocol
+
 protocol_name = 'TestSurfaceTemplateGroupPipelineV1';
+
 if isempty(bst_get('Protocol', protocol_name))
     gui_brainstorm('CreateProtocol', protocol_name, 1, 0); % UseDefaultAnat=1, UseDefaultChannel=0
 end
+
 
 % Set template for default anatomy
 nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
@@ -50,13 +53,24 @@ nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
 % .brainstorm/defaults/nirstorm/sample_data if necessary
 [nirs_fns, subject_names] = nst_io_fetch_sample_data('template_group_tapping'); 
 
+
 %% Import data
-options = nst_ppl_surface_template_V1('get_options'); % get default pipeline options 
-[sFiles, imported] = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
+options = nst_ppl_surface_template_V1('get_options');
+
+options.import.useDefaultAnat=1;
+options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subjects);
+
+for i=1:nb_subjects
+    options.import.subject{i}.name=subject_names{i};
+    options.import.subject{i}.nirs_fn=data_fns{i};
+    options.import.subject{i}.additional_headpoints=data_fns{i+2*nb_subjects};
+end    
+
+[sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
 
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
-    if imported(ifile)
+    if imported(ifile)       
         % Read events from aux channel
         bst_process('CallProcess', 'process_evt_read', sFiles{ifile}, [], ...
                     'stimchan',  'NIRS_AUX', ...
