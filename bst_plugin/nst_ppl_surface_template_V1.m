@@ -3,7 +3,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % Manage a full template- and surface-based pipeline starting from raw NIRS data
 % up to GLM group analysis (if enough subjects).
 %
-% IMPORTANT: although each subject has its own optode coordinate file during importation,
+% IMPORTANT: although each subject can have its own optode coordinate file during importation,
 % the same optode coordinates are used for all subjects. These coordinates
 % are the one from the first given subject.
 %
@@ -17,8 +17,8 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %   options = NST_PPL_SURFACE_TEMPLATE_V1('get_options'); % get default pipeline options
 %
 %   % Define import options (optional):
-%   options.moco.export_dir = 'path/to/store/motion_events'
-%   options.tag_bad_channels.export_dir = 'path/to/store/bad_channels'
+%   options.export_dir_events = 'path/to/store/events'
+%   options.export_dir_channel_flags = 'path/to/store/channel_flags'
 %
 %   % Import some nirs data along with event markings:
 %   subject_names = {'subj1', 'subj2'};
@@ -36,7 +36,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %   % Run the pipeline (and  save user markings):
 %   NST_PPL_SURFACE_TEMPLATE_V1('analyse', options, subject_names); % Run the full pipeline
 %
-%   % For a working example see
+%   % For a minimal working example see
 %   nirstorm/script/surface_template_full_group_pipeline.m
 %
 % DEFAULT_OPTIONS = NST_PPL_SURFACE_TEMPLATE_V1('get_options')
@@ -55,6 +55,30 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %     Return:
 %         FILES_RAW: brainstorm file pathes to imported data.
 %
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
+%     Import all nirs files in database and use given subjects (skip if exists).
+%     NIRS_FNS is a cell array of str.
+%     If SUBJECT_NAMES is empty or not given, then use base filename as
+%     subject names. If not empty, then it must be a cell array of str with the 
+%     same length as NIRS_FNS.
+%
+%     Used options:
+%        - options.import.redo
+%
+%     Return:
+%         FILES_RAW: brainstorm file pathes to imported data.
+%
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('save_markings', OPTIONS, SUBJECT_NAMES)
+%     Export markings (events and bad channels) for given subjects SUBJECT_NAMES.
+%
+%     Used options:
+%         - options.export_dir_events
+%         - options.export_dir_channel_flags
+%
+%     Return:
+%         FILES_RAW: brainstorm file pathes to imported data, for which markings 
+%                    were exported.
+%
 %  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
 %     Apply pipeline to given group(s) of subjects.
@@ -68,9 +92,9 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %            -> head models are not recomputed for each subject.
 %            Create a dummy subject called "full_head_model...".
 %        Then for each subject:
-%          -) Export user-defined inputs [optional]: TODO
-%             - movement events
-%             - bad channels
+%          0) Export user-defined markings [optional]:
+%             - all events (especially movement artefacts)
+%             - channel tags
 %          1) Motion correction
 %              ASSUME: event group "movement_artefacts" exists in each FILES_RAW 
 %                      and has been filled by user before calling this function.
@@ -97,11 +121,12 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % TODO:
 % - handle when no contrast defined
 % - options documentation
-% - export manual inputs
 % - importation of manual inputs:
 % - wiki page
 % - utest
-% 
+% - factorize plot code
+% - more comprehensive plot setup to control all options
+
 global GlobalData;
 
 assert(ischar(action));
@@ -128,9 +153,24 @@ switch action
             subject_names = cell(size(arg1));
             subject_names(:) = {''};
         end
+        if isempty(options)
+            options = get_options();
+        end
+        create_dirs(options);
         [imported_files, redone] = import_nirs_files(arg1, subject_names, options);
+        import_markings(imported_files(redone==1), subject_names(redone==1), options);
+        % Just in case markings changed in files that were not reimported, save them:
+        export_markings(imported_files(redone==0), subject_names(redone==0), options);
         varargout{1} = imported_files;
         varargout{2} = redone;
+        return;
+    case 'save_markings'
+        subject_names = arg1;
+        orig_cond = ['origin' get_ppl_tag()];
+        files_raw = cellfun(@(s)  nst_get_bst_func_files(s, orig_cond , 'Raw'), ...
+                            subject_names, 'UniformOutput', false);
+        export_markings(files_raw, subject_names, options);
+        varargout{1} = files_raw;
         return;
     case 'analyse'
     otherwise
@@ -155,6 +195,8 @@ if strcmp(options.save_fig_method, 'export_fig') && ~function_exists('export_fig
     error('"export_fig" not found. Can be installed from "https://github.com/altmany/export_fig"');
 end
 
+create_dirs(options);
+
 force_redo = options.redo_all;
 
 protocol_info = bst_get('ProtocolInfo');
@@ -169,11 +211,6 @@ prev_iCortex = sSubject.iCortex;
 iCortex = find(strcmp({sSubject.Surface.Comment}, options.head_model.surface));
 db_surface_default(0, 'Cortex', iCortex);
 panel_protocols('RepaintTree');
-
-create_dir(options.fig_dir);
-create_dir(options.moco.export_dir);
-create_dir(options.tag_bad_channels.export_dir);
-create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
 
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
@@ -209,6 +246,8 @@ for igroup=1:nb_groups
             error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
                           subject_name)); %#ok<SPERR>
         end
+        
+        export_markings({file_raw}, {subject_name}, options);
         
         % Run preprocessings
         [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
@@ -477,21 +516,6 @@ preproc_folder = sprintf('preprocessing%s/', get_ppl_tag());
 % Compute Scalp coupling index
 nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process_nst_sci', sFile_raw);
 
-% TODO: export motion correction tagging to external file
-% sRaw = load(file_fullpath(sFile_raw));
-% sExport.Events = sRaw.Events(strcmp({sRaw.Events.label}, 'movement_artefacts'));
-% export_events(sExport, [], moco_export_fn);
-
-% TODO: export bad channel tagging information
-
-% TODO: plot raw input signals
-% fig_bfn = sprintf('%s_%s_signals_raw.png', SubjectName, data_tag);
-% fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
-% if ~isempty(options.fig_dir) && options.make_figs && options.plot_raw_signals.do && ...
-%         (force_redo || options.plot_raw_signals.redo || ~exist(fig_fn, 'file'))
-%    plot_signals(sFile_raw, fig_fn, options);
-% end
-
 % Deglitching
 if options.deglitch.do
     redo_parent = force_redo | options.deglitch.redo;
@@ -732,6 +756,22 @@ options.redo_all = 0;
 
 options.import.redo = 0;
 
+options.export_dir_events = ''; % Where to export all events (mirroring), 
+                                % espcially those manually defined.
+                                % -> will be exported everytime the pipeline
+                                %    function is run, or called with the action 
+                                %    'export_markings'
+                                % -> will be reimported everytime reimportation
+                                %    is needed.
+                              
+options.export_dir_channel_flags = ''; % Where to export channel tags (mirroring), 
+                                       % espcially those manually tagged.
+                                       % -> will be exported everytime the pipeline
+                                       %    function is run, or called with the action 
+                                       %    'export_markings'
+                                       % -> will be reimported everytime reimportation
+                                       %    is needed.
+
 options.head_model.surface = 'cortex_lowres';
 
 options.sci.redo = 0;
@@ -743,10 +783,7 @@ options.deglitch.redo = 0;
 options.deglitch.agrad_std_factor = 2.5;
 
 options.moco.redo = 0;
-options.moco.export_dir = ''; % Where to export motion correction events manually tagged (for backup) 
-                              % -> will be exported before running the analysis
-                              % -> will be reimported everytime the importation
-                              %    stage is run
+
 options.resample.redo = 0;
 options.resample.freq = 5; % Hz
 
@@ -759,11 +796,6 @@ options.high_pass_filter.low_cutoff = 0.01; %Hz
 options.tag_bad_channels.redo = 0;
 options.tag_bad_channels.max_prop_sat_ceil = 1; % no tagging
 options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
-options.tag_bad_channels.export_dir = ''; % Where to export bad channel taggings (backup) 
-                                          % -> will be exported before
-                                          %    running the analysis
-                                          % -> will be reimported everytime 
-                                          %    the importation stage is run 
 
 options.projection.redo = 0;
 proj_methods = process_nst_cortical_projection('methods');
@@ -854,56 +886,112 @@ for ifile=1:length(nirs_fns)
                                            'freq',         [], ...
                                            'baseline',     []);
     redone_imports(ifile) = redone;
-    %% Manage movement event markings TODO
     if redone
-        evt_formats = bst_get('FileFilters', 'events');
-        evt_format = evt_formats(strcmp('BST', evt_formats(:,3)), :);
-
-        moco_fn = get_moco_markings_fn(subject_name, options.moco.export_dir);
-        if exist(moco_fn, 'file')
-            % Load event from pre-saved file
-            % TODO: test
-            sFile_in = load(file_fullpath(file_in));
-            [sFile_in, events] = import_events(sFile_in, [], moco_fn, evt_format);   
-        else
-            % Create empty event group
-            movement_events = db_template('event');
-            movement_events.label = 'movement_artefacts';
-            sFile_in = bst_process('GetInputStruct', file_in);
-            process_nst_import_csv_events('import_events', [], sFile_in, movement_events);
-        end
-
-        bad_chans_fn = get_bad_chan_markings_fn(subject_name, options.tag_bad_channels.export_dir);
-        if exist(bad_chans_fn, 'file')
-            % TODO: load content of .mat and set channel flag
-            % TODO: save data -> see process_nst_tag_bad_channels
-        end
+        % Create empty event group
+        movement_events = db_template('event');
+        movement_events.label = 'movement_artefacts';
+        sFile_in = bst_process('GetInputStruct', file_in);
+        process_nst_import_csv_events('import_events', [], sFile_in, movement_events);
     end
-    %% Manage bad channel markins
-    % TODO: update channel flags
-    % 
     files_in{ifile} = file_in;
 end
 
 end
 
-function markings_fn = get_moco_markings_fn(subject_name, export_dir)
-markings_fn = '';
-if ~isempty(export_dir)
-    assert(exist(export_dir, 'dir')~=0);
-    markings_fn = fullfile(export_dir, [subject_name '_motion_events.mat']);
+function create_dirs(options)
+create_dir(options.fig_dir);
+create_dir(options.export_dir_events);
+create_dir(options.export_dir_channel_flags);
+create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
+end
+
+
+% TODO: export motion correction tagging to external file
+% sRaw = load(file_fullpath(sFile_raw));
+% sExport.Events = sRaw.Events(strcmp({sRaw.Events.label}, 'movement_artefacts'));
+% export_events(sExport, [], moco_export_fn);
+
+% TODO: export bad channel tagging information
+
+% TODO: plot raw input signals
+% fig_bfn = sprintf('%s_%s_signals_raw.png', SubjectName, data_tag);
+% fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
+% if ~isempty(options.fig_dir) && options.make_figs && options.plot_raw_signals.do && ...
+%         (force_redo || options.plot_raw_signals.redo || ~exist(fig_fn, 'file'))
+%    plot_signals(sFile_raw, fig_fn, options);
+% end
+
+
+%         if exist(moco_fn, 'file')
+            % Load event from pre-saved file
+            % TODO: test
+%             sFile_in = load(file_fullpath(file_in));
+%             [sFile_in, events] = import_events(sFile_in, [], moco_fn, evt_format);   
+%         else
+
+function import_markings(sFiles, subject_names, options)
+io_markings(sFiles, subject_names, @nst_bst_import_events, @get_events_fn, ...
+                 'export_dir_events', 1, 'Loaded events', options);
+io_markings(sFiles, subject_names, @nst_bst_import_channel_flags, @get_channel_flags_fn, ...
+                 'export_dir_channel_flags', 1, 'Loaded channel flags', options);
+end
+
+function export_markings(sFiles, subject_names, options)
+io_markings(sFiles, subject_names, @nst_bst_export_events, @get_events_fn, ...
+               'export_dir_events', 0, 'Saved events', options);
+io_markings(sFiles, subject_names, @nst_bst_export_channel_flags, @get_channel_flags_fn, ...
+               'export_dir_channel_flags', 0, 'Saved channel flags', options);
+end
+
+function io_markings(sFiles, subject_names, io_func, get_fn_func, dir_option_name, ...
+                      check_exist, msg, options)
+if ~isempty(options.(dir_option_name))
+    assert(exist(options.(dir_option_name), 'dir')~=0);
+    for isubject=1:length(subject_names)
+        markings_fn = get_fn_func(subject_names{isubject},....
+                                  options.(dir_option_name));
+        if ~check_exist || exist(markings_fn, 'file')==2
+            io_func(sFiles{isubject}, markings_fn);
+            write_log(sprintf('%s to: %s\n', msg, markings_fn));
+        end
+    end
 end
 end
 
-function markings_fn = get_bad_chan_markings_fn(subject_name, export_dir)
-markings_fn = '';
+
+% function save_markings_(sFiles, subject_names, export_func, get_fn_func, dir_option_name, msg, options)
+% if ~isempty(options.(dir_option_name))
+%     assert(exist(options.(dir_option_name), 'dir')~=0);
+%     for isubject=1:length(subject_names)
+%         markings_fn = get_fn_func(subject_names{isubject},....
+%                                   options.(dir_option_name));
+%         export_func(sFiles{isubject}, markings_fn);
+%         write_log(sprintf('%s to: %s\n', msg, markings_fn));
+%     end
+% end
+% end
+        
+function events_fn = get_events_fn(subject_name, export_dir)
+events_fn = get_marking_fn(subject_name, export_dir, 'events');
+end
+
+function chan_tag_fn = get_channel_flags_fn(subject_name, export_dir)
+chan_tag_fn = get_marking_fn(subject_name, export_dir, 'channel_flags');
+end
+
+function marking_fn = get_marking_fn(subject_name, export_dir, tag)
+marking_fn = '';
 if ~isempty(export_dir)
     assert(exist(export_dir, 'dir')~=0);
-    markings_fn = fullfile(export_dir, [subject_name '_bad_channels.mat']);
+    marking_fn = fullfile(export_dir, [subject_name '_' tag '.mat']);
 end
 end
 
 %% Helper functions
+
+function write_log(msg)
+fprintf(msg);
+end
 
 function folder = create_dir(folder)
 % Create folder if does not exist. 
