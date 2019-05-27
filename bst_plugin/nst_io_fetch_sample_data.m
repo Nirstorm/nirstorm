@@ -29,7 +29,7 @@ switch data_label
                                                        subject_names{subject_id}, 'optodes.txt'};
         end
         data_fns = nst_request_files(data_to_fetch, confirm_download, nst_get_repository_url(), 1e6);
-        varargout{1} = data_fns(:);
+        varargout{1} = data_fns(1:nb_subjects);
         varargout{2} = subject_names;
         
     case 'group_tapping'
@@ -48,7 +48,7 @@ switch data_label
         end
         
         data_fns = nst_request_files(data_to_fetch, confirm_download, nst_get_repository_url(), 1e6);                    
-        varargout{1} = data_fns(1:nb_subjects);
+        varargout{1} = data_fns(:);
         varargout{2} = subject_names;                
         
     otherwise
