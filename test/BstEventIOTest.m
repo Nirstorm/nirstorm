@@ -22,10 +22,9 @@ classdef BstEventIOTest < matlab.unittest.TestCase
     
     methods(Test)
 
-        
-        
+ 
         function test_load_save_current_version(testCase)
-            bst_events = get_test_events();
+            bst_events = utest_get_test_bst_events();
             event_fn = fullfile(testCase.tmp_dir, 'bst_events.mat');
             nst_bst_save_events(bst_events, event_fn);
             testCase.assertTrue(exist(event_fn, 'file')==2);
@@ -34,7 +33,7 @@ classdef BstEventIOTest < matlab.unittest.TestCase
         end
         
         function test_load_save_backward_compatibility(testCase)
-            bst_events = get_test_events();
+            bst_events = utest_get_test_bst_events();
             % Dump event file and check that it's available online in the
             % unittest nirstorm data repository
             forge_current_utest_data_file(bst_events);
@@ -56,39 +55,6 @@ classdef BstEventIOTest < matlab.unittest.TestCase
         % Assert warning is issued when rounding of events make them
         % differ from what was stored on the drive.
     end
-end
-
-function bst_event = get_test_events()
-% Return a BST event struct with corner cases:
-%   - multiple conditions
-%   - some have empty notes / channels tags
-%   - some have non-empty notes with weird chars
-%   - some selected, some not
-%
-% Maintain this function everytime bst event structure changes
-% -> to add new fields use expected default values so that backward compatibility 
-%    is guarenteed. test_load_save_backward_compatibility should yell at
-%    you if not.
-bst_event = db_template('event');
-bst_event(1).label = 'condition1';
-bst_event(1).color = [0., 0., 0.];
-bst_event(1).epochs = [1];
-bst_event(1).times = [10.3];
-bst_event(1).reactTimes = [];
-bst_event(1).select = 1;
-bst_event(1).channels = {{}};
-bst_event(1).notes = {''};
-
-bst_event(2).label = 'condition2';
-bst_event(2).color = [0., 1., 0.3];
-bst_event(2).epochs = [1 1 1];
-bst_event(2).times = [1.3 7.5 12.6];
-bst_event(2).reactTimes = [];
-bst_event(2).select = 0;
-bst_event(2).channels = {{'S1D1', 'S2D3'}, {}, {'S121', 'S4D3'}};
-bst_event(2).notes = {sprintf('\t!:/\\,#%%*+{}[]wazaéàè?`''&$'), ...
-                   '', '12345678910-=;,1,2||'};
-
 end
 
 function forge_current_utest_data_file(bst_events)
