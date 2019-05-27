@@ -181,6 +181,7 @@ create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
 create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
 
+
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
 file_raw1 = nst_get_bst_func_files(groups(1).subject_names{1}, ['origin' get_ppl_tag()], 'Raw');
@@ -547,9 +548,21 @@ redo_parent = redo_parent | options.high_pass_filter.redo;
                                   
 % Compute head model from full head model
 redo_parent = redo_parent | options.head_model.redo;
-[dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
-                                            sFile_dOD_filtered, sFile_raw_full_head_model);                                  
-                                  
+
+if ~options.head_model.subject_specific  
+    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
+                                            sFile_dOD_filtered, sFile_raw_full_head_model);
+else   
+    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], options.head_model.redo || redo_parent, ...
+                                       'process_nst_import_head_model', sFile_dOD_filtered, [], ...
+                                       'use_closest_wl', 1, 'use_all_pairs', 0, ...
+                                       'force_median_spread', 0, ...
+                                       'normalize_fluence', 1, ...
+                                       'smoothing_fwhm', 3);
+end
+                                        
+
+
 % Project and convert to d[HbX]
 redo_parent = redo_parent | options.projection.redo;
 proj_method =  options.projection.method;
@@ -749,7 +762,7 @@ options.import.subject{1}.mri_folder='';
 options.import.subject{1}.additional_headpoints='';
 
 
-
+options.head_model.subject_specific = 0; % 1 if you want to recompute the head model for each subject
 options.head_model.surface = 'cortex_lowres';
 
 options.sci.redo = 0;

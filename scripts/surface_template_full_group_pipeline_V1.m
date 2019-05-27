@@ -51,7 +51,7 @@ nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
 % Get list of local nirs files for the group data.
 % The function nst_io_fetch_sample_data takes care of downloading data to
 % .brainstorm/defaults/nirstorm/sample_data if necessary
-[nirs_fns, subject_names] = nst_io_fetch_sample_data('template_group_tapping'); 
+[nirs_fns, subject_names] = nst_io_fetch_sample_data('group_tapping'); 
 
 
 %% Import data
@@ -62,8 +62,8 @@ options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subject
 
 for i=1:nb_subjects
     options.import.subject{i}.name=subject_names{i};
-    options.import.subject{i}.nirs_fn=data_fns{i};
-    options.import.subject{i}.additional_headpoints=data_fns{i+2*nb_subjects};
+    options.import.subject{i}.nirs_fn=nirs_fns{i};
+    options.import.subject{i}.additional_headpoints=nirs_fns{i+2*nb_subjects};
 end    
 
 [sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
@@ -81,11 +81,16 @@ for ifile=1:length(sFiles)
                     'src',  'AUX1', 'dest', 'motor');
         % Convert to extended event-> add duration of 30 sec to all motor events
         bst_process('CallProcess', 'process_evt_extended', sFiles{ifile}, [], ...
-                    'eventname',  'motor', 'timewindow', [0, 30]);
+                    'eventname',  'motor', 'timewindow', [0, 10]);
     end
 end
 
 %% Run pipeline
+
+% Recompute the headmodel for each subject
+options.head_model.subject_specific=1; 
+
+
 options.GLM_1st_level.stimulation_events = {'motor'};
 options.GLM_1st_level.contrasts(1).label = 'motor';
 options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a vector of weights, as a string 
