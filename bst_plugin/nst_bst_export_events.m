@@ -1,6 +1,5 @@
 function nst_bst_export_events(sFile, event_fn)
-% Wrapper around bst functions to load event in a backward compatible mode
-% Load according to format based on extension
+% Wrapper around bst functions to export events.
 
 if ischar(sFile)
     bst_evt_data = load(file_fullpath(sFile), 'Events');

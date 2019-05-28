@@ -11,7 +11,7 @@ function surface_template_full_group_pipeline_V1()
  %
  % Data are imported in brainstorm in a dedicated protocol, using specific 
  % naming conventions specific to NST_PPL_SURFACE_TEMPLATE_V1.
- % Preprocessings and processings are then run up to group-level analysis:
+ % Preprocessings and processings are then run, up to group-level analysis:
  %          1) Resampling to 5hz
  %          2) Bad channels detection
  %          3) Conversion to delta optical density
@@ -76,7 +76,6 @@ options.GLM_1st_level.stimulation_events = {'motor'};
 options.GLM_1st_level.contrasts(1).label = 'motor';
 options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a vector of weights, as a string 
 
-% Run the pipeline (and  save user markings):
+% Run the pipeline:
 nst_ppl_surface_template_V1('analyse', options, subject_names); % Run the full pipeline
-%TODO: full reload of GUI tree at end of pipeline
 end

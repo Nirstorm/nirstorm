@@ -13,8 +13,7 @@ function sFileUpdated = nst_bst_import_events(sFile, events_fn)
 %  Outputs:
 %      - sFile (struct or str): same type as sFile intput
 %
-
-
+% TODO: utest with struct input
 
 STRUCT = 1;
 FILE = 2;
@@ -25,25 +24,36 @@ else
 
     sFile_fn = sFile;
     obj_type = FILE;
-    
-    % fileType = file_gettype( fileName )
-    % See process_nst_import_csv_events for proper event importation and
-    % loading of sFile struct from file
 
-    
-    sFile = in_fopen_bstmat(DataFile);
+    isRaw = ~isempty(strfind(sFile_fn, '_0raw'));
+    if isRaw
+        DataMat = in_bst_data(sFile_fn, 'F');
+        sFile = DataMat.F;
+    else
+        DataMat = in_fopen_bstmat(sFile_fn);
+        sFile = DataMat;
+    end    
 end
 
-[root, bfn, ext] = fileparts(event_fn);
+[root, bfn, ext] = fileparts(events_fn);
 switch ext
     case '.mat'
-        sFile = import_events(sFile, [], event_fn, 'BST');
+        sFileUpdated = import_events(sFile, [], events_fn, 'BST');
     otherwise
         error(sprintf('Unsupported extension for event file: "%s"', ext));
 end
 
-if obj_type == FILE
-    bst_save(sFile_fn, sFile);
+if obj_type == FILE   
+    % Report changes in .mat structure
+    if isRaw
+        DataMat.F = sFileUpdated;
+    else
+        DataMat.Events = sFileUpdated.events;
+    end
+    % Save file definition
+    bst_save(file_fullpath(sFile_fn), DataMat, 'v6', 1);
+    
+    sFileUpdated = sFile_fn;
 end
 
 end
