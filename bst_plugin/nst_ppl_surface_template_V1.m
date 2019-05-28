@@ -22,7 +22,20 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %
 %   % Import some nirs data along with event markings:
 %   subject_names = {'subj1', 'subj2'};
-%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import', options, {'data1.nirs', 'data2.nirs'}, subject_names);
+%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', options, {'data1.nirs', 'data2.nirs'}, subject_names);
+%   for ifile=1:length(sFilesRaw)
+%     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
+%   end
+%
+%
+%   User can specify more option for the importation (such additional headspoints, or MRI files) : 
+%   options.import.subject(1:nb_subjects)=repmat(options.import.subject,1, nb_subjects);
+%   for i=1:nb_subjects
+%       options.import.subject{i}.name=subject_names{i}; 
+%       options.import.subject{i}.nirs_fn='raw.nirs' % path to the nirs file
+%       options.import.subject{i}.additional_headpoints='headpoints'; % path to the digitalized headpoints 
+%    end    
+%   sFilesRaw= nst_ppl_surface_template_V1('import_subjects', options);
 %   for ifile=1:length(sFilesRaw)
 %     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
 %   end
@@ -42,7 +55,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % DEFAULT_OPTIONS = NST_PPL_SURFACE_TEMPLATE_V1('get_options')
 %     Return default options
 %
-% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
 %     Import all nirs files in database and use given subjects (skip if exists).
 %     NIRS_FNS is a cell array of str.
 %     If SUBJECT_NAMES is empty or not given, then use base filename as
@@ -50,11 +63,28 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %     same length as NIRS_FNS.
 %
 %     Used options:
-%        - options.import.redo
-%
+%        - options.import.redo       
 %     Return:
 %         FILES_RAW: brainstorm file pathes to imported data.
 %
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_subjects', OPTIONS)
+%     Import all nirs files in database and use given subjects (skip if exists).
+%     options.subject is an array of structur that contains subjects informations.
+%     Used options:
+%        - options.import.redo
+%        - options.import.useDefaultAnat % set to 1 if you want to use
+%        default anatomy, if not, you have to specify
+%        options.import.mri_folder_type, options.import.nvertices, and
+%        options.import.aseg to configure the parameters for the MRI
+%        importation
+%        - options.subject{i} contains the following informations about 
+%          the ith subject :
+%           - subject{i}.name [optional] 
+%           - subject{i}.nirs_fn [mandatory]  
+%           - import.subject{i}.mri_folder [optional] 
+%           - import.subject{i}.additional_headpoints [optional]
+%     Return:
+%         FILES_RAW: brainstorm file pathes to imported data.
 %  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
 %     Apply pipeline to given group(s) of subjects.
