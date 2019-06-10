@@ -1,4 +1,4 @@
-function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
+function varargout = nst_ppl_surface_full_V1(action, options, arg1, arg2)
 %NST_PPL_SURFACE_TEMPLATE_V1
 % Manage a full template- and surface-based pipeline starting from raw NIRS data
 % up to GLM group analysis (if enough subjects).
@@ -22,19 +22,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %
 %   % Import some nirs data along with event markings:
 %   subject_names = {'subj1', 'subj2'};
-%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', options, {'data1.nirs', 'data2.nirs'}, subject_names);
-%   for ifile=1:length(sFilesRaw)
-%     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
-%   end
-%
-%   User can specify more option for the importation (such additional headspoints, or MRI files) : 
-%   options.import.subject(1:nb_subjects)=repmat(options.import.subject,1, nb_subjects);
-%   for i=1:nb_subjects
-%       options.import.subject{i}.name=subject_names{i}; 
-%       options.import.subject{i}.nirs_fn='raw.nirs' % path to the nirs file
-%       options.import.subject{i}.additional_headpoints='headpoints'; % path to the digitalized headpoints 
-%    end    
-%   sFilesRaw= nst_ppl_surface_template_V1('import_subjects', options);
+%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import', options, {'data1.nirs', 'data2.nirs'}, subject_names);
 %   for ifile=1:length(sFilesRaw)
 %     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
 %   end
@@ -54,7 +42,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % DEFAULT_OPTIONS = NST_PPL_SURFACE_TEMPLATE_V1('get_options')
 %     Return default options
 %
-% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
 %     Import all nirs files in database and use given subjects (skip if exists).
 %     NIRS_FNS is a cell array of str.
 %     If SUBJECT_NAMES is empty or not given, then use base filename as
@@ -62,22 +50,11 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %     same length as NIRS_FNS.
 %
 %     Used options:
-%        - options.import.redo       
+%        - options.import.redo
+%
 %     Return:
 %         FILES_RAW: brainstorm file pathes to imported data.
 %
-% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_subjects', OPTIONS)
-%     Import all nirs files in database and use given subjects (skip if exists).
-%     options.subject is an array of structur that contains subjects informations.
-%     Used options:
-%        - options.import.redo
-%        - options.subject{i} contains the following informations about 
-%          the ith subject :
-%           - subject{i}.name [optional] 
-%           - subject{i}.nirs_fn [mandatory]  
-%           - subject{i}.additional_headpoints [optional] 
-%     Return:
-%         FILES_RAW: brainstorm file pathes to imported data.
 %  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
 %     Apply pipeline to given group(s) of subjects.
@@ -141,6 +118,7 @@ switch action
             varargout{1} = get_options();
         end
         return;
+        
     case 'rois_summary.get_mask_combinations'
         varargout{1} = get_mask_combinations();
         return;
@@ -161,6 +139,40 @@ switch action
         varargout{1} = imported_files;
         varargout{2} = redone;
         return;
+    case 'preprocessing'
+        if nargin >= 3
+            % Only compute the fluences for the specified subjects
+            subject_names = arg1;
+        else
+            % Compute the fluences for every subjects 
+            subject_names = cell(size(options.import.subject));
+            for iSubject=1:size(options.import.subject,2)
+                subject_names{iSubject} = options.import.subject{iSubject}.name;
+            end    
+        end
+         sFiles=cell(size(options.import.subject));
+         redones=cell(size(options.import.subject));
+         
+        for iSubject=1:length(subject_names)
+            [sFiles{iSubject},hb_types,redones{iSubject}, preproc_folder] = preprocs(subject_names{iSubject},options);
+            varargout{1} = sFiles;
+            varargout{2} = redones;
+        end
+        return;
+    case 'compute_fluences'
+        if nargin >= 3
+            % Only compute the fluences for the specified subjects
+            subject_names = arg1;
+        else
+            % Compute the fluences for every subjects 
+            subject_names = cell(size(options.import.subject));
+            for iSubject=1:size(options.import.subject,2)
+                subject_names{iSubject} = options.import.subject{iSubject}.name;
+            end    
+        end
+       
+        compute_fluences(subject_names,options);
+        return
     case 'analyse'
     otherwise
         error('Unknown action: %s', action);
@@ -186,33 +198,11 @@ end
 
 force_redo = options.redo_all;
 
-protocol_info = bst_get('ProtocolInfo');
-if protocol_info.UseDefaultAnat~=1
-    error('Protocol should use default anatomy for all subjects');
-end
-
-% Set default cortical surface
-sSubject = bst_get('Subject', 0);
-prev_iCortex = sSubject.iCortex;
-%TODO: only if necessary
-iCortex = find(strcmp({sSubject.Surface.Comment}, options.head_model.surface));
-db_surface_default(0, 'Cortex', iCortex);
-panel_protocols('RepaintTree');
-
 create_dir(options.fig_dir);
 create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
 create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
 
-
-% Get head model precomputed for all optode pairs
-% (precompute it by cloning given data if needed)
-file_raw1 = nst_get_bst_func_files(groups(1).subject_names{1}, ['origin' get_ppl_tag()], 'Raw');
-if isempty(file_raw1)
-    error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
-                  groups(1).subject_names{1})); %#ok<SPERR>
-end
-[sFile_raw_fhm, fm_subject, fhm_redone] = get_sFile_for_full_head_model(file_raw1, options, force_redo);
 
 nb_groups = length(groups);
 group_condition_names = cell(1, nb_groups);
@@ -228,20 +218,10 @@ for igroup=1:nb_groups
 
         subject_name = subject_names{isubject};
 
-        % Check if given subject is dummy one created to hold full head model    
-        if strcmp(subject_name, fm_subject)
-            warning('Ignoring dummy subject "%s" used to store head model for all pairs', fm_subject);
-            continue;
-        end
 
-        file_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
-        if isempty(file_raw)
-            error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
-                          subject_name)); %#ok<SPERR>
-        end
         
         % Run preprocessings
-        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
+        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(subject_name,options, force_redo);
         
         % Run 1st level GLM
         [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
@@ -266,204 +246,6 @@ for igroup=1:nb_groups
         redo_group = redo_group | redone_any_contrast;
     end
 
-    %% Group-level analysis
-    if length(subject_names) <= 2
-       if ~isempty(group_label)
-           group_msg = [' of ' group_label];
-       else
-           group_msg = '';
-       end
-       warning('Not enough data for group analysis%s.\n', group_msg);
-       return;
-    end
-    sSubjectDefault = bst_get('Subject', 0); %TODO: use this also for 1st level
-
-    stacking_types = process_nst_concat_matrices('get_stacking_types');
-    contrasts = options.GLM_1st_level.contrasts;
-    if options.GLM_group.do
-       
-        if ~isempty(group_label) 
-            group_condition_name = [group_label '_'];
-        else
-            group_condition_name = '';
-        end
-        group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
-        group_condition_names{igroup} = group_condition_name;
-        for ihb=1:nb_hb_types
-            for icon=1:nb_contrasts
-                item_comment = ['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label];
-                [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
-                                                                'process_nst_glm_group_ttest', all_sFiles_con{igroup}(ihb, icon, :), [], ...
-                                                                'tail', 'two');
-                fig_bfn = sprintf('group_%s_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
-                              group_label, hb_types{ihb}, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
-                              nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
-                              contrasts(icon).label);
-                fig_fn = fullfile(options.fig_dir, fig_bfn);
-                if ~isempty(options.fig_dir) && options.make_figs && ...
-                    options.GLM_group.contrast_tstat.plot.do && ...
-                    (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))   
-                    plot_stat(sFile_GLM_gp_ttest, fig_fn, options, 0, 1, sSubjectDefault);
-                end
-
-                if options.GLM_group.rois_summary.do
-                    
-                    if igroup==1 && ihb==1 && icon==1
-                        sFile_gp_masks = cell(nb_groups, nb_hb_types, nb_contrasts);
-                    end
-                    
-                    [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
-                                                                redone | options.GLM_group.rois_summary.redo, ...
-                                                                'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
-                                                                'do_atlas_inter', 1, ...
-                                                                'min_atlas_roi_size', 3, ...
-                                                                'atlas', options.GLM_group.rois_summary.atlas);
-                     sFile_gp_masks{igroup, ihb, icon} = sFile_gp_mask;
-                end   
-            end % loop over contrasts
-        end % loop over hb types
-    end % If do group level    
-end % Loop over groups
-
-
-if options.GLM_group.do && options.GLM_group.rois_summary.do
-    mask_combinations = get_mask_combinations();
-    
-    all_sFiles_subj_zmat = cell(nb_hb_types, nb_contrasts);
-    all_sFiles_subj_zmat_con_concat = cell(1, nb_hb_types);
-    
-    [varying, common_pref, common_suf] = str_remove_common(group_condition_names);
-    if options.GLM_group.rois_summary.group_masks_combination ~= mask_combinations.none
-        mask_combinations_str = fieldnames(mask_combinations);
-        stacked_group_cond_name = [common_pref mask_combinations_str{options.GLM_group.rois_summary.group_masks_combination} '_of_' ...
-                                   strjoin(varying, '_') common_suf];
-        
-        for ihb=1:nb_hb_types
-            if ~options.GLM_group.rois_summary.group_masks_combine_contrasts
-                for icon=1:nb_contrasts
-                    [sFile_combined_mask, redone] = nst_run_bst_proc(['Group analysis/' stacked_group_cond_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
-                                                                     redone | options.GLM_group.rois_summary.redo, ...
-                                                                    'process_nst_combine_masks', sFile_gp_masks(:, ihb, icon), [], ...
-                                                                    'operation', options.GLM_group.rois_summary.group_masks_combination);
-                    for igroup=1:nb_groups
-                        sFile_gp_masks{igroup, ihb, icon} = sFile_combined_mask;
-                    end
-                end
-            else
-                gp_all_cons_masks = sFile_gp_masks(:, ihb, :);
-                [sFile_combined_mask, redone] = nst_run_bst_proc(['Group analysis/' stacked_group_cond_name '/' hb_types{ihb} ' | all cons_t-+ | mask'], ...
-                                                                  redone | options.GLM_group.rois_summary.redo, ...
-                                                                  'process_nst_combine_masks', gp_all_cons_masks(:), [], ...
-                                                                  'operation', options.GLM_group.rois_summary.group_masks_combination);
-                for igroup=1:nb_groups
-                    for icon=1:nb_contrasts
-                        sFile_gp_masks{igroup, ihb, icon} = sFile_combined_mask;
-                    end
-                end
-            end
-        end
-        
-        for igroup=1:nb_groups
-            target_group_condition_names{igroup} = stacked_group_cond_name;
-        end
-        group_comment_tags = cellfun(@(s) [' ' s], {groups.label}, 'UniformOutput', false);
-    else % do not combine masks -> treat groups indepently
-        stacked_group_cond_name = [common_pref strjoin(varying, '_') common_suf];
-        target_group_condition_names = group_condition_names;
-        for igroup=1:nb_groups
-            group_comment_tags{igroup} = '';
-        end
-    end
-
-    for igroup=1:nb_groups
-        for ihb=1:nb_hb_types
-            for icon=1:nb_contrasts
-                 % Extract subject- and region-specific zscores based on group mask
-                 % TODO: switch between matrix output (atlas-based) or map output (full mask)                                       
-                 [sFile_subj_zmat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb} ' | con ' contrasts(icon).label ' |' group_comment_tags{igroup} ' masked z-scores'], ...
-                                                               redone | options.GLM_group.rois_summary.redo, ...
-                                                               'process_nst_glm_group_subjs_zmat', ...
-                                                               all_sFiles_con{igroup}(ihb, icon, :), sFile_gp_masks{igroup, ihb, icon});
-                 all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
-                 if redone
-                    % Set contrast name as prefix for each ROI column                 
-                    bst_process('CallProcess', 'process_nst_prefix_matrix', ...
-                                sFile_subj_zmat, [], 'col_prefixes', [contrasts(icon).label '_']);
-                 end
-                
-            end
-            
-            % Stack zscore tables along contrasts
-            [sFile_concat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb}  ' | all cons |' group_comment_tags{igroup} ' masked z-scores'], ...
-                                                     redone | options.GLM_group.rois_summary.redo, ...
-                                                     'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat(ihb, :), [], ...
-                                                     'stacking_type', stacking_types.column);
-            all_sFiles_subj_zmat_con_concat{ihb} = sFile_concat;
-
-            if redone
-                % Set Hb type as prefix for all columns. Add user-defined col prefix
-                if ~isempty(options.GLM_group.rois_summary.matrix_col_prefix)
-                    col_prefix = [options.GLM_group.rois_summary.matrix_col_prefix '_'];
-                else
-                    col_prefix = '';
-                end
-                bst_process('CallProcess', 'process_nst_prefix_matrix', ...
-                            sFile_concat, [], 'col_prefixes', [col_prefix hb_types{ihb} '_']);
-            end
-                
-        end
-        
-        % Stack zscore tables along Hb types
-        [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/all Hb cons |' group_comment_tags{igroup} ' masked z-scores'], ...
-                                                     redone | options.GLM_group.rois_summary.redo, ...
-                                                     'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat_con_concat, [], ...
-                                                     'stacking_type', stacking_types.column);
-
-        all_sFile_table_zscores{igroup} = sFile_table_zscores;
-        any_rois_summary_redone = any_rois_summary_redone | redone;
-
-        if redone && ~isempty(options.GLM_group.rois_summary.csv_export_output_dir)
-            % Save each group data separately
-            if isempty(group_label)
-                group_prefix = '';
-            else
-                group_prefix = [group_label '_'];
-            end
-            csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
-                              [group_prefix 'z-scores.csv']);
-            bst_process('CallProcess', 'process_nst_save_matrix_csv', ...
-                        sFile_table_zscores, [], ...
-                        'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 0, ...
-                        'csv_file', {csv_fn, 'ASCII-CSV'});
-        end
-    end
-    
-    % Concatenate all group results and save as CSV
-    
-    % Stack zscore tables along groups
-
-    [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' stacked_group_cond_name '/all Hb cons | all groups masked zscores'], ...
-                                                        any_rois_summary_redone | options.GLM_group.rois_summary.redo, ...
-                                                        'process_nst_concat_matrices', ...
-                                                        all_sFile_table_zscores, [], ...
-                                                        'stacking_type', stacking_types.row);
-
-    [varying_label, common_prefix, common_suffix] = str_remove_common({groups.label}, 1);
-    varying_label(cellfun(@isempty, varying_label)) = {''};
-    
-    if ~isempty(options.GLM_group.rois_summary.csv_export_output_dir)
-        % Save as CSV
-        csv_fn = fullfile(options.GLM_group.rois_summary.csv_export_output_dir, ...
-                          [common_prefix strjoin(varying_label, '_') common_suffix '_z-scores.csv']);
-        nst_run_bst_proc({}, redone | options.GLM_group.rois_summary.redo, ...
-                        'process_nst_save_matrix_csv', ...
-                        sFile_table_zscores, [], ...
-                        'ignore_rows_all_zeros', 0, 'ignore_cols_all_zeros', 1, ...
-                        'csv_file', {csv_fn, 'ASCII-CSV'});
-    end
-end
 
 
 %% Finalize
@@ -472,36 +254,20 @@ if prev_iCortex ~= iCortex
    db_surface_default(0, 'Cortex', prev_iCortex);
    panel_protocols('RepaintTree');
 end
-
-% if nargout >= 1
-%     varargout{1} = sFiles_con;
-% end
-% 
-% if nargout >= 2
-%     varargout{2} = redone_any_contrast;
-% end
-% 
-% if nargout >= 3
-%     varargout{3} = sFiles_GLM;
-% end
-% 
-% if nargout >= 4 
-%     varargout{4} = glm_folder;
-% end
-% 
-% if nargout >= 5 && ~options.clean_preprocessings
-%     varargout{5} = preproc_folder;
-% end
-
+end
 end
 
-
-function [sFilesHbProj, hb_types, redone, preproc_folder] = preprocs(sFile_raw, sFile_raw_full_head_model, options, force_redo)
+function [sFilesHbProj, hb_types, redone, preproc_folder]  = preprocs(subject_name,options, force_redo)
 
 if nargin < 4
     force_redo = 0;
 end
 
+sFile_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
+if isempty(sFile_raw)
+    error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                  subject_name)); %#ok<SPERR>
+end
 preproc_folder = sprintf('preprocessing%s/', get_ppl_tag());
 
 % Compute Scalp coupling index
@@ -567,24 +333,21 @@ redo_parent = redo_parent | options.high_pass_filter.redo;
                                       'attenuation', 'relax', ...
                                       'mirror', 0, ...
                                       'sensortypes', 'NIRS');
-
+                                  
                                   
 % Compute head model from full head model
 redo_parent = redo_parent | options.head_model.redo;
+fluences_dir=fullfile(options.fluences.export_dir,subject_name);
 
-if options.head_model.subject_specific  
-    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], options.head_model.subject_specific || redo_parent, ...
-                                   'process_nst_import_head_model', sFile_dOD_filtered, [], ...
-                                   'use_closest_wl', 1, 'use_all_pairs', 0, ...
-                                   'force_median_spread', 0, ...
-                                   'normalize_fluence', 1, ...
-                                   'smoothing_fwhm', options.head_model.smoothing_fwhm);
+[dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, ...
+                           'process_nst_import_head_model', sFile_dOD_filtered, [], ...
+                           'data_source', fluences_dir ,...
+                           'use_closest_wl', 1, 'use_all_pairs', 0, ...
+                           'force_median_spread', 0, ...
+                           'normalize_fluence', 1, ...
+                           'smoothing_fwhm', options.head_model.smoothing_fwhm);
     
-else   
-    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
-                                            sFile_dOD_filtered, sFile_raw_full_head_model);
-end
-                                        
+                                      
 
 
 % Project and convert to d[HbX]
@@ -595,8 +358,34 @@ proj_method =  options.projection.method;
                                                 'method', proj_method, ...
                                                 'sparse_storage', options.projection.sparse_storage);
 hb_types = process_nst_cortical_projection('get_hb_types');
+redone = redo_parent;                                  
+end
 
-redone = redo_parent;
+function compute_fluences(subject_names,options)
+% Todo : make sure that each subject has been proprely imported 
+% Check if the fluences have already been computed and re-computed them
+% only if asked (flag redo)
+
+create_dir(options.fluences.export_dir);
+outputdir={};
+for iSubject=1:length(subject_names)
+    
+    file_raw = nst_get_bst_func_files(subject_names{iSubject}, ['origin' get_ppl_tag()], 'Raw');
+    if isempty(file_raw)
+        error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                      subject_names{iSubject})); %#ok<SPERR>
+    end
+        
+    outputdir{1}=fullfile(options.fluences.export_dir,subject_names{iSubject});
+    create_dir(outputdir{1})
+    
+    bst_process('CallProcess', 'process_nst_ComputeFluencesforOptodes', file_raw, [], ...
+                'outputdir', outputdir, ...
+                'mcxlab_nphoton', options.fluences.nphoton, ...
+                'mcxlab_flag_thresh',options.fluences.thresh, ...
+                'vox2ras',     1);
+
+end
 end
 
 function [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles, options, force_redo)
@@ -698,76 +487,6 @@ for ifile=1:length(sFiles_GLM)
 end
 end
 
-function [file_raw_fm, fm_subject, redone] = get_sFile_for_full_head_model(sfile_raw, options, force_redo)
-
-redone = 0;
-fm_subject = ['full_head_model' get_ppl_tag()];
-subject_name = fileparts(sfile_raw);
-% Check if given subject is dummy one created to hold full head model
-if strcmp(subject_name, fm_subject)
-    file_raw_fm = sfile_raw;
-    if ~force_redo
-        return;
-    end
-else 
-    file_raw_fm = nst_get_bst_func_files(fm_subject, ['origin' get_ppl_tag()], 'Raw');
-end
-
-head_model_comment = 'head model [all pairs]';
-
-if isempty(file_raw_fm)
-    [SubjectName, origin_folder] = bst_fileparts(bst_fileparts(sfile_raw), 1);
-
-    % Lazy way of duplicating data along with channel definition
-    % -> export as .nirs, then reimport
-    tmp_dir = tempname;
-    mkdir(tmp_dir);
-    [o1, o2, sInputs] = bst_process('CallProcess', 'process_nst_export_nirs', sfile_raw, [], ...
-                                    'outputdir', {tmp_dir, {}});
-    nirs_bfn = process_nst_export_nirs('get_output_nirs_bfn', sInputs);
-    
-    tmp_nirs_fn = fullfile(tmp_dir, nirs_bfn);
-    
-    sFile_in = bst_process('CallProcess', 'process_import_data_time', [], [], ...
-                            'subjectname',  fm_subject, ...
-                            'condition',    origin_folder, ...
-                            'datafile',     {tmp_nirs_fn, 'NIRS-BRS'}, ...
-                            'timewindow',   [], ...
-                            'split',        0, ...
-                            'ignoreshort',  1, ...
-                            'channelalign', 1, ...
-                            'usectfcomp',   0, ...
-                            'usessp',       0, ...
-                            'freq',         [], ...
-                            'baseline',     []);
-    file_raw_fm = bst_process('CallProcess', 'process_set_comment', sFile_in, [], ...
-                            'tag',     'Raw', ...
-                            'isindex', 0);
-    if isstruct(file_raw_fm)
-        file_raw_fm = file_raw_fm.FileName;
-    end
-    rmdir(tmp_dir, 's');
-else
-    % TODO: Check that existing surface of existing head model is consistent with
-    % options
-%     sStudy = bst_get('StudyWithCondition', fileparts(file_raw_fm));
-%     parent_head_model_fn = sStudy.HeadModel(1).FileName;
-%     parent_head_model = in_bst_headmodel(parent_head_model_fn);
-end
-
-% Compute head model for all pairs if needed
-% Here the montage coordinates of one single subject are used to compute the 
-% head model. Then this "template" head model will be used to create the head model 
-% for any other subject. Going from the template head model to another head
-% model only uses pairing information, and thus ignores subject-specific
-% montage coordinates (see process_nst_sub_headmodel).
-[dummy_out, redone] = nst_run_bst_proc(head_model_comment, options.head_model.redo || force_redo, ...
-                                       'process_nst_import_head_model', file_raw_fm, [], ...
-                                       'use_closest_wl', 1, 'use_all_pairs', 1, ...
-                                       'force_median_spread', 0, ...
-                                       'normalize_fluence', 1, ...
-                                       'smoothing_fwhm', options.head_model.smoothing_fwhm);
-end
 
 function options = get_options()
 
@@ -775,19 +494,30 @@ options.redo_all = 0;
 
 
 options.import.redo = 0;
-
+options.import.useDefaultAnat = 1;
+options.import.mri_folder_type='FreeSurfer';
+options.import.nvertices = 2500;
+options.import.aseg=1;
 
 options.import.subject{1}.name='';
 options.import.subject{1}.nirs_fn='';
+options.import.subject{1}.mri_folder='';
 options.import.subject{1}.additional_headpoints='';
 
 
-options.head_model.subject_specific = 0; % 1 if you want to recompute the head model for each subject
-options.head_model.smoothing_fwhm = 0; %
-options.head_model.surface = 'cortex_lowres';
-options.head_model.redo = 0;
 
+options.head_model.surface = 'cortex_lowres';
 options.sci.redo = 0;
+options.head_model.redo = 0;
+options.head_model.smoothing_fwhm=0;
+
+
+options.fluences.export_dir=''; % where to export the fluences
+                                % will be used to compute the head model
+                                % 
+options.fluences.nphoton=100; % Numner of photon used for the simulation in Million
+options.fluences.thresh=0; % between 0 and 1  
+
 options.deglitch.do = 0;
 options.deglitch.redo = 0;
 options.deglitch.agrad_std_factor = 2.5;
@@ -938,6 +668,81 @@ end
 
 end
 
+
+function redone=load_anatomy(options,i_subject)
+
+    subject=options.import.subject{i_subject};
+    [sSubject, iSubject] = bst_get('Subject',subject.name, 1);
+
+    
+    redone=options.import.redo && length(sSubject.Surface) >= 1;
+    if redone  || ~size(sSubject.Surface,2)
+        fiducial_file=fullfile(subject.mri_folder,'fiducials.mat');
+        if exist(fiducial_file,'file')
+            fiducials=load(fiducial_file);
+            bst_process('CallProcess', 'process_import_anatomy', [], [], ... 
+                                   'subjectname', subject.name, ...
+                                   'mrifile',     {subject.mri_folder, options.import.mri_folder_type}, ...
+                                   'nvertices',   options.import.nvertices, ...
+                                   'nas', fiducials.NAS, ...
+                                   'lpa', fiducials.LPA, ...
+                                   'rpa', fiducials.RPA, ...
+                                   'ac' , fiducials.AC,  ...
+                                   'pc' , fiducials.PC,  ...
+                                   'ih' , fiducials.IH,  ...
+                                   'aseg',options.import.aseg );
+        else
+            bst_process('CallProcess', 'process_import_anatomy', [], [], ... 
+                                   'subjectname', subject.name, ...
+                                   'mrifile',     {subject.mri_folder, options.import.mri_folder_type}, ...
+                                   'nvertices',   options.import.nvertices, ...
+                                   'aseg',options.import.aseg );
+
+        end
+        
+        % Reload subject
+        [sSubject, iSubject] = bst_get('Subject',subject.name, 1);
+
+        % Set the default cortex surface
+        iCortex = find(strcmp({sSubject.Surface.Comment}, options.head_model.surface));
+        db_surface_default(iSubject, 'Cortex', iCortex);
+        panel_protocols('RepaintTree');
+        
+        % Remesh the head surface to have an homogenous mapping of the
+        % surface 
+        iHead = find( contains( {sSubject.Surface.Comment},'head') );
+
+        HeadSurfaceFile=sSubject.Surface(iHead).FileName;
+        [SurfaceMat, SurfaceFile] = in_tess_bst(HeadSurfaceFile);
+
+        tess_remesh(sSubject.Surface(iHead).FileName, size(SurfaceMat.Vertices,1)) 
+        
+        
+        
+        % Compute Voroi Interpolator 
+        % To fix : It doesn't work if the segmentation file is already
+        % imported
+        bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
+                    'subjectname', subject.name);
+        
+        
+        % Process: Import Segentated MRI
+        segmentation_file=fullfile(subject.mri_folder,'Segmentation','segmentation_5tissues.nii');
+        if exist(segmentation_file,'file')
+            bst_process('CallProcess', 'process_import_mri', [], [], ...
+                'subjectname', subject.name, ...
+                'mrifile',     {segmentation_file, 'ALL'});
+            % Rename and fix segmentation file value 
+            
+           [sSubject, iSubject] = bst_get('Subject',subject.name, 1);
+           iSegmentation = find( contains( {sSubject.Anatomy.Comment},'segmentation') );
+           fix_segmentation(sSubject, iSubject,iSegmentation);
+        end
+        
+        
+    end
+end
+
 function [file_in, redone] = import_nirs_file(options,i_subject)
 subject=options.import.subject{i_subject};
 
@@ -1010,24 +815,30 @@ end
 end
 
 function [files_in, redone_imports] = import_subjects(options)
-    nb_subjects = length(options.import.subject);
-    
-    files_in = cell(1,nb_subjects);
-    redone_imports = zeros(1,nb_subjects);
+nb_subjects = length(options.import.subject);
 
-    for i=1:nb_subjects
-        sSubject = bst_get('Subject', options.import.subject{i}.name, 1);
-        if isempty(sSubject)
-            [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 1, 0); % Use default anatomy 
-        end
-        
-        [imported_files, redone] = import_nirs_file(options,i);
-        
-        files_in{i} = imported_files;
-        redone_imports(i)=redone; 
+files_in = cell(1,nb_subjects);
+redone_imports = zeros(1,nb_subjects);
+
+for i=1:nb_subjects
+    sSubject = bst_get('Subject', options.import.subject{i}.name, 1);
+    if isempty(sSubject)
+        [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 0, 0);
     end
 
+    redone_imports(i)=load_anatomy(options,i);
+    options.import.redo = options.import.redo || redone_imports(i);
+
+    db_save();
+
+    [imported_files, redone] = import_nirs_file(options,i);
+    files_in{i} = imported_files;
+    redone_imports(i)=redone;
 end
+
+end
+
+
 
 function markings_fn = get_moco_markings_fn(subject_name, export_dir)
 markings_fn = '';
@@ -1065,6 +876,26 @@ if ~isempty(folder)
 end
 
 end
+
+function fix_segmentation(sSubject, iSubject,iSegmentation)
+% Fix the value of the segmentation MRI file.
+% The file should contains value between 0 and 5 instead of 0 and 255 
+% This step is needed in order to compute the fluences
+
+segmentation_fn = file_fullpath(sSubject.Anatomy(iSegmentation).FileName);
+sSegmentation = load(segmentation_fn);
+sSegmentation.Cube(sSegmentation.Cube==51)=1;
+sSegmentation.Cube(sSegmentation.Cube==102)=2;
+sSegmentation.Cube(sSegmentation.Cube==153)=3;
+sSegmentation.Cube(sSegmentation.Cube==204)=4;
+sSegmentation.Cube(sSegmentation.Cube==255)=5;
+
+bst_save(segmentation_fn, sSegmentation, 'v7');
+
+db_save();
+end
+
+
 
 function tag = get_bst_file_tag(fn)
 

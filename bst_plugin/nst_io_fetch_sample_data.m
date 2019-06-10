@@ -31,6 +31,46 @@ switch data_label
         data_fns = nst_request_files(data_to_fetch, confirm_download, nst_get_repository_url(), 1e6);
         varargout{1} = data_fns(1:nb_subjects);
         varargout{2} = subject_names;
+        
+    case 'group_tapping'
+        subject_names = {'S01' ,               ...
+                         'S04', 'S05',        ...
+                         'S07', 'S08', 'S09', ...
+                         'S10', 'S11'};
+             
+        nb_subjects = length(subject_names);
+        data_to_fetch{3*nb_subjects}={''};
+
+        for i=1:nb_subjects
+            data_to_fetch{i}={'Tapping',subject_names{i}, 'data', ['subject_' subject_names{i}(2:3) '.nirs'] };
+            data_to_fetch{i+nb_subjects}={'Tapping',subject_names{i}, 'data', 'optodes.txt' };
+            data_to_fetch{i+2*nb_subjects}={'Tapping',subject_names{i}, 'data', 'headpoints' };  
+        end
+        
+        data_fns = nst_request_files(data_to_fetch, confirm_download, nst_get_repository_url(), 1e6);                    
+        varargout{1} = data_fns(:);
+        varargout{2} = subject_names;                
+    case 'group_tapping_with_anatomy'
+        subject_names = {'S01' ,               ...
+                         'S04', 'S05',        ...
+                         'S07', 'S08', 'S09', ...
+                         'S10', 'S11'};
+             
+        nb_subjects = length(subject_names);
+        data_to_fetch{4*nb_subjects}={''};
+
+        for i=1:nb_subjects
+            data_to_fetch{i}={'Tapping',subject_names{i}, 'anatomy' };
+            data_to_fetch{i+nb_subjects}={'Tapping',subject_names{i}, 'data', ['subject_' subject_names{i}(2:3) '.nirs'] };
+            data_to_fetch{i+2*nb_subjects}={'Tapping',subject_names{i}, 'data', 'optodes.txt' };
+            data_to_fetch{i+3*nb_subjects}={'Tapping',subject_names{i}, 'data', 'headpoints' };
+        end
+        
+        data_fns = nst_request_files(data_to_fetch, confirm_download, nst_get_repository_url(), 1e6);                    
+        varargout{1} = data_fns(:);
+        varargout{2} = subject_names; 
+        
+   
     otherwise
         error(['Unknown data set: ' data_label]);
 end
