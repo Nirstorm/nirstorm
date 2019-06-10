@@ -2,7 +2,7 @@ function surface_template_full_group_pipeline_V1()
  % Example for the template- and surface-based full pipeline, using the
  % function NST_PPL_SURFACE_TEMPLATE_V1.
  %
- % This script downloads some sample data of 10 "dummy" subjects (27 Mb), 
+ % This script downloads some sample data of 10 subjects (114.5 MB), 
  % as well as the Colin27_4NIRS template (19 Mb) if not available.
  % For the analysis part, precomputed fluence data are also downloaded.
  % Total max amount of data to download: 50 Mb, the user is asked for download 
@@ -37,7 +37,7 @@ end
 
 %% Check Protocol
 
-protocol_name = 'TestSurfaceTemplateGroupPipelineV1';
+protocol_name = 'SurfaceTemplateGroupPipelineV1';
 
 if isempty(bst_get('Protocol', protocol_name))
     gui_brainstorm('CreateProtocol', protocol_name, 1, 0); % UseDefaultAnat=1, UseDefaultChannel=0
@@ -51,8 +51,8 @@ nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
 % Get list of local nirs files for the group data.
 % The function nst_io_fetch_sample_data takes care of downloading data to
 % .brainstorm/defaults/nirstorm/sample_data if necessary
-[nirs_fns, subject_names] = nst_io_fetch_sample_data('template_group_tapping'); 
-
+[nirs_fns, subject_names] = nst_io_fetch_sample_data('group_tapping_with_anatomy'); 
+nb_subjects=length(subject_names);
 
 %% Import data
 options = nst_ppl_surface_template_V1('get_options');
@@ -62,8 +62,8 @@ options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subject
 
 for i=1:nb_subjects
     options.import.subject{i}.name=subject_names{i};
-    options.import.subject{i}.nirs_fn=data_fns{i};
-    options.import.subject{i}.additional_headpoints=data_fns{i+2*nb_subjects};
+    options.import.subject{i}.nirs_fn=nirs_fns{i};
+    options.import.subject{i}.additional_headpoints=nirs_fns{i+2*nb_subjects};
 end    
 
 [sFiles, imported] = nst_ppl_surface_template_V1('import_subjects', options);
