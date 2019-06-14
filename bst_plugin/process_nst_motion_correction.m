@@ -84,6 +84,7 @@ for iInput=1:length(sInputs)
         if strcmp(events(ievt).label, event_name)
             event = events(ievt);
             ievt_mvt = ievt;
+            break;
         end
     end
     if isempty(event)
@@ -95,7 +96,8 @@ for iInput=1:length(sInputs)
     if isempty(event.times) % no marked event
         data_corr = sDataIn.F';
     else
-        data_corr = Compute(sDataIn.F', sDataIn.Time', event.samples');
+        samples = round((event.times' - sDataIn.Time(1)) ./ diff(sDataIn.Time(1:2))) + 1;
+        data_corr = Compute(sDataIn.F', sDataIn.Time', samples);
     end
     if 0
         nirs_data_full = in_bst(sInputs(iInput).FileName, [], 1, 0, 'no');
