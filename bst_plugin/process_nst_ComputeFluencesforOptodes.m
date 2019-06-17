@@ -170,7 +170,7 @@ sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 iseg = 0;
 
 for ianat = 1:size(sSubject.Anatomy,2)
-    if any(strcmp(sSubject.Anatomy(ianat).Comment, 'segmentation_5tissues'))
+    if any(contains(sSubject.Anatomy(ianat).Comment, 'segmentation_5tissues'))
         iseg = ianat;
     end
 end

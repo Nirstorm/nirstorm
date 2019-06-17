@@ -284,7 +284,7 @@ if do_grey_mask
     % Load segmentation
     iseg = 0;    
     for ianat = 1:size(sSubject.Anatomy,2)
-        if any(strcmp(sSubject.Anatomy(ianat).Comment, segmentation_name))
+        if any(contains(sSubject.Anatomy(ianat).Comment, segmentation_name))
             iseg = ianat;
         end
     end
