@@ -70,7 +70,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         B = glm_fit.ImageGridAmp';
     else
         surface_data = 0;
-        B = glm_fit.F;
+        B = glm_fit.F';
     end
     covB = glm_fit.beta_cov;
     edf = glm_fit.edf;        

@@ -288,7 +288,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
         OutputFiles{end+1} = ResultFile;
     else
         sDataOut = db_template('data');
-        sDataOut.F            = B;
+        sDataOut.F            = B';
         sDataOut.Comment      = output_comment;
         sDataOut.ChannelFlag  = DataMat.ChannelFlag;
         sDataOut.Time         = 1:nb_regressors;
