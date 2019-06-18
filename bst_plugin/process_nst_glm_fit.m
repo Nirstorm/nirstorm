@@ -54,6 +54,40 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
+    sProcess.options.label1.Comment = '<U><B>Optimization Method</B></U>:';
+    sProcess.options.label1.Type    = 'label';
+    
+    sProcess.options.fitting.Type    = 'radio_line';
+    sProcess.options.fitting.Comment   = {'OLS', 'IRLS(not implemented)','' };
+    sProcess.options.fitting.Value   = 1;
+    
+    sProcess.options.label2.Comment = '<U><B>Statistical Preprocessing</B></U>:';
+    sProcess.options.label2.Type    = 'label';
+    
+    sProcess.options.statistical_processing.Type    = 'radio_line';
+    sProcess.options.statistical_processing.Comment   = {'Pre-coloring', 'Pre-whitenning','Method : '};
+    sProcess.options.statistical_processing.Value   = 1;
+    
+    sProcess.options.output_cmt0.Comment = '<B>Pre-coloring Options</B>:';
+    sProcess.options.output_cmt0.Type    = 'label';
+    
+    sProcess.options.hpf_low_cutoff.Comment = 'Low cut-off frequency: ';
+    sProcess.options.hpf_low_cutoff.Type    = 'value';
+    sProcess.options.hpf_low_cutoff.Value   = {0.01, 'sec', 2};
+    
+    sProcess.options.output_cmt1.Comment = '<B>Pre-whitenning Options</B>:';
+    sProcess.options.output_cmt1.Type    = 'label';
+    
+    sProcess.options.noise_model.Type    = 'radio_line';
+    sProcess.options.noise_model.Comment   = {'AR(1)', 'AR(p)','Model of the noise : '};
+    sProcess.options.noise_model.Value   = 1;
+    
+    sProcess.options.separator1.Type = 'separator';
+    sProcess.options.separator1.Comment = ' ';
+    
+    sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
+    sProcess.options.label3.Type    = 'label';
+    
     sProcess.options.stim_events.Comment = 'Stimulation events: ';
     sProcess.options.stim_events.Type    = 'text';
     sProcess.options.stim_events.Value   = '';
@@ -66,23 +100,15 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trend.Type    = 'checkbox';
     sProcess.options.trend.Value   =  1;
     
-    sProcess.options.fitting.Comment = 'Method';
-    sProcess.options.fitting.Type    = 'combobox';
-    sProcess.options.fitting.Value   = {1, {'OLS - precoloring', 'AR-IRLS' }};
-    
-    sProcess.options.hpf_low_cutoff.Comment = 'Low cut-off frequency: ';
-    sProcess.options.hpf_low_cutoff.Type    = 'value';
-    sProcess.options.hpf_low_cutoff.Value   = {0.01, 'sec', 2};
-    
     sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
     sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
     
     % Separator
-    sProcess.options.separator.Type = 'separator';
-    sProcess.options.separator.Comment = ' ';
-    
-    sProcess.options.output_cmt.Comment = '<B>Extra outputs</B>:';
+    sProcess.options.separator2.Type = 'separator';
+    sProcess.options.separator2.Comment = ' ';
+
+    sProcess.options.output_cmt.Comment = '<U><B>Extra outputs</B></U>:';
     sProcess.options.output_cmt.Type    = 'label';
         
     sProcess.options.save_betas.Comment = 'Beta maps';
@@ -207,24 +233,37 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     X_trim = X((trim_start_sample+1):end, :);
     
     %% Solve Y = XB + e 
-    fitting_choice = sProcess.options.fitting.Value{1};
-    if fitting_choice == 1  %
-         method_name = 'OLS_precoloring';
-         hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
-         [B, covB, dfe, residuals, mse_residuals] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
-    elseif  fitting_choice == 2  % Use AR-IRLS 
-        analyzIR_url = 'https://bitbucket.org/huppertt/nirs-toolbox/';
-        if ~exist('nirs.core.ChannelStats','class')
-        	bst_error(['AnalyzIR toolbox required. See ' analyzIR_url]);
+    switch sProcess.options.fitting.Value
+        case 1 % OLS 
+            if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
+                method_name = 'OLS_precoloring';
+                hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
+                [B, covB, dfe, residuals, mse_residuals] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
+            else % Pre-whitenning
+                if sProcess.options.noise_model.Value == 1
+                    method_name = 'AR1_OLS';
+                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hrf);
+                else 
+                    bst_error('This method is not implemented');
+                    return
+                end    
+            end    
+
+        case 2 % IRLS
+            analyzIR_url = 'https://bitbucket.org/huppertt/nirs-toolbox/';
+            if ~exist('nirs.core.ChannelStats','class')
+                bst_error(['AnalyzIR toolbox required. See ' analyzIR_url]);
+                return
+            end
+            method_name = 'AR-IRLS_fit';
+            % TODO: adapt to return original covB and separated mse_residuals
+            % instead of mixing them already (done later during con t-stat computation)
+            [B, covB, dfe, residuals, mse_residuals] = ar_irls_fit( Y_trim, X_trim, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
+        otherwise
+            bst_error('This method is not implemented');
             return
-        end
-        method_name = 'AR-IRLS_fit';
-        % TODO: adapt to return original covB and separated mse_residuals
-        % instead of mixing them already (done later during con t-stat computation)
-        [B,covB,dfe] = ar_irls_fit( Y_trim, X_trim, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
-    else
-        bst_report('Error', sProcess, sInput, 'This method is not implemented yet' );
-    end
+        
+    end    
     
     %% Save results
     % Main output is beta maps stacked in temporal axis
@@ -367,8 +406,21 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     end
 end
 
+function [B,proj_X] = compute_B_svd(y,X)
 
-function [B,covB,dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low_cutoff)
+    [X_u, X_s, X_v] = svd(X,0);
+    X_diag_s = diag(X_s);
+    X_rank_tol =  max(size(X)) * max(abs(X_diag_s)) * eps;
+    X_rank =  sum(X_diag_s > X_rank_tol);
+
+    % Compute projector based on X to solve Y = X*B
+    proj_X = X_v(:,1:X_rank) * diag(1./X_diag_s(1:X_rank)) * X_u(:,1:X_rank)';
+    
+    % Fit to data
+    B = proj_X * y; 
+
+end
+function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low_cutoff)
     
     % Low pass filter, applied to input data
     lpf = full(lpf_hrf(hrf, size(y, 1)));
@@ -387,16 +439,7 @@ function [B,covB,dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low
     X_filtered = [X_filtered X(:,end)];
     
     %% Solve y = X*B using SVD as in SPM
-    [X_u, X_s, X_v] = svd(X_filtered,0);
-    X_diag_s = diag(X_s);
-    X_rank_tol =  max(size(X_filtered)) * max(abs(X_diag_s)) * eps;
-    X_rank =  sum(X_diag_s > X_rank_tol);
-
-    % Compute projector based on X to solve Y = X*B
-    proj_X = X_v(:,1:X_rank) * diag(1./X_diag_s(1:X_rank)) * X_u(:,1:X_rank)';
-    
-    % Fit to data
-    B = proj_X * y_filtered; 
+    [B,proj_X] = compute_B_svd(y_filtered,X_filtered);
     
     %% For stat afterwards
     res_form_mat = eye(size(lpf)) - X_filtered * proj_X;
@@ -438,8 +481,89 @@ function [B,covB,dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low
         
     end
 end
+function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hrf)
+    
+    n_chan=size(Y_trim,2);
+    n_cond=size(X_trim,2);
+    max_iter=30;
+    B_out=zeros(n_cond,n_chan);
+    
+    for i_chan=1:n_chan
+       % Solve B for chan i_chan. We need to solve B for each channel
+       % speratly as we are fitting one AR model per channel. This might 
+       % not be a good idead in the source space. 
+       
+       
+       y=Y_trim(:,i_chan);
+       
+       B= y\X_trim; 
+       B0=zeros(n_cond,1);
+       
+       iter=0;
+       
+       X_filtered=X_trim;
+       y_filtered=y;
+       
+       while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
+           disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
 
-function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
+           B0=B;
+           res=y_filtered-X_filtered*B0';
+           
+           [W,y,e]=AR_fit(res,1,1e-5,0);
+           
+           W=[1 ; -W(2:end)];
+           
+           X_filtered=filter(W,1,X_filtered);
+           y_filtered=filter(W,1,y_filtered);
+           
+           [B,proj_X] = compute_B_svd(y_filtered,X_filtered);
+           iter=iter+1;
+       end
+       
+       % Compute stat afterwards
+       
+        B_out(:,i_chan)=B;
+        % TODO 
+    
+        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration |res|=' num2str(norm(res)) ]) 
+    end  
+        
+end
+
+function [W,y,e] = AR_fit(x,order,mu,normalized)
+    % Use an LMS algorithm to fit an AR(P) model to x
+    % mu is the learning rate and should be close to 0
+    % If normalized = 1, use the NLMS instead
+    P=order+1;
+    
+    if nargin < 5
+        normalized=0;
+    end    
+
+    % initialisation : 
+    N=length(x);
+    
+    W=zeros(P,1);
+    e=zeros(1,N);
+    e(1:P)=x(1:P);
+    
+    y=zeros(1,N);
+    
+    for n=P:N 
+        u = x(n:-1:n-P+1);
+        y(n)= W' * u;
+        e(n)= y(n) - x(n);
+        if normalized
+            W = W - mu*u*e(n)/(norm(u)^2);
+        else    
+            W = W - mu*u*e(n);
+        end
+    end
+
+end
+
+function [B, covB, dfe, residuals, mse_residuals]=ar_irls_fit(y,X,pmax)
 	stat=nirs.math.ar_irls(y,X, pmax );
     
     B=stat.beta;
@@ -449,6 +573,8 @@ function [B,covB,dfe]=ar_irls_fit(y,X,pmax)
        covB(:,:,i)= stat.covb(:,:,i,i);
     end    
     dfe=stat.dfe;
+    
+    
 end
 
 function lpf = lpf_hrf(h, signal_length)
@@ -574,7 +700,7 @@ function signal = cpt_hrf_boxcar(t_vect,lag,duration)
             signal(i)=1;
         else
             signal(i)=0;
-        end;
+        end
         i=i+1;
     end
 end
