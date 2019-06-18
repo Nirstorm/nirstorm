@@ -70,7 +70,8 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
         surface_data = 1;
         con_mat = con_data.ImageGridAmp';
     else
-        con_mat = con_data.F;
+        surface_data = 0;
+        con_mat = con_data.F';
     end
     edf = con_data.edf;        
     con_std = con_data.contrast_std;
@@ -113,7 +114,7 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutput.SurfaceFile = con_data.SurfaceFile;
         sOutput.ChannelFlag = [];
     else
-        sOutput.ChannelFlag = ones(1,nb_positions); %TODO: use current channel flags
+        sOutput.ChannelFlag = con_data.ChannelFlag; %TODO: use current channel flags
         sOutput.Options.SensorTypes = 'NIRS';
     end
     sOutput.Time         = [1];

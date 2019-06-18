@@ -182,10 +182,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     else
         %TODO: check channel-space output
         sDataOut = db_template('data');
-        sDataOut.F            = con_mat;
+        sDataOut.F            = con_mat';
         sDataOut.Comment      = comment;
         sDataOut.ChannelFlag  = glm_fit.ChannelFlag;
-        sDataOut.Time         = 1;
+        sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = glm_fit.DisplayUnits; %TODO: check scaling
@@ -193,8 +193,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         % Add extra fields
         extra_fields = fieldnames(extra_output);
         for ifield = 1:length(extra_fields)
-            assert(~isfield(sDataOut, extra_fields{ifield}));
-            sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+            if ~isfield(sDataOut, extra_fields{ifield})
+                sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+            end
         end
         
         % Save to bst database
@@ -202,7 +203,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut.FileName = file_short(glm_fn);
         bst_save(glm_fn, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInput.iStudy, glm_fn, sDataOut);
+        db_add_data(sInputs(1).iStudy, glm_fn, sDataOut);
         OutputFiles{end+1} = glm_fn;
     end
 
