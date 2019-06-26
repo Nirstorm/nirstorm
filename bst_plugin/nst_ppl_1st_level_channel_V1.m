@@ -280,7 +280,7 @@ redo_parent = redo_parent | options.MBLL.redo;
                                             'option_do_plp_corr',     1, ...
                                             'option_dpf_method',      2, ...  % DUNCAN1996
                                             'option_baseline_method', options.MBLL.baseline_method, ...  % median
-                                            'timewindow',             []);
+                                            'timewindow',             [0 options.MBLL.timewindow]);
               
 % Band pass filter
 redo_parent = redo_parent | options.high_pass_filter.redo;
@@ -424,7 +424,7 @@ options.MBLL.redo = 0;
 options.MBLL.age = 60;
 options.MBLL.pvf = 50;
 options.MBLL.baseline_method = 2; % 1:mean, 2:median
-
+options.MBLL.timewindow=60;
 
 options.high_pass_filter.redo = 0;
 options.high_pass_filter.low_cutoff = 0.01; %Hz
@@ -668,7 +668,7 @@ redone_imports = zeros(1,nb_subjects);
 for i=1:nb_subjects
     sSubject = bst_get('Subject', options.import.subject{i}.name, 1);
     if isempty(sSubject)
-        [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 0, 0);
+        [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 1, 0);
     end
 
     db_save();

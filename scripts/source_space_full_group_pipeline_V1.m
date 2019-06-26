@@ -32,12 +32,14 @@ end
 
 %% Check Protocol
 
-protocol_name = 'Protocol02';
+protocol_name = 'Tapping_on_template';
 
 if isempty(bst_get('Protocol', protocol_name))
     gui_brainstorm('CreateProtocol', protocol_name, 1, 0); % UseDefaultAnat=1, UseDefaultChannel=0
 end
 
+% Set template for default anatomy
+nst_bst_set_template_anatomy('Colin27_4NIRS_Jan19');
 
 %% Fetch data
 % Get list of local nirs files for the group data.
@@ -77,9 +79,16 @@ for ifile=1:length(sFiles)
 end
 
 %% Run pipeline
+
+options.MBLL.timewindow=30;
+
+
+
 options.GLM_1st_level.stimulation_events = {'motor'};
 options.GLM_1st_level.contrasts(1).label = 'motor';
 options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a vector of weights, as a string 
+options.GLM_1st_level.contrast_tstat.do = 1;
+
 
 % Run the pipeline (and  save user markings):
 nst_ppl_1st_level_channel_V1('analyse', options, subject_names); % Run the full pipeline

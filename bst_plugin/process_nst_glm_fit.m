@@ -61,7 +61,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.fitting.Comment   = {'OLS', 'IRLS(not implemented)','' };
     sProcess.options.fitting.Value   = 1;
     
-    sProcess.options.label2.Comment = '<U><B>Statistical Preprocessing</B></U>:';
+    sProcess.options.label2.Comment = '<U><B>Serial Correlation Preprocessing</B></U>:';
     sProcess.options.label2.Type    = 'label';
     
     sProcess.options.statistical_processing.Type    = 'radio_line';
@@ -485,6 +485,8 @@ function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, 
     
     n_chan=size(Y_trim,2);
     n_cond=size(X_trim,2);
+    n_time=size(Y_trim,1);
+    
     max_iter=30;
     B_out=zeros(n_cond,n_chan);
     
@@ -496,7 +498,8 @@ function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, 
        
        y=Y_trim(:,i_chan);
        
-       B= y\X_trim; 
+       [B,proj_X] = compute_B_svd(y,X_trim);
+ 
        B0=zeros(n_cond,1);
        
        iter=0;
@@ -508,13 +511,13 @@ function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, 
            disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
 
            B0=B;
-           res=y_filtered-X_filtered*B0';
+           res=y_filtered-X_filtered*B0;
            
            [W,y,e]=AR_fit(res,1,1e-5,0);
            
            W=[1 ; -W(2:end)];
            
-           X_filtered=filter(W,1,X_filtered);
+           X_filtered(:,1:end-1)=filter(W,1,X_filtered(:,1:end-1));
            y_filtered=filter(W,1,y_filtered);
            
            [B,proj_X] = compute_B_svd(y_filtered,X_filtered);
@@ -524,7 +527,17 @@ function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, 
        % Compute stat afterwards
        
         B_out(:,i_chan)=B;
-        % TODO 
+%         res_form_mat = eye(n_time) - X_filtered * proj_X;
+%         lpf_lpf_T = full(lpf * lpf');
+%         RV = res_form_mat * lpf_lpf_T;
+%         trRV = sum(diag(RV));
+%         RVRVt = RV .* RV';
+%         trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
+%         dfe = trRV^2 / trRVRV;
+    
+        fit = X_filtered * B;
+        residuals = y_filtered - fit;     
+        mse_residuals = var(residuals) * (size(y,1)-1); % / trRV;
     
         disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration |res|=' num2str(norm(res)) ]) 
     end  
