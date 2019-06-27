@@ -22,19 +22,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %
 %   % Import some nirs data along with event markings:
 %   subject_names = {'subj1', 'subj2'};
-%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', options, {'data1.nirs', 'data2.nirs'}, subject_names);
-%   for ifile=1:length(sFilesRaw)
-%     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
-%   end
-%
-%   User can specify more option for the importation (such additional headspoints, or MRI files) : 
-%   options.import.subject(1:nb_subjects)=repmat(options.import.subject,1, nb_subjects);
-%   for i=1:nb_subjects
-%       options.import.subject{i}.name=subject_names{i}; 
-%       options.import.subject{i}.nirs_fn='raw.nirs' % path to the nirs file
-%       options.import.subject{i}.additional_headpoints='headpoints'; % path to the digitalized headpoints 
-%    end    
-%   sFilesRaw= nst_ppl_surface_template_V1('import_subjects', options);
+%   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import', options, {'data1.nirs', 'data2.nirs'}, subject_names);
 %   for ifile=1:length(sFilesRaw)
 %     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
 %   end
@@ -54,7 +42,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % DEFAULT_OPTIONS = NST_PPL_SURFACE_TEMPLATE_V1('get_options')
 %     Return default options
 %
-% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_nirs', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import', OPTIONS, NIRS_FNS, SUBJECT_NAMES)
 %     Import all nirs files in database and use given subjects (skip if exists).
 %     NIRS_FNS is a cell array of str.
 %     If SUBJECT_NAMES is empty or not given, then use base filename as
@@ -62,22 +50,11 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %     same length as NIRS_FNS.
 %
 %     Used options:
-%        - options.import.redo       
+%        - options.import.redo
+%
 %     Return:
 %         FILES_RAW: brainstorm file pathes to imported data.
 %
-% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('import_subjects', OPTIONS)
-%     Import all nirs files in database and use given subjects (skip if exists).
-%     options.subject is an array of structur that contains subjects informations.
-%     Used options:
-%        - options.import.redo
-%        - options.subject{i} contains the following informations about 
-%          the ith subject :
-%           - subject{i}.name [optional] 
-%           - subject{i}.nirs_fn [mandatory]  
-%           - subject{i}.additional_headpoints [optional] 
-%     Return:
-%         FILES_RAW: brainstorm file pathes to imported data.
 %  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
 %     Apply pipeline to given group(s) of subjects.
@@ -144,7 +121,7 @@ switch action
     case 'rois_summary.get_mask_combinations'
         varargout{1} = get_mask_combinations();
         return;
-    case 'import_nirs'
+    case 'import'
         if nargin >= 4
             subject_names = arg2;
         else
@@ -152,12 +129,6 @@ switch action
             subject_names(:) = {''};
         end
         [imported_files, redone] = import_nirs_files(arg1, subject_names, options);
-        varargout{1} = imported_files;
-        varargout{2} = redone;
-        return;
-    case 'import_subjects'
-        [imported_files, redone] = import_subjects(options);
-        
         varargout{1} = imported_files;
         varargout{2} = redone;
         return;
@@ -203,7 +174,6 @@ create_dir(options.fig_dir);
 create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
 create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
-
 
 % Get head model precomputed for all optode pairs
 % (precompute it by cloning given data if needed)
@@ -571,22 +541,9 @@ redo_parent = redo_parent | options.high_pass_filter.redo;
                                   
 % Compute head model from full head model
 redo_parent = redo_parent | options.head_model.redo;
-
-if options.head_model.subject_specific  
-    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], options.head_model.subject_specific || redo_parent, ...
-                                   'process_nst_import_head_model', sFile_dOD_filtered, [], ...
-                                   'use_closest_wl', 1, 'use_all_pairs', 0, ...
-                                   'force_median_spread', 0, ...
-                                   'normalize_fluence', 1, ...
-                                   'smoothing_fwhm', options.head_model.smoothing_fwhm);
-    
-else   
-    [dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
-                                            sFile_dOD_filtered, sFile_raw_full_head_model);
-end
-                                        
-
-
+[dummy_out, redo_parent] = nst_run_bst_proc([preproc_folder 'head model'], redo_parent, 'process_nst_sub_headmodel', ...
+                                            sFile_dOD_filtered, sFile_raw_full_head_model);                                  
+                                  
 % Project and convert to d[HbX]
 redo_parent = redo_parent | options.projection.redo;
 proj_method =  options.projection.method;
@@ -766,28 +723,21 @@ end
                                        'use_closest_wl', 1, 'use_all_pairs', 1, ...
                                        'force_median_spread', 0, ...
                                        'normalize_fluence', 1, ...
-                                       'smoothing_fwhm', options.head_model.smoothing_fwhm);
+                                       'smoothing_fwhm', 0);
 end
 
 function options = get_options()
 
 options.redo_all = 0;
 
-
 options.import.redo = 0;
 
-
-options.import.subject{1}.name='';
-options.import.subject{1}.nirs_fn='';
-options.import.subject{1}.additional_headpoints='';
-
-
-options.head_model.subject_specific = 0; % 1 if you want to recompute the head model for each subject
-options.head_model.smoothing_fwhm = 0; %
 options.head_model.surface = 'cortex_lowres';
-options.head_model.redo = 0;
 
 options.sci.redo = 0;
+
+options.head_model.redo = 0;
+
 options.deglitch.do = 0;
 options.deglitch.redo = 0;
 options.deglitch.agrad_std_factor = 2.5;
@@ -878,7 +828,6 @@ operations = process_nst_combine_masks('get_mask_combinations');
 operations.none = length(fieldnames(operations)) + 1;
 end
 
-
 function [files_in, redone_imports] = import_nirs_files(nirs_fns, subject_names, options)
 files_in = cell(size(nirs_fns));
 redone_imports = zeros(size(nirs_fns));
@@ -935,97 +884,6 @@ for ifile=1:length(nirs_fns)
     % 
     files_in{ifile} = file_in;
 end
-
-end
-
-function [file_in, redone] = import_nirs_file(options,i_subject)
-subject=options.import.subject{i_subject};
-
-%% Import data
-nirs_fn = subject.nirs_fn;
-
-if isempty(subject.name)
-   [root, subject_name, ext] = fileparts(nirs_fn);
-else
-    subject_name = subject.name;
-end
-
-condition = ['origin' get_ppl_tag()];
-[file_in, redone] = nst_run_bst_proc([subject_name '/' condition '/Raw'], options.import.redo, ...
-                                       'process_import_data_time', [], [], ...
-                                       'subjectname',  subject_name, ...
-                                       'condition',    condition, ...
-                                       'datafile',     {nirs_fn, 'NIRS-BRS'}, ...
-                                       'timewindow',   [], ...
-                                       'split',        0, ...
-                                       'ignoreshort',  1, ...
-                                       'channelalign', 1, ...
-                                       'usectfcomp',   0, ...
-                                       'usessp',       0, ...
-                                       'freq',         [], ...
-                                       'baseline',     []);
-%% If available import additional headpoints, and refine the registration
-if redone && ~isempty(subject.additional_headpoints)  && exist(subject.additional_headpoints)
-    % Import head points
-    bst_process('CallProcess', 'process_headpoints_add', file_in, [], ...
-                'channelfile', {subject.additional_headpoints, 'ASCII_NXYZ'}, ...
-                'fixunits',    0.1, ...
-                'vox2ras',     1);
-
-    %  Refine registration
-    bst_process('CallProcess', 'process_headpoints_refine', file_in, []);
-    
-end 
-
-%% Manage movement event markings TODO
-if redone
-    evt_formats = bst_get('FileFilters', 'events');
-    evt_format = evt_formats(strcmp('BST', evt_formats(:,3)), :);
-
-    moco_fn = get_moco_markings_fn(subject_name, options.moco.export_dir);
-    if exist(moco_fn, 'file')
-        % Load event from pre-saved file
-        % TODO: test
-        sFile_in = load(file_fullpath(file_in));
-        [sFile_in, events] = import_events(sFile_in, [], moco_fn, evt_format);   
-    else
-        % Create empty event group
-        movement_events = db_template('event');
-        movement_events.label = 'movement_artefacts';
-        sFile_in = bst_process('GetInputStruct', file_in);
-        process_nst_import_csv_events('import_events', [], sFile_in, movement_events);
-    end
-
-    bad_chans_fn = get_bad_chan_markings_fn(subject_name, options.tag_bad_channels.export_dir);
-    if exist(bad_chans_fn, 'file')
-        % TODO: load content of .mat and set channel flag
-        % TODO: save data -> see process_nst_tag_bad_channels
-    end
-    
-end
-%% Manage bad channel markins
-% TODO: update channel flags
-% 
-
-end
-
-function [files_in, redone_imports] = import_subjects(options)
-    nb_subjects = length(options.import.subject);
-    
-    files_in = cell(1,nb_subjects);
-    redone_imports = zeros(1,nb_subjects);
-
-    for i=1:nb_subjects
-        sSubject = bst_get('Subject', options.import.subject{i}.name, 1);
-        if isempty(sSubject)
-            [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 1, 0); % Use default anatomy 
-        end
-        
-        [imported_files, redone] = import_nirs_file(options,i);
-        
-        files_in{i} = imported_files;
-        redone_imports(i)=redone; 
-    end
 
 end
 
