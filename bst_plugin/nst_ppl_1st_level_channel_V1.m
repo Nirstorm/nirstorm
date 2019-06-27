@@ -148,14 +148,13 @@ for igroup=1:nb_groups
                                                                                   redone_preprocs | force_redo);
         
         if isubject==1
-            nb_hb_types = size(sFiles_con, 1);
             nb_contrasts = size(sFiles_con, 2);
-            all_sFiles_con{igroup} = cell(nb_hb_types, nb_contrasts, length(subject_names));
+            all_sFiles_con{igroup} = cell(nb_contrasts, length(subject_names));
         else
-            assert(size(sFiles_con, 1) == nb_hb_types);
+            %assert(size(sFiles_con, 1) == nb_hb_types);
             assert(size(sFiles_con, 2) == nb_contrasts);
         end
-        all_sFiles_con{igroup}(:,:, isubject) = sFiles_con;
+        all_sFiles_con{igroup}(:, isubject) = sFiles_con;
 
         if options.clean_preprocessings
             full_preproc_folder = fileparts(sFiles_preprocessed{1});
@@ -177,10 +176,6 @@ for igroup=1:nb_groups
        return;
     end
     sSubjectDefault = bst_get('Subject', 0); %TODO: use this also for 1st level
-    
-    hb_types = process_nst_cortical_projection('get_hb_types');
-    nb_hb_types=length(hb_types);
-    stacking_types = process_nst_concat_matrices('get_stacking_types');
     contrasts = options.GLM_1st_level.contrasts;
     if options.GLM_group.do
        
@@ -191,39 +186,37 @@ for igroup=1:nb_groups
         end
         group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
         group_condition_names{igroup} = group_condition_name;
-        for ihb=1:nb_hb_types
-            for icon=1:nb_contrasts
-                item_comment = ['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label];
-                [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
-                                                                'process_nst_glm_group_ttest', all_sFiles_con{igroup}(ihb, icon, :), [], ...
-                                                                'tail', 'two');
-                fig_bfn = sprintf('group_%s_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
-                              group_label, hb_types{ihb}, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
-                              nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
-                              contrasts(icon).label);
-                fig_fn = fullfile(options.fig_dir, fig_bfn);
-                if ~isempty(options.fig_dir) && options.make_figs && ...
-                    options.GLM_group.contrast_tstat.plot.do && ...
-                    (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))   
-                    plot_stat(sFile_GLM_gp_ttest, fig_fn, options, 0, 1, sSubjectDefault);
+        for icon=1:nb_contrasts
+            item_comment = ['Group analysis/' group_condition_name '/ | con_t-+ ' contrasts(icon).label];
+            [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
+                                                            'process_nst_glm_group_ttest', all_sFiles_con{igroup}(icon, :), [], ...
+                                                            'tail', 'two');
+            fig_bfn = sprintf('group_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
+                          group_label, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
+                          nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
+                          contrasts(icon).label);
+            fig_fn = fullfile(options.fig_dir, fig_bfn);
+            if ~isempty(options.fig_dir) && options.make_figs && ...
+                options.GLM_group.contrast_tstat.plot.do && ...
+                (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))   
+                plot_stat(sFile_GLM_gp_ttest, fig_fn, options, 0, 1, sSubjectDefault);
+            end
+
+            if options.GLM_group.rois_summary.do
+
+                if igroup==1 && ihb==1 && icon==1
+                    sFile_gp_masks = cell(nb_groups, nb_hb_types, nb_contrasts);
                 end
 
-                if options.GLM_group.rois_summary.do
-                    
-                    if igroup==1 && ihb==1 && icon==1
-                        sFile_gp_masks = cell(nb_groups, nb_hb_types, nb_contrasts);
-                    end
-                    
-                    [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
-                                                                redone | options.GLM_group.rois_summary.redo, ...
-                                                                'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
-                                                                'do_atlas_inter', 1, ...
-                                                                'min_atlas_roi_size', 3, ...
-                                                                'atlas', options.GLM_group.rois_summary.atlas);
-                     sFile_gp_masks{igroup, ihb, icon} = sFile_gp_mask;
-                end   
-            end % loop over contrasts
-        end % loop over hb types
+                [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/ | con_t-+ ' contrasts(icon).label ' | mask'], ...
+                                                            redone | options.GLM_group.rois_summary.redo, ...
+                                                            'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
+                                                            'do_atlas_inter', 1, ...
+                                                            'min_atlas_roi_size', 3, ...
+                                                            'atlas', options.GLM_group.rois_summary.atlas);
+                 sFile_gp_masks{igroup, icon} = sFile_gp_mask;
+            end   
+        end % loop over contrasts
     end % If do group level    
 end % Loop over groups
 

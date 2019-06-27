@@ -83,6 +83,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     con_name = sConStat.contrast_name;
     
     if isfield(sConStat, 'SurfaceFile')
+        surface_data = 1;
         nb_positions = size(sConStat.ImageGridAmp, 1);
         all_cons = zeros(nb_inputs, nb_positions);
         all_cons_var = zeros(nb_inputs, nb_positions);
@@ -93,8 +94,22 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             all_cons_var(iInput, :) = in_data.contrast_std.^2;
         end
     else
-        %TODO
-        error('TODO');
+        
+        % Warnings : This does not check that the montage is consistent
+        % across subject 
+        surface_data = 0;
+        [ChannelMat,ChannelList]=getCommonChannels(sInputs);
+        
+        n_chan=length(ChannelList);
+        all_cons = zeros(nb_inputs, n_chan);
+        all_cons_var = zeros(nb_inputs, n_chan);
+        for iInput=1:nb_inputs
+            in_data=getDataForChannels(sInputs(iInput),ChannelList);
+            assert(strcmp(con_name, in_data.contrast_name));
+            all_cons(iInput, :) = in_data.F;
+            all_cons_var(iInput, :) = in_data.contrast_std.^2;
+        end
+
     end
     
     con_avg = mean(all_cons, 1);
@@ -109,14 +124,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     p = process_test_parametric2('ComputePvalues', t_stat, edf, 't', ...
                                  sProcess.options.tail.Value );
     
-    if ~isfield(sConStat, 'SurfaceFile') || isempty(sConStat.SurfaceFile) 
-        %TODO
-        error('TODO');
-        [ChannelFile] = bst_get('ChannelFileForStudy', iStudy);
-        [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudyIntra);
-        db_set_channel(iChannelStudy, ChannelFile, 0, 0);
-    end
-    
+
     % === OUTPUT STRUCTURE ===
     % Initialize output structure
 
@@ -129,20 +137,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     df_map(sum(gp_var, 1) > 0) = edf;
     sOutput.df = df_map;
     
-    if ~isfield(sConStat, 'SurfaceFile') || isempty(sConStat.SurfaceFile)
-        sOutput.ChannelFlag = ones(1,n_chan);
-        sOutput.Options.SensorTypes = 'NIRS';
-    else
+    if surface_data 
         sOutput.HeadModelType = 'surface';
         sOutput.SurfaceFile = sConStat.SurfaceFile;
         sOutput.ChannelFlag = [];
+        sOutput.Type = 'results';
+
+    else
+        sOutput.ChannelFlag = ones(1,n_chan);
+        sOutput.Options.SensorTypes = 'NIRS'; 
+        sOutput.Type = 'data';
+
     end
+    
     sOutput.Correction   = 'no';    
     sOutput.Time         = [1];
     sOutput.ColormapType = 'stat2';
     sOutput.DisplayUnits = 't';
-    
-    sOutput.Type = 'results';
     sOutput.nComponents = 1; %TODO: check
     
     comment = sprintf('GLM group contrast (n=%d df):%s', nb_inputs, con_name);
@@ -162,11 +173,84 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     if isempty(sSubject)
         [sSubject, iSubject] = db_add_subject(output_subject, [], 1, 0);
     end
-    
     iStudy = db_add_condition(output_subject, output_condition);
     sStudy = bst_get('Study', iStudy);
     
-    OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudy.FileName), 'presults_group_ttest');
-    bst_save(OutputFiles{1}, sOutput, 'v6');
-    db_add_data(iStudy, OutputFiles{1}, sOutput);
+    if surface_data
+        OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudy.FileName), 'presults_group_ttest');
+        bst_save(OutputFiles{1}, sOutput, 'v6');
+        db_add_data(iStudy, OutputFiles{1}, sOutput);
+    else 
+         % Save channel definition
+        [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+        db_set_channel(iChannelStudy, ChannelMat, 0, 0);   
+        OutputFiles{1} = bst_process('GetNewFilename', fileparts(sStudy.FileName), 'pdata_group_ttest');
+        bst_save(OutputFiles{1}, sOutput, 'v6');
+        db_add_data(iStudy, OutputFiles{1}, sOutput);
+        
+    end
+
+
+end
+
+function [ChannelMat,ChannelList]=getCommonChannels(sInputs)
+    
+    nb_inputs=length(sInputs);
+    
+    % Get the list of the name of commom channel 
+    ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
+    ChannelList=getChannelsNames(ChannelMat);
+    for iInput=2:nb_inputs
+        ChannelMat = in_bst_channel(sInputs(iInput).ChannelFile);
+        tmpChannelList=getChannelsNames(ChannelMat);
+        % Do not modify the order of the channels
+        ChannelList=intersect(ChannelList,tmpChannelList,'stable');
+   
+    end
+    
+    
+    % Get the list of the commom channel 
+    n_channel=length(ChannelList);
+    i_chan=1;
+    for i_old_chan=1:length(ChannelMat.Channel)
+        if ~isempty( intersect( ChannelMat.Channel(i_old_chan).Name,ChannelList)) 
+            new_channel(i_chan)=ChannelMat.Channel(i_old_chan);
+            i_chan=i_chan+1;
+        end
+    end
+    
+    % Update the channel matrix
+    ChannelMat.Channel=new_channel;
+    ChannelMat.Comment=['NIRS-BRS sensors (' int2str(n_channel) ')'];
+end
+
+
+function ChannelsNames=getChannelsNames(channelMat)
+    [nirs_ichans, tmp] = channel_find(channelMat.Channel, 'NIRS');
+    ChannelsNames={};
+    for i_chan=nirs_ichans
+        ChannelsNames{end+1}=channelMat.Channel(i_chan).Name;
+    end    
+end
+
+function data=getDataForChannels(sInput,ChannelList)
+    ChannelMat = in_bst_channel(sInput.ChannelFile);
+    channel_name=getChannelsNames(ChannelMat);
+    
+    data = in_bst_data(sInput.FileName);
+    n_chan=length(ChannelList);
+    
+    F=zeros(n_chan,1);
+    contrast_std=zeros(1,n_chan);
+            
+    for i_chan=1:length(channel_name)
+        [C,ia,ib]=intersect(channel_name(i_chan),ChannelList);
+        if ~isempty(C) 
+            F(ib)=data.F(i_chan);
+            contrast_std(ib)=data.contrast_std(i_chan);
+        end
+    end
+    data.F=F;
+    data.contrast_std=contrast_std;
+    data.ChannelFlag=ones(n_chan,1);
 end
