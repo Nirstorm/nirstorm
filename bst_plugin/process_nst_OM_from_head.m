@@ -215,7 +215,7 @@ if 1
     segmentation_name = 'segmentation_5tissues';
     iseg = 0;
     for ianat = 1:size(sSubject.Anatomy,2)
-        if any(contains(sSubject.Anatomy(ianat).Comment, segmentation_name))
+        if ~isempty(strfind(sSubject.Anatomy(ianat).Comment, segmentation_name))
             iseg = ianat;
         end
     end

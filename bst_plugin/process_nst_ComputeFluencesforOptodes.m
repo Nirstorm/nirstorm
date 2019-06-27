@@ -168,14 +168,14 @@ sHead = in_tess_bst(head_mesh_fn);
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 % Load segmenation 
 iseg = 0;
-
+segmentation_name = 'segmentation_5tissues';
 for ianat = 1:size(sSubject.Anatomy,2)
-    if any(contains(sSubject.Anatomy(ianat).Comment, 'segmentation_5tissues'))
+    if ~isempty(strfind(sSubject.Anatomy(ianat).Comment, segmentation_name))
         iseg = ianat;
     end
 end
 if iseg == 0
-    bst_error('ERROR: Please import segmentation file as MRI and rename it as "segmentation_5tissues"');
+    bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
 
