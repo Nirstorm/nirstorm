@@ -1,4 +1,4 @@
-function varargout = nst_ppl_surface_full_V1(action, options, arg1, arg2)
+function varargout = nst_ppl_surface_V1(action, options, arg1, arg2)
 %NST_PPL_SURFACE_TEMPLATE_V1
 % Manage a full template- and surface-based pipeline starting from raw NIRS data
 % up to GLM group analysis (if enough subjects).
@@ -139,40 +139,6 @@ switch action
         varargout{1} = imported_files;
         varargout{2} = redone;
         return;
-    case 'preprocessing'
-        if nargin >= 3
-            % Only compute the fluences for the specified subjects
-            subject_names = arg1;
-        else
-            % Compute the fluences for every subjects 
-            subject_names = cell(size(options.import.subject));
-            for iSubject=1:size(options.import.subject,2)
-                subject_names{iSubject} = options.import.subject{iSubject}.name;
-            end    
-        end
-         sFiles=cell(size(options.import.subject));
-         redones=cell(size(options.import.subject));
-         
-        for iSubject=1:length(subject_names)
-            [sFiles{iSubject},hb_types,redones{iSubject}, preproc_folder] = preprocs(subject_names{iSubject},options);
-            varargout{1} = sFiles;
-            varargout{2} = redones;
-        end
-        return;
-    case 'compute_fluences'
-        if nargin >= 3
-            % Only compute the fluences for the specified subjects
-            subject_names = arg1;
-        else
-            % Compute the fluences for every subjects 
-            subject_names = cell(size(options.import.subject));
-            for iSubject=1:size(options.import.subject,2)
-                subject_names{iSubject} = options.import.subject{iSubject}.name;
-            end    
-        end
-       
-        compute_fluences(subject_names,options);
-        return
     case 'analyse'
     otherwise
         error('Unknown action: %s', action);
@@ -202,6 +168,7 @@ create_dir(options.fig_dir);
 create_dir(options.moco.export_dir);
 create_dir(options.tag_bad_channels.export_dir);
 create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
+create_dir(options.fluences.export_dir);
 
 
 nb_groups = length(groups);
@@ -217,11 +184,12 @@ for igroup=1:nb_groups
     for isubject=1:length(subject_names)
 
         subject_name = subject_names{isubject};
-
-
+        
+        % Compute fluences 
+        redone_fluences=compute_fluences(subject_name,options,force_redo);
         
         % Run preprocessings
-        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(subject_name,options, force_redo);
+        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(subject_name,options, redone_fluences | force_redo);
         
         % Run 1st level GLM
         [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
@@ -361,29 +329,23 @@ hb_types = process_nst_cortical_projection('get_hb_types');
 redone = redo_parent;                                  
 end
 
-function compute_fluences(subject_names,options)
-% Todo : make sure that each subject has been proprely imported 
-% Check if the fluences have already been computed and re-computed them
-% only if asked (flag redo)
+function redone_fluences=compute_fluences(subject_name,options,force_redo)
+% Compute the fluences for a specific subject
+redone_fluences=0;
 
-create_dir(options.fluences.export_dir);
-outputdir={};
-for iSubject=1:length(subject_names)
-    
-    file_raw = nst_get_bst_func_files(subject_names{iSubject}, ['origin' get_ppl_tag()], 'Raw');
-    if isempty(file_raw)
-        error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
-                      subject_names{iSubject})); %#ok<SPERR>
-    end
-        
-    outputdir{1}=fullfile(options.fluences.export_dir,subject_names{iSubject});
+file_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
+outputdir{1}=fullfile(options.fluences.export_dir,subject_name);
+
+if ~exist(outputdir{1}) || force_redo
     create_dir(outputdir{1})
-    
+
     bst_process('CallProcess', 'process_nst_ComputeFluencesforOptodes', file_raw, [], ...
                 'outputdir', outputdir, ...
                 'mcxlab_nphoton', options.fluences.nphoton, ...
                 'mcxlab_flag_thresh',options.fluences.thresh, ...
                 'vox2ras',     1);
+            
+   redone_fluences=1;
 
 end
 end
@@ -494,7 +456,6 @@ options.redo_all = 0;
 
 
 options.import.redo = 0;
-options.import.useDefaultAnat = 1;
 options.import.mri_folder_type='FreeSurfer';
 options.import.nvertices = 2500;
 options.import.aseg=1;

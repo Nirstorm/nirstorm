@@ -62,7 +62,6 @@ headpoints=data_fns((1+3*nb_subjects):4*nb_subjects);
 options = nst_ppl_surface_V1('get_options');
 options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subjects);
 
-options.import.useDefaultAnat=0;
 options.import.mri_folder_type='FreeSurfer';
 options.import.nvertices = 25000;
 options.import.aseg=1;
@@ -96,33 +95,16 @@ for ifile=1:length(sFiles)
     end
 end
 
-%% Compute fluences
+%% Run pipeline
 options.fluences.export_dir='/NAS/home/edelaire/Documents/output_analysis/fluences'; 
 options.fluences.nphoton=100; 
 options.fluences.thresh=0; 
 
-subject_names = {'S04', 'S05',        ...
-                 'S07', 'S08', 'S09', ...
-                 'S10', 'S11'};
-                     
-             
-nst_ppl_surface_full_V1('compute_fluences', options,subject_names);
-
-
-%% Run preprocessing
-
-[sdoD,redones]=nst_ppl_surface_full_V1('preprocessing', options,subject_names);
-
-
-
-
-
-
-%% Run pipeline
 
 % Recompute the headmodel for each subject
 options.head_model.subject_specific=1; 
 
+options.GLM_1st_level.contrast_tstat.do = 1;
 
 options.GLM_1st_level.stimulation_events = {'motor'};
 options.GLM_1st_level.contrasts(1).label = 'motor';
