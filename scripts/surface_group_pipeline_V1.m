@@ -59,7 +59,7 @@ headpoints=data_fns((1+3*nb_subjects):4*nb_subjects);
 
 
 %% Import data
-options = nst_ppl_surface_full_V1('get_options');
+options = nst_ppl_surface_V1('get_options');
 options.import.subject(1:nb_subjects)=repmat(options.import.subject,1,nb_subjects);
 
 options.import.useDefaultAnat=0;
@@ -77,7 +77,7 @@ for i=1:nb_subjects
     options.import.subject{i}.additional_headpoints=headpoints{i};
 end    
 
-[sFiles, imported] = nst_ppl_surface_full_V1('import_subjects', options);
+[sFiles, imported] = nst_ppl_surface_V1('import_subjects', options);
 
 % Read stimulation events from AUX channel
 for ifile=1:length(sFiles)
@@ -129,7 +129,7 @@ options.GLM_1st_level.contrasts(1).label = 'motor';
 options.GLM_1st_level.contrasts(1).vector = '[1 0]'; % a vector of weights, as a string 
 
 % Run the pipeline (and  save user markings):
-nst_ppl_surface_full_V1('analyse', options, subject_names); % Run the full pipeline
+nst_ppl_surface_V1('analyse', options, subject_names); % Run the full pipeline
 %TODO: full reload of GUI tree at end of pipeline
 end
 
