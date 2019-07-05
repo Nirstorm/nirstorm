@@ -133,8 +133,8 @@ else
     montage_info = nst_montage_info_from_bst_channels(channels);
     separations = zeros(size(pair_indexes, 1), 1);
     for ipair=1:size(pair_indexes, 1)
-        src_idx = montage_info.src_ids == pair_indexes(ipair, 1);
-        det_idx = montage_info.det_ids == pair_indexes(ipair, 2);
+        src_idx = montage_info.src_ids == montage_info.src_ids(pair_indexes(ipair, 1));
+        det_idx = montage_info.det_ids == montage_info.det_ids(pair_indexes(ipair, 2));
         separations(ipair) = euc_dist(montage_info.src_pos(src_idx, :), ...
                                       montage_info.det_pos(det_idx, :));
     end
