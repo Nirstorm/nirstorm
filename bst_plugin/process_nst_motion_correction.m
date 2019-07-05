@@ -95,7 +95,8 @@ for iInput=1:length(sInputs)
     if isempty(event.times) % no marked event
         data_corr = sDataIn.F';
     else
-        data_corr = Compute(sDataIn.F', sDataIn.Time', event.samples');
+        samples = time_to_sample_idx(event.times, sDataIn.Time);
+        data_corr = Compute(sDataIn.F', sDataIn.Time', samples');
     end
     if 0
         nirs_data_full = in_bst(sInputs(iInput).FileName, [], 1, 0, 'no');
@@ -299,4 +300,12 @@ end
 % [d ~]=mfip_correct_negChan(d,ml);
 
 nirs_sig_corr = d;
+end
+
+function samples = time_to_sample_idx(time, ref_time)
+if nargin < 2
+    assert(all(diff(diff(time))==0));
+    ref_time = time;
+end
+samples = round((time - ref_time(1)) / diff(ref_time(1:2))) + 1;
 end
