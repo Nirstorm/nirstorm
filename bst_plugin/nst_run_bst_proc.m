@@ -158,7 +158,7 @@ for i_item=1:length(outputs)
             sStudy = bst_get('Study', iStudy);
         end
         outputs(i_item).sStudy = sStudy;
-        outputs(1).iStudy = iStudy;
+        outputs(i_item).iStudy = iStudy;
         
          % Check if output exists in specified condition
         [selected_files, file_type] = nst_get_bst_func_files(subject_name, outputs(i_item).condition, outputs(i_item).comment);
@@ -173,11 +173,11 @@ for i_item=1:length(outputs)
         end
         if ~isempty(file_type)
             sFilesOut_types{i_item} = file_type;
+            sFilesOut{i_item} = selected_files;
         else
             sFilesOut_types{i_item} = '';
+            sFilesOut{i_item} = '';
         end
-        sFilesOut{i_item} = selected_files;
-        
     else
         outputs(i_item).sStudy = [];
         outputs(1).iStudy = [];
@@ -188,9 +188,9 @@ for i_item=1:length(outputs)
 end
 
 if ~isempty(duplicates)
-    bst_error(sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', ')));
-    sFilesOut = {};
-    return;
+    error(sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', ')));
+%     sFilesOut = {};
+%     return;
 end
 existing = cellfun(@(s) ~isempty(s), sFilesOut);
 
@@ -204,11 +204,11 @@ if isempty(outputs) || any(~existing) || force_redo
             prev_iHeadModel = strcmp({outputs(1).sStudy.HeadModel.FileName}, sFilesOut{1});
             outputs(1).sStudy = delete_head_model(outputs(1).sStudy, outputs(1).iStudy, prev_iHeadModel);
         else
-            bst_process('CallProcess', 'process_delete', sFilesOut, [], ...
+            bst_process('CallProcess', 'process_delete', sFilesOut(existing), [], ...
                        'target', 1);
         end
         bst_report('Info', ProcessName, sFiles, ...
-                   sprintf('Force redo - removed previous result(s): %s', strjoin(sFilesOut, ', ')) );
+                   sprintf('Force redo - removed previous result(s): %s', strjoin(sFilesOut(existing), ', ')) );
     end
     
     % Special case for head model which is not returned in sFilesOut
