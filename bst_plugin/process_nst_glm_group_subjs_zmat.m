@@ -37,6 +37,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.InputTypes  = {'results'};
     sProcess.OutputTypes = {'matrix'};
     
+    % Useful for single-channel experiment where signal is duplicated while
+    % projecting -> discard regional aspects
+    sProcess.options.keep_only_first_roi.Comment = 'Keep only first ROI';
+    sProcess.options.keep_only_first_roi.Type    = 'checkbox';
+    sProcess.options.keep_only_first_roi.Hidden  =  1;
+    sProcess.options.keep_only_first_roi.Value   =  0;
+    
     sProcess.nInputs     = 2;
     sProcess.nMinFiles   = 1;
     sProcess.isPaired    = 0;
@@ -80,10 +87,15 @@ function [OutputFiles1, OutputFiles2]  = Run(sProcess, sInputs1, sInput2) %#ok<D
             roi_indexes = roi_indexes(2:end);
         end
     end
+    
+    if sProcess.options.keep_only_first_roi.Value
+        roi_indexes = roi_indexes(1);
+    end
+    
     if  ~isempty(mask_data.from_atlas)
         roi_names = {mask_data.from_atlas.Scouts(roi_indexes).Label};
     else
-        roi_names = arrayfun(@(n) num2str(n), roi_indexes, 'UniformOutput', 0);
+        roi_names = arrayfun(@(n) ['roi_' num2str(n)], roi_indexes, 'UniformOutput', 0);
     end
     
     % Loop over full list of ROIs within FOV and fill matrix with mean of 

@@ -84,6 +84,7 @@ for iInput=1:length(sInputs)
         if strcmp(events(ievt).label, event_name)
             event = events(ievt);
             ievt_mvt = ievt;
+            break;
         end
     end
     if isempty(event)
@@ -91,12 +92,29 @@ for iInput=1:length(sInputs)
         OutputFiles = {};
         return
     end
-    
+
     if isempty(event.times) % no marked event
         data_corr = sDataIn.F';
     else
+        % Process only NIRS channels
+        channels = in_bst_channel(sInputs(iInput).ChannelFile);
+        nirs_ichans = channel_find(channels.Channel, 'NIRS');
+        data_nirs = sDataIn.F(nirs_ichans, :)';
+        prev_negs = any(data_nirs <= 0, 1);
+        % Keep track of channels that contained neg values 
         samples = time_to_sample_idx(event.times, sDataIn.Time);
-        data_corr = Compute(sDataIn.F', sDataIn.Time', samples');
+        data_corr = Compute(data_nirs, sDataIn.Time', samples');
+        % Fix negative values created by moco
+        new_negs = any(data_corr <= 0, 1) & ~prev_negs;
+        if any(new_negs)
+            warning('Motion correction introduced negative values. Will be fixed by global offset');
+            % TODO: use pair-specific offset see /home/tom/Projects/Research/Software/mfipcode/sandbox/nirstorm/mfip_correct_negChan.m
+            offset = 2*abs(min(data_corr(:)));
+            data_corr = data_corr + offset;
+        end
+        data_corr_full = sDataIn.F';
+        data_corr_full(:, nirs_ichans) = data_corr;
+        data_corr = data_corr_full;
     end
     if 0
         nirs_data_full = in_bst(sInputs(iInput).FileName, [], 1, 0, 'no');
@@ -112,6 +130,8 @@ for iInput=1:length(sInputs)
         % Add bad channels
         % OutputFiles = {sInputs(iInput).FileName};
     end
+    
+    
     
     % Save time-series data
     sDataOut = db_template('data');
