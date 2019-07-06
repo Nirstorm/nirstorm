@@ -102,8 +102,8 @@ for iInput=1:length(sInputs)
         data_nirs = sDataIn.F(nirs_ichans, :)';
         prev_negs = any(data_nirs <= 0, 1);
         % Keep track of channels that contained neg values 
-        samples = round((event.times' - sDataIn.Time(1)) ./ diff(sDataIn.Time(1:2))) + 1;
-        data_corr = Compute(data_nirs, sDataIn.Time', samples);
+        samples = time_to_sample_idx(event.times, sDataIn.Time);
+        data_corr = Compute(data_nirs, sDataIn.Time', samples');
         % Fix negative values created by moco
         new_negs = any(data_corr <= 0, 1) & ~prev_negs;
         if any(new_negs)
@@ -320,4 +320,12 @@ end
 % [d ~]=mfip_correct_negChan(d,ml);
 
 nirs_sig_corr = d;
+end
+
+function samples = time_to_sample_idx(time, ref_time)
+if nargin < 2
+    assert(all(diff(diff(time))==0));
+    ref_time = time;
+end
+samples = round((time - ref_time(1)) / diff(ref_time(1:2))) + 1;
 end
