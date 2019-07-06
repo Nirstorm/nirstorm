@@ -32,6 +32,7 @@ classdef SurfTplPipelineTest < matlab.unittest.TestCase
     
     methods(Test)
         
+        % TODO: test full default pipeline
         % TODO: test figure output & rewriting
         % TODO: check coverage
         
@@ -71,11 +72,9 @@ classdef SurfTplPipelineTest < matlab.unittest.TestCase
             % tag some channels.
             % Run importation again and check that user-defined markings are
             % saved.
-            % TODO: add action 'save_markings' to explicitely save all
-            %       events and bad channels tagging.
             
-            % TODO: reimplement
-            %    - utest them with MWUC from ppl function & insure backward compatibility
+            % TODO:
+            %    - insure backward compatibility
             %    - see if we still need to keep nst_bst_save_events / nst_bst_load_events
             [nirs_fns, subject_names] = load_test_group_data();
             options = nst_ppl_surface_template_V1('get_options');
@@ -208,6 +207,73 @@ classdef SurfTplPipelineTest < matlab.unittest.TestCase
             testCase.assertEqual(sFile2.channelflag(end), -1);
             testCase.assertTrue(all(sFile2.channelflag(2:end-1) == 1));
         end
+
+        function test_reimportation_with_markings_all_subjects(testCase)
+            % Do a first importation of all data, then add some event & tag chans
+            % Save event markings. Then remove 1 item. Reimport and check
+            % that user-defined event markings were restored
+            
+            [nirs_fns, subject_names] = load_test_group_data();
+            options = nst_ppl_surface_template_V1('get_options');
+            event_dir = fullfile(testCase.tmp_dir, 'export_events');
+            options.export_dir_events = event_dir;
+            chan_flags_dir = fullfile(testCase.tmp_dir, 'export_channel_flags');
+            options.export_dir_channel_flags = chan_flags_dir;
+            
+            sFiles = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
+            data = load(file_fullpath(sFiles{2}));
+            events = data.Events;
+            
+            % Add one movement artefacts
+            i_evt_mvt = find(strcmp('movement_artefacts', {events.label}));
+            events(i_evt_mvt).times = [1.5;...
+                1.9];
+            events(i_evt_mvt).epochs = [1];
+            events(i_evt_mvt).reactTimes = [];
+            events(i_evt_mvt).channels = {{}};
+            events(i_evt_mvt).notes = {'participant sneezed'};
+            
+            % Append test events
+            events = [events utest_get_test_bst_events()];
+            
+            % Tag some channels as bad:
+            data.ChannelFlag(1) = -1;
+            data.ChannelFlag(end) = -1;
+            
+            % Update bst data
+            data.Events = events;
+            bst_save(file_fullpath(sFiles{2}), data); %TODO: use bst import function instead of hacking data file?
+            
+            % Save markings
+            sFiles_mkgs = nst_ppl_surface_template_V1('save_markings', options);
+            testCase.assertMatches(sFiles_mkgs{1}, sFiles{1});
+            testCase.assertMatches(sFiles_mkgs{2}, sFiles{2});
+            testCase.assertMatches(sFiles_mkgs{3}, sFiles{3});
+            testCase.assertEqual(length(sFiles_mkgs), length(sFiles));
+            
+            % Delete one item
+            bst_process('CallProcess', 'process_delete', sFiles{2}, [], ...
+                'target', 1);
+            
+            % Import again
+            [files_raw, import_flags] = nst_ppl_surface_template_V1('import', options, nirs_fns, subject_names);
+            testCase.assertTrue(all(import_flags == [0 1 0]));
+            
+            % Check event markings in DB
+            sFile1 = in_fopen(files_raw{1}, 'BST-DATA');
+            testCase.assertTrue(length(sFile1.events) == 1);
+            testCase.assertMatches(sFile1.events(1).label, 'movement_artefacts');
+            
+            sFile2 = in_fopen(files_raw{2}, 'BST-DATA');
+            testCase.assertTrue(isequaln(sFile2.events, events));
+            
+            % Check bad channel markings
+            testCase.assertTrue(all(sFile1.channelflag == 1));
+            testCase.assertEqual(sFile2.channelflag(1), -1);
+            testCase.assertEqual(sFile2.channelflag(end), -1);
+            testCase.assertTrue(all(sFile2.channelflag(2:end-1) == 1));
+        end
+        
         
         %
         %         function test_reimportation_with_markings_events_only(testCase)

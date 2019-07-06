@@ -11,33 +11,49 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % such as movement events and bad channels. This allows to safely flush all
 % brainstorm data while keeping markings.
 % 
+%% Overview
+%
 % This function is intended to be called from batch scripts where the user
 % can add some custom steps. Here is the workflow:
 %
+%   %% Importation script
+%
 %   options = NST_PPL_SURFACE_TEMPLATE_V1('get_options'); % get default pipeline options
 %
-%   % Define import options (optional):
-%   options.export_dir_events = 'path/to/store/events'
-%   options.export_dir_channel_flags = 'path/to/store/channel_flags'
+%   % Define options (optional):
+%   options.export_dir_events = 'path/to/export/events';
+%   options.export_dir_channel_flags = 'path/to/export/channel_flags';
 %
-%   % Import some nirs data along with event markings:
+%   % Import some nirs data:
 %   subject_names = {'subj1', 'subj2'};
 %   sFilesRaw = NST_PPL_SURFACE_TEMPLATE_V1('import', options, {'data1.nirs', 'data2.nirs'}, subject_names);
 %   for ifile=1:length(sFilesRaw)
 %     % Tweak sFilesRaw{ifile} here, eg import stimulation event.
 %   end
 %
-%   % User can manually tag motion events and bad channels here
+%   % After the importation script, motion events and bad channels can be manually tagged.
+%
+%   %% Markings export script
+%
+%   NST_PPL_SURFACE_TEMPLATE_V1('save_markings', options, subject_names);
+%
+%   %% Analysis script
+%   options = NST_PPL_SURFACE_TEMPLATE_V1('get_options');
+%   % Define export options again (redundant so this could be factorized)
+%   options.export_dir_events = 'path/to/export/events';
+%   options.export_dir_channel_flags = 'path/to/export/channel_flags';
 %
 %   % Customize options:
 %   options.GLM_1st_level.contrasts(1).name = 'my_contrast1';
 %   options.GLM_1st_level.contrasts(1).vector = [0 1 -1 0];
 % 
 %   % Run the pipeline (and  save user markings):
-%   NST_PPL_SURFACE_TEMPLATE_V1('analyse', options, subject_names); % Run the full pipeline
+%   NST_PPL_SURFACE_TEMPLATE_V1('analyse', options); % Run the full pipeline
 %
 %   % For a minimal working example see
 %   nirstorm/script/surface_template_full_group_pipeline.m
+%
+%% Setup and importation
 %
 % DEFAULT_OPTIONS = NST_PPL_SURFACE_TEMPLATE_V1('get_options')
 %     Return default options
@@ -79,7 +95,12 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %         FILES_RAW: brainstorm file pathes to imported data, for which markings 
 %                    were exported.
 %
-%  NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
+% FILES_RAW = NST_PPL_SURFACE_TEMPLATE_V1('save_markings', OPTIONS)
+%     Export markings (events and bad channels) for all subjects in current protocol.
+%
+%% Analysis
+%
+% NST_PPL_SURFACE_TEMPLATE_V1('analyse', OPTIONS, GROUPS | SUBJECT_NAMES)
 %   
 %     Apply pipeline to given group(s) of subjects.
 %     ASSUME: all subjects in a given protocol have the same template
@@ -95,19 +116,22 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %          0) Export user-defined markings [optional]:
 %             - all events (especially movement artefacts)
 %             - channel tags
-%          1) Motion correction
-%              ASSUME: event group "movement_artefacts" exists in each FILES_RAW 
-%                      and has been filled by user before calling this function.
-%                      Note that NST_PPL_SURFACE_TEMPLATE_V1('import')
-%                      creates this event group if necessary.
-%          2) Resampling:
+%             WARNING: the function does run the analyses again if markings have changed. 
+%                      Either use the redo option or delete specific analysis items
+%                      in the brainstorm DB to force their recomputation.
+%          1) Deglitching
+%          2) Motion correction
+%              NOTE: NST_PPL_SURFACE_TEMPLATE_V1('import') creates the event group 
+%                    "movement_artefacts". The user should fill it to
+%                    specify motion events.
+%          3) Resampling:
 %              TODO: check interpolation errors when there are spikes
-%          3) Detect bad channels
-%          4) Convert to delta optical density
-%          5) High pass filter
-%          6) Compute head model (from "full_head_model...")
-%          7) Project on the cortical surface
-%          8) 1st level GLM:
+%          4) Detect bad channels
+%          5) Convert to delta optical density
+%          6) High pass filter
+%          7) Compute head model (from "full_head_model...")
+%          8) Project on the cortical surface
+%          9) 1st level GLM:
 %              - build design matrix from stimulation events
 %              - OLS fit with pre-coloring
 %              - compute contrasts
@@ -118,10 +142,16 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %              - MFX contrast t-maps
 %          2) Extract group-masked subject-level maps [optional]
 %
-% TODO:
+% TODO:% - importation of manual inputs:
+% - find a way to invalidate analysis if markings have changed
+%   -> compare if markings about to be saved differ from disk version
+%   -> save only if they differ and store modification date (use ISO with
+%   time zone)
+%   -> store analysis date 
+%   -> compare dates before running analysis, redo if analysis date < marking date
+%   -> for now, must be handled by the user.
 % - handle when no contrast defined
 % - options documentation
-% - importation of manual inputs:
 % - wiki page
 % - utest
 % - factorize plot code
@@ -165,10 +195,29 @@ switch action
         varargout{2} = redone;
         return;
     case 'save_markings'
-        subject_names = arg1;
+        if nargin >= 3
+            subject_names = arg1;
+        else
+            % Get all subjects in current protocol (ignore Group_analysis
+            % and subject holding full head model)
+            if isempty(GlobalData.DataBase.iProtocol) || (GlobalData.DataBase.iProtocol == 0)
+                error('Cannot find current protocol');
+            end
+            sSubjects = GlobalData.DataBase.ProtocolSubjects(GlobalData.DataBase.iProtocol);
+            subject_names = ignore_forged_subjects({sSubjects.Subject.Name});
+        end
         orig_cond = ['origin' get_ppl_tag()];
         files_raw = cellfun(@(s)  nst_get_bst_func_files(s, orig_cond , 'Raw'), ...
                             subject_names, 'UniformOutput', false);
+        missing = cellfun(@isempty, files_raw);
+        if any(missing)
+            warning(sprintf('Missing origin/raw data files for subjects (will be ignored):\n%s\n', ...
+                            strjoin(cellfun(@(s) sprintf(' - %s', s), subject_names(missing), ...
+                                    'UniformOutput', false), '\n')));
+        end
+        files_raw = files_raw(~missing);
+        subject_names = subject_names(~missing);
+        create_dirs(options);
         export_markings(files_raw, subject_names, options);
         varargout{1} = files_raw;
         return;
@@ -227,7 +276,7 @@ any_rois_summary_redone = 0;
 all_sFiles_con = cell(1, nb_groups);
 for igroup=1:nb_groups
     redo_group = options.GLM_group.redo;
-    subject_names = groups(igroup).subject_names;
+    subject_names = ignore_forged_subjects(groups(igroup).subject_names);
     group_label = groups(igroup).label;
     
     %% Within-subject analyses
@@ -392,12 +441,13 @@ if options.GLM_group.do && options.GLM_group.rois_summary.do
                  [sFile_subj_zmat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb} ' | con ' contrasts(icon).label ' |' group_comment_tags{igroup} ' masked z-scores'], ...
                                                                redone | options.GLM_group.rois_summary.redo, ...
                                                                'process_nst_glm_group_subjs_zmat', ...
-                                                               all_sFiles_con{igroup}(ihb, icon, :), sFile_gp_masks{igroup, ihb, icon});
+                                                               all_sFiles_con{igroup}(ihb, icon, :), sFile_gp_masks{igroup, ihb, icon}, ...
+                                                              'keep_only_first_roi', options.GLM_group.rois_summary.keep_only_first_roi);
                  all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
                  if redone
                     % Set contrast name as prefix for each ROI column                 
                     bst_process('CallProcess', 'process_nst_prefix_matrix', ...
-                                sFile_subj_zmat, [], 'col_prefixes', [contrasts(icon).label '_']);
+                                sFile_subj_zmat, [], 'col_prefixes', [protect_con_str(contrasts(icon).label) '_']);
                  end
                 
             end
@@ -533,7 +583,7 @@ redo_parent = redo_parent | options.moco.redo;
                              'process_nst_motion_correction', sFile_deglitched, [], ...
                              'option_event_name', 'movement_artefacts');
                          
-% Resample to 5Hz (save some space)
+% Resample (save some space)
 redo_parent = redo_parent | options.resample.redo;
 [sFileMocoResampled, redo_parent] = nst_run_bst_proc([preproc_folder 'Motion-corrected | Resampled'], redo_parent, ...
                                                       'process_resample', sFileMoco, [], ...
@@ -571,11 +621,18 @@ redo_parent = redo_parent | options.head_model.redo;
 % Project and convert to d[HbX]
 redo_parent = redo_parent | options.projection.redo;
 proj_method =  options.projection.method;
-[sFilesHbProj, redo_parent] = nst_run_bst_proc({[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex']},  redo_parent, ... 
+hb_types = process_nst_cortical_projection('get_hb_types', options.projection.compute_hbt);
+% TODO: align output order with hb_types 
+if options.projection.compute_hbt
+    proj_outputs = {[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex'], [preproc_folder 'dHbT_cortex']};
+else
+    proj_outputs = {[preproc_folder 'dHbO_cortex'], [preproc_folder 'dHbR_cortex']};
+end
+[sFilesHbProj, redo_parent] = nst_run_bst_proc(proj_outputs,  redo_parent, ... 
                                                 'process_nst_cortical_projection', sFile_dOD_filtered, [], ...
                                                 'method', proj_method, ...
+                                                'compute_hbt', options.projection.compute_hbt, ...
                                                 'sparse_storage', options.projection.sparse_storage);
-hb_types = process_nst_cortical_projection('get_hb_types');
 
 redone = redo_parent;
 end
@@ -679,10 +736,14 @@ for ifile=1:length(sFiles_GLM)
 end
 end
 
+function fm_subject = get_full_head_model_subject_name()
+    fm_subject = ['full_head_model' get_ppl_tag()];
+end
+
 function [file_raw_fm, fm_subject, redone] = get_sFile_for_full_head_model(sfile_raw, options, force_redo)
 
 redone = 0;
-fm_subject = ['full_head_model' get_ppl_tag()];
+fm_subject = get_full_head_model_subject_name();
 subject_name = fileparts(sfile_raw);
 % Check if given subject is dummy one created to hold full head model
 if strcmp(subject_name, fm_subject)
@@ -747,8 +808,15 @@ end
                                        'use_closest_wl', 1, 'use_all_pairs', 1, ...
                                        'force_median_spread', 0, ...
                                        'normalize_fluence', 1, ...
+                                       'sensitivity_threshold_pct', 0.5, ...
                                        'smoothing_fwhm', 0);
 end
+
+function subject_names = ignore_forged_subjects(subject_names)
+ignore_subjects = {get_full_head_model_subject_name(), 'Group_analysis'};
+subject_names = subject_names(~ismember(subject_names, ignore_subjects));
+end
+
 
 function options = get_options()
 
@@ -784,6 +852,8 @@ options.deglitch.agrad_std_factor = 2.5;
 
 options.moco.redo = 0;
 
+% TODO: disable resampling by default
+% Maybe issue warning if sampling > 5Hz or nb_samples > 10000
 options.resample.redo = 0;
 options.resample.freq = 5; % Hz
 
@@ -800,7 +870,7 @@ options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
 options.projection.redo = 0;
 proj_methods = process_nst_cortical_projection('methods');
 options.projection.method = proj_methods.Sensitivity_based_interpolation; % proj_methods.MNE;
-
+options.projection.compute_hbt = 0;
 options.projection.sparse_storage = 0;
 
 options.clean_preprocessings = 0;
@@ -830,6 +900,7 @@ options.GLM_group.contrast_tstat.plot.pvalue_mcc_method = 'none';
 options.GLM_group.rois_summary.do = 0;
 options.GLM_group.rois_summary.atlas = 'MarsAtlas';
 options.GLM_group.rois_summary.matrix_col_prefix = '';
+options.GLM_group.rois_summary.keep_only_first_roi = 0;
 options.GLM_group.rois_summary.csv_export_output_dir = '';
 mask_combinations = get_mask_combinations();
 options.GLM_group.rois_summary.group_masks_combination = mask_combinations.none; % mask_combinations.intersection, mask_combinations.union
@@ -1042,6 +1113,17 @@ end
 
 end
 
+function con_str = protect_con_str(con_str)
+con_str = strrep(con_str, ' - ', '_minus_');
+con_str = strrep(con_str, '-', '_minus_');
+con_str = strrep(con_str, ' + ', '_plus_');
+con_str = strrep(con_str, '+', '_plus_');
+con_str = strrep(con_str, ' * ', '_x_');
+con_str = strrep(con_str, '*', '_x_');
+con_str = strrep(con_str, ':', '_');
+con_str = strrep(con_str, ' ', '_');
+end
+
 function sfn = protect_fn_str(s)
 sfn = strrep(s, ' | ', '--');
 sfn = strrep(s, ' : ', '--');
@@ -1051,9 +1133,11 @@ end
 
 
 function plot_stat(sFile_ttest, fig_fn, options, show_colbar, save_colbar, sSubjectDefault)
-
 % TODO: set colormap
 % TODO: set t-stat cmap boundaries
+% TODO: control window size / figure size.
+% TODO: contolr displayed scouts
+global GlobalData;
 
 hFigSurfData = view_surface_data(sSubjectDefault.Surface(sSubjectDefault.iCortex).FileName, ...
                                  sFile_ttest, 'NIRS', 'NewFigure');
