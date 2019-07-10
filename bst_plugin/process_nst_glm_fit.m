@@ -544,37 +544,6 @@ function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, 
         
 end
 
-function [W,y,e] = AR_fit(x,order,mu,normalized)
-    % Use an LMS algorithm to fit an AR(P) model to x
-    % mu is the learning rate and should be close to 0
-    % If normalized = 1, use the NLMS instead
-    P=order+1;
-    
-    if nargin < 5
-        normalized=0;
-    end    
-
-    % initialisation : 
-    N=length(x);
-    
-    W=zeros(P,1);
-    e=zeros(1,N);
-    e(1:P)=x(1:P);
-    
-    y=zeros(1,N);
-    
-    for n=P:N 
-        u = x(n:-1:n-P+1);
-        y(n)= W' * u;
-        e(n)= y(n) - x(n);
-        if normalized
-            W = W - mu*u*e(n)/(norm(u)^2);
-        else    
-            W = W - mu*u*e(n);
-        end
-    end
-
-end
 
 function [B, covB, dfe, residuals, mse_residuals]=ar_irls_fit(y,X,pmax)
 	stat=nirs.math.ar_irls(y,X, pmax );
