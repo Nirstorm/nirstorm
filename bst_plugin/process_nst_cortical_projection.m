@@ -44,6 +44,10 @@ sProcess.options.method.Type    = 'combobox';
 choices = methods();
 sProcess.options.method.Value   = {choices.Sensitivity_based_interpolation, ...
                                    fieldnames(choices)};
+
+sProcess.options.compute_hbt.Comment = 'Compute HbT';
+sProcess.options.compute_hbt.Type    = 'checkbox';
+sProcess.options.compute_hbt.Value   =  0;                        
                                
 sProcess.options.sparse_storage.Comment = 'Sparse storage';
 sProcess.options.sparse_storage.Type    = 'checkbox';
@@ -125,7 +129,7 @@ switch i_method
 end
 
 nb_vertices = size(sensitivity_surf, 3);
-hb_types = get_hb_types();
+hb_types = get_hb_types(sProcess.options.compute_hbt.Value);
 
 pinv_ext = pinv(ext_coeffs);
 pdata_hbo = zeros(nb_vertices, nb_samples);
@@ -148,6 +152,16 @@ OutputFiles{end+1} = ResultFile;
     sInputs, sStudy, 'Projected HbR signals', [], sProcess.options.sparse_storage.Value, ...
     extra);
 OutputFiles{end+1} = ResultFile;
+
+if sProcess.options.compute_hbt.Value
+    pdata_hbt = pdata_hbo + pdata_hbr;
+    [sStudy, ResultFile] = nst_bst_add_surf_data(pdata_hbt, sDataIn.Time, ...
+                                                 head_model, 'hbt_proj', sprintf('HbT cortex (%s)', mtag), ...
+                                                 sInputs, sStudy,  'Projected HbT signals', [], sProcess.options.sparse_storage.Value, ...
+                                                 extra);
+    OutputFiles{end+1} = ResultFile;
+    clear pdata_hbt;
+end
 
 clear pdata_hbo pdata_hbr;
 
@@ -185,9 +199,16 @@ end
 
 end
 
-function hb_types = get_hb_types()
+function hb_types = get_hb_types(enable_hbt)
+if nargin < 1
+    enable_hbt = 0;
+end
 % Return Hb type order as used for the cols of the matrix of exctinction coeffs
-hb_types = {'HbO', 'HbR'};
+if enable_hbt
+    hb_types = {'HbO', 'HbR', 'HbT'};
+else
+    hb_types = {'HbO', 'HbR'};
+end
 end
 
 function save_chan_data(chan_data, sDataIn, iStudy, sStudy, comment, tag)
