@@ -159,6 +159,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
                                
+    %% Load data and events                            
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
         parent_data = in_bst_data(DataMat.DataFile);
@@ -188,6 +189,9 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
         DataMat.DisplayUnits = 'mumol.l-1';
     elseif strcmp(DataMat.DisplayUnits, 'mmol.l-1')
         Y = Y * 1e3;
+        DataMat.DisplayUnits = 'mumol.l-1';
+    elseif strcmp(DataMat.DisplayUnits, 'mumol.l-1') || strcmp(DataMat.DisplayUnits, 'mumol.l-1')
+        Y = Y * 1;
         DataMat.DisplayUnits = 'mumol.l-1';
     else
         if ~isempty(DataMat.DisplayUnits)
@@ -242,7 +246,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
             else % Pre-whitenning
                 if sProcess.options.noise_model.Value == 1
                     method_name = 'AR1_OLS';
-                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hrf);
+                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, X_trim);
                 else 
                     bst_error('This method is not implemented');
                     return

@@ -22,6 +22,23 @@ classdef GLMTest < matlab.unittest.TestCase
     
     methods(Test)
         
+        function test_ols_svd(testCase)
+            dt = 0.1; %sec
+            nb_samples = 6000;
+            nb_channels=10;
+            nb_active_channels=5;
+            
+            [X, names] = design_matrix(dt,nb_samples);
+            X=[X ones(nb_samples,1)];
+
+            
+            [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
+            y=X*B + 1e-3*randn(nb_samples,nb_channels);
+            
+            [B_hat,proj_X] = process_nst_glm_fit('compute_B_svd',y,X);
+            testCase.assertTrue( all(all(abs(B - B_hat) < 1e-3)));
+        end
+        
         function test_cortical_simulation(testCase)
             
             % Simulate cortical signals -> dHb
@@ -248,9 +265,9 @@ for ipair=1:nb_pairs
     end
 end
 
-% Add some noise at the channel level
+% Add some white noise at the channel level
 sig_range = max(reordered_dOD(:)) - min(reordered_dOD(:));
-reordered_dOD = reordered_dOD + rand(size(reordered_dOD)) * 0.1 * sig_range;
+reordered_dOD = reordered_dOD + randn(size(reordered_dOD)) * 0.1 * sig_range;
 
 %% Save dOD as new data
 sDummyData = in_bst_data(sDummy.FileName);
@@ -280,4 +297,68 @@ proj_methods = process_nst_cortical_projection('methods');
 hb_cortex = bst_process('CallProcess', ...
                         'process_nst_cortical_projection', sdODInput, [], ...
                         'method', proj_methods.MNE);                  
+end
+
+
+
+function [X, names] = design_matrix(dt,nb_samples)
+
+% Returned the design matrix
+
+
+time = (0:(nb_samples-1))*dt;
+
+events = db_template('event');
+stim_event_names = {'stim1', 'stim2'};
+events(1).label = stim_event_names{1};
+events(1).times = [10 160 200 260 300 330 360 400 440 460 490 520 550];
+events(1).epochs = ones(1, length(events(1).times));
+
+events(2).label = stim_event_names{2};
+events(2).times = [40 60 90 120 140 150 170 210 270 300 380];
+events(2).epochs = ones(1, length(events(2).times));
+
+stim_duration = 10; % sec
+events(1).times(2,:) = events(1).times(1,:) + stim_duration;
+events(2).times(2,:) = events(2).times(1,:) + stim_duration;
+
+% Insure rounding is consistent
+for icond=1:length(events)
+    events(icond).samples = round(events(icond).times ./ dt);
+    events(icond).times   = events(icond).samples .* dt;
+end
+
+hrf_types = process_nst_glm_fit('get_hrf_types');
+[X,names] = process_nst_glm_fit('make_design_matrix', time, events, ...
+                                hrf_types.CANONICAL, 25, 0);
+
+                            
+assert(all(strcmp(names, {events.label})));
+
+end
+
+function [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels)
+    % Assume 2 conditions Stim1=Task,Stim2=Rest  
+    mean_active_b=5;
+    sigma_active_b= 0.2;
+    
+    mean_unactive_b=0;
+    sigma_unactive_b=0.2;
+    
+    mean_trend=0.3;
+    
+    B=zeros(3,nb_channels);
+    perm=randperm(nb_channels);
+    
+    active_channels=sort(perm(1:nb_active_channels));
+    unactive_channels=sort(perm(nb_active_channels+1:end));
+
+    B(1,active_channels)=mean_active_b + sigma_active_b*randn(1,nb_active_channels);
+    B(2,active_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
+
+    B(1,unactive_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
+    B(2,unactive_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
+
+    B(3,:)=mean_trend;
+
 end
