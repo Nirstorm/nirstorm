@@ -523,9 +523,9 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
        
         y=Y(:,i_chan);
         SX=X_hpf;
-        y_filtered=y;
+        SY=y;
        
-        [B,proj_X] = compute_B_svd(y_filtered,SX);
+        [B,proj_X] = compute_B_svd(SY,SX);
         B0=zeros(n_cond,1);
         S_prod=speye(n_time);
       
@@ -535,7 +535,7 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         
         
             % Estimate the AR(1) processe on the residual
-            res=y_filtered-SX*B0; 
+            res=SY-SX*B0; 
             W=nst_math_fit_AR(res',1);
         
             %W=[1  -W(2:end)];
@@ -551,11 +551,11 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
             S_prod=sparse(S)*S_prod;
             
             % Apply the filtering to the data and the deisgn matrix
-            y_filtered = S*y;
+            SY = S*y;
             SX = S*X;
 
             % Compute B for Sy = SXB + Se following an iid normal distribution
-            [B,proj_X] = compute_B_svd(y_filtered,SX);
+            [B,proj_X] = compute_B_svd(SY,SX);
        
             iter=iter+1;
       end
@@ -577,12 +577,12 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
         
         fit = SX * B;
-        residuals = y_filtered - fit;
+        residuals = SY - fit;
         sigma2=var(residuals);
 
         dfe = trRV^2 / trRVRV;
         mse_residuals =  sigma2* (size(y,1)-1)/trRV;
-        covB= (y'* S'*(R'*R)*S*y)*  SX' * S_Va_S_t * pSX'/trRV; 
+        covB= ( SY'*(R'*R)*SY)*  pSX * S_Va_S_t * pSX'/trRV; 
         
         % Save stats 
         
