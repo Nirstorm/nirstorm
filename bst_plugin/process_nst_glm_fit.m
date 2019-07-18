@@ -54,6 +54,22 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
+    sProcess.options.label0.Comment = '<U><B>Signal Information</B></U>:';
+    sProcess.options.label0.Type    = 'label';
+    
+    sProcess.options.hpf_low_cutoff.Comment = 'Applied High-pass filter ( 0 if no high-pass filter have been applied): ';
+    sProcess.options.hpf_low_cutoff.Type    = 'value';
+    sProcess.options.hpf_low_cutoff.Value   = {0.01, 'Hz', 2};
+    
+    
+    sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
+    sProcess.options.trim_start.Type    = 'value';
+    sProcess.options.trim_start.Value   = {0, 'sec', 2};
+    
+    % Separator
+    sProcess.options.separator00.Type = 'separator';
+    sProcess.options.separator00.Comment = ' ';
+
     sProcess.options.label1.Comment = '<U><B>Optimization Method</B></U>:';
     sProcess.options.label1.Type    = 'label';
     
@@ -71,9 +87,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.output_cmt0.Comment = '<B>Pre-coloring Options</B>:';
     sProcess.options.output_cmt0.Type    = 'label';
     
-    sProcess.options.hpf_low_cutoff.Comment = 'Low cut-off frequency: ';
-    sProcess.options.hpf_low_cutoff.Type    = 'value';
-    sProcess.options.hpf_low_cutoff.Value   = {0.01, 'sec', 2};
     
     sProcess.options.output_cmt1.Comment = '<B>Pre-whitenning Options</B>:';
     sProcess.options.output_cmt1.Type    = 'label';
@@ -100,13 +113,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trend.Type    = 'checkbox';
     sProcess.options.trend.Value   =  1;
     
-    sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
-    sProcess.options.trim_start.Type    = 'value';
-    sProcess.options.trim_start.Value   = {0, 'sec', 2};
-    
-    % Separator
-    sProcess.options.separator2.Type = 'separator';
-    sProcess.options.separator2.Comment = ' ';
 
     sProcess.options.output_cmt.Comment = '<U><B>Extra outputs</B></U>:';
     sProcess.options.output_cmt.Type    = 'label';
@@ -158,7 +164,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     end
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
-                               
+    
     %% Load data and events                            
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
@@ -485,66 +491,111 @@ function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_l
         
     end
 end
-function [B_out, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hrf)
+function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y, dt, X, hpf_low_cutoff)
     
-    n_chan=size(Y_trim,2);
-    n_cond=size(X_trim,2);
-    n_time=size(Y_trim,1);
+    n_chan=size(Y,2);
+    n_cond=size(X,2);
+    n_time=size(Y,1);
     
     max_iter=30;
     B_out=zeros(n_cond,n_chan);
     
-    for i_chan=1:n_chan
-       % Solve B for chan i_chan. We need to solve B for each channel
-       % speratly as we are fitting one AR model per channel. This might 
-       % not be a good idead in the source space. 
-       
-       
-       y=Y_trim(:,i_chan);
-       
-       [B,proj_X] = compute_B_svd(y,X_trim);
- 
-       B0=zeros(n_cond,1);
-       
-       iter=0;
-       
-       X_filtered=X_trim;
-       y_filtered=y;
-       
-       while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
-           disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
-
-           B0=B;
-           res=y_filtered-X_filtered*B0;
-           
-           [W,y,e]=AR_fit(res,1,1e-5,0);
-           
-           W=[1 ; -W(2:end)];
-           
-           X_filtered(:,1:end-1)=filter(W,1,X_filtered(:,1:end-1));
-           y_filtered=filter(W,1,y_filtered);
-           
-           [B,proj_X] = compute_B_svd(y_filtered,X_filtered);
-           iter=iter+1;
-       end
-       
-       % Compute stat afterwards
-       
-        B_out(:,i_chan)=B;
-%         res_form_mat = eye(n_time) - X_filtered * proj_X;
-%         lpf_lpf_T = full(lpf * lpf');
-%         RV = res_form_mat * lpf_lpf_T;
-%         trRV = sum(diag(RV));
-%         RVRVt = RV .* RV';
-%         trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
-%         dfe = trRV^2 / trRVRV;
+    covB_out=zeros(n_cond,n_cond,n_chan);
+    dfe_out=zeros(1,n_chan);
+    residuals_out=zeros(n_time,n_chan);
+    mse_residuals_out=zeros(1,n_chan);
     
-        fit = X_filtered * B;
-        residuals = y_filtered - fit;     
-        mse_residuals = var(residuals) * (size(y,1)-1); % / trRV;
+    
+    % high-pass filtering of the design matrix
+    X_hpf = process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
+                                              'highpass', hpf_low_cutoff, ...
+                                               0, 2, 0);
+    X_hpf = [X_hpf X(:,end)];
+    %X_hpf=X;
+    
+    
+    for i_chan=1:n_chan
+        % Solve B for chan i_chan. We need to solve B for each channel
+        % speratly as we are fitting one AR model per channel. This might 
+        % not be a good idead in the source space. 
+       
+        iter=0;
+       
+        y=Y(:,i_chan);
+        SX=X_hpf;
+        y_filtered=y;
+       
+        [B,proj_X] = compute_B_svd(y_filtered,SX);
+        B0=zeros(n_cond,1);
+        S_prod=speye(n_time);
+      
+      while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
+          disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
+          B0=B;
+        
+        
+            % Estimate the AR(1) processe on the residual
+            res=y_filtered-SX*B0; 
+            W=nst_math_fit_AR(res',1);
+        
+            %W=[1  -W(2:end)];
+            %X_filtered(:,1:end-1)=filter(1,W,X_filtered(:,1:end-1));
+            %y_filtered=filter(1,W,y_filtered);
+       
+            % Compute the filtering matrix 
+            a1 = -W(2);
+            ka = sparse( ( eye(n_time) - diag( ones(1,n_time-1)*a1,-1) ))^(-1); 
+            Va = ka* ka';
+        
+            S= full( inv(Va) )^(0.5); % can't use power .5 on sparse matrix
+            S_prod=sparse(S)*S_prod;
+            
+            % Apply the filtering to the data and the deisgn matrix
+            y_filtered = S*y;
+            SX = S*X;
+
+            % Compute B for Sy = SXB + Se following an iid normal distribution
+            [B,proj_X] = compute_B_svd(y_filtered,SX);
+       
+            iter=iter+1;
+      end
+       
+        S=S_prod;
+        Va=full(inv(S))^2;
+        S=full(S);
+        
+        % Compute stat afterwards
+       
+        pSX=pinv(SX);
+        
+        R = eye(n_time) - SX * pSX;
+        
+        S_Va_S_t = S * Va * S';
+        RV = R * S_Va_S_t;
+        trRV = sum(diag(RV));
+        RVRVt = RV .* RV';
+        trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
+        
+        fit = SX * B;
+        residuals = y_filtered - fit;
+        sigma2=var(residuals);
+
+        dfe = trRV^2 / trRVRV;
+        mse_residuals =  sigma2* (size(y,1)-1)/trRV;
+        covB= (y'* S'*(R'*R)*S*y)*  SX' * S_Va_S_t * pSX'/trRV; 
+        
+        % Save stats 
+        
+               
+        B_out(:,i_chan)=B;
+        covB_out(:,:,i_chan)=covB;
+        dfe_out(i_chan)=dfe;
+        residuals_out(:,i_chan)=residuals;
+        mse_residuals_out(i_chan)=mse_residuals;
     
         disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration |res|=' num2str(norm(res)) ]) 
     end  
+
         
 end
 

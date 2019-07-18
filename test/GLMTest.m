@@ -23,12 +23,12 @@ classdef GLMTest < matlab.unittest.TestCase
     methods(Test)
         
         function test_ols_svd(testCase)
-            dt = 0.1; %sec
-            nb_samples = 6000;
+            dt = 1; %sec
+            nb_samples = 700;
             nb_channels=10;
             nb_active_channels=5;
             
-            [X, names] = design_matrix(dt,nb_samples);
+            [X, names,tmp] = design_matrix(dt,nb_samples);
             X=[X ones(nb_samples,1)];
 
             
@@ -39,6 +39,27 @@ classdef GLMTest < matlab.unittest.TestCase
             testCase.assertTrue( all(all(abs(B - B_hat) < 1e-3)));
         end
         
+        function test_AR_ols_fit(testCase)
+            dt = 1; %sec
+            nb_samples = 700;
+            nb_channels=10;
+            nb_active_channels=5;
+            
+            [X, names,tmp] = design_matrix(dt,nb_samples);
+            X=[X ones(nb_samples,1)];
+
+            
+            [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
+            y=X*B + 1e-3*randn(nb_samples,nb_channels);
+            
+            [B_hat, covB, dfe, residuals, mse_residuals] = process_nst_glm_fit('AR1_ols_fit',y, dt, X, 0.1);
+            testCase.assertTrue( all(all(abs(B - B_hat) < 1e-3)));  
+         end
+        
+        
+        function test_channel_simulation(testCase)
+            [hb_cortex, beta_map_hb, activations, stim_event_names] = dHbO_from_simulated_channel_activation(testCase.tmp_dir);
+        end
         function test_cortical_simulation(testCase)
             
             % Simulate cortical signals -> dHb
@@ -176,6 +197,7 @@ hrf_types = process_nst_glm_fit('get_hrf_types');
                                 hrf_types.CANONICAL, 25, 0);
 assert(all(strcmp(names, {events.label})));
 
+
 %% Retrieve data
 repo_url = nst_get_repository_url();
 data_fns = nst_request_files({{'unittest','lesca_data','dummy_frontal_16x16.nirs'}, ...
@@ -300,8 +322,77 @@ hb_cortex = bst_process('CallProcess', ...
 end
 
 
+[B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
 
-function [X, names] = design_matrix(dt,nb_samples)
+
+nb_conditions = length(events);
+
+
+func_map_hb = zeros(length(HB_TYPES), nb_samples, nb_vertices);
+beta_map_hb = zeros(length(HB_TYPES), nb_conditions, nb_vertices);
+
+
+for ihb=1:length(HB_TYPES)
+    for icond=1:nb_conditions
+        beta_map_hb(ihb, icond, activation_scout(icond).sScout.Vertices) = delta_hb(ihb, icond);
+        nst_bst_add_surf_data(squeeze(beta_map_hb(ihb, icond, :)), 1, head_model_holder, ['simu_beta_' HB_TYPES{ihb} '_' events(icond).label], ...
+                              ['Simulated beta ' HB_TYPES{ihb} ' ' events(icond).label], [], sStudy, 'simulated', surface_file);
+    end
+    func_map_hb(ihb, :, :) = X * squeeze(beta_map_hb(ihb,:,:) ) + rand(nb_samples, nb_vertices) * 0.1 * mean(delta_hb(ihb,:));
+    nst_bst_add_surf_data(squeeze(func_map_hb(ihb,:, :))', time, head_model_holder, ['simu_sig_' HB_TYPES{ihb}], ...
+                          ['Simulated signals ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
+end
+
+% Align functional data to current channel definition
+reordered_dOD = zeros(size(func_map_dOD_stacked));
+nb_pairs = size(montage_info.pair_ichans, 1);
+for ipair=1:nb_pairs
+    for imeasure=1:size(montage_info.pair_ichans, 2)
+        ichan = montage_info.pair_ichans(ipair, imeasure);
+        reordered_dOD(ichan, :) = func_map_dOD_stacked(ipair + nb_pairs*(imeasure-1), :);
+    end
+end
+
+% Add some white noise at the channel level
+sig_range = max(reordered_dOD(:)) - min(reordered_dOD(:));
+reordered_dOD = reordered_dOD + randn(size(reordered_dOD)) * 0.1 * sig_range;
+
+%% Save dOD as new data
+sDummyData = in_bst_data(sDummy.FileName);
+sDataOut = db_template('data');
+sDataOut.F            = reordered_dOD;
+sDataOut.Comment      = 'NIRS dOD simulated';
+sDataOut.ChannelFlag  = sDummyData.ChannelFlag;
+sDataOut.Time         = time;
+sDataOut.DataType     = 'recordings';
+sDataOut.nAvg         = 1;
+sDataOut.Events       = events;
+sDataOut.DisplayUnits = 'delta OD';
+
+% Generate a new file name in the same folder
+dODFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dod');
+sDataOut.FileName = file_short(dODFile);
+bst_save(dODFile, sDataOut, 'v7');
+% Register in database
+db_add_data(sDummy.iStudy, dODFile, sDataOut);
+
+%TODO: check channels that are on top of activation area but no evoked signal
+
+%% Project back on the cortex
+
+sdODInput = bst_process('GetInputStruct', dODFile);
+proj_methods = process_nst_cortical_projection('methods');
+hb_cortex = bst_process('CallProcess', ...
+                        'process_nst_cortical_projection', sdODInput, [], ...
+                        'method', proj_methods.MNE);     
+                    
+
+
+end
+
+
+
+function [X, names, events] = design_matrix(dt,nb_samples)
 
 % Returned the design matrix
 
