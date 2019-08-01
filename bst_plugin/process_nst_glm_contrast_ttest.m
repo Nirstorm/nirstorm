@@ -73,8 +73,9 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
         surface_data = 0;
         con_mat = con_data.F';
     end
-    edf = con_data.edf;        
-    con_std = con_data.contrast_std;
+    edf = con_data.edf;
+
+    con_std = real(con_data.contrast_std);
 
     t_stat = con_mat ./ con_std ;
     t_stat(con_std==0) = 0;
@@ -106,7 +107,11 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
     sOutput.contrast_name = con_data.contrast_name;
     
     df_map = zeros(size(sOutput.tmap));
-    df_map(con_std>0) = edf;
+    if length(edf) > 1    
+        df_map(con_std>0) = edf(con_std>0);
+    else
+        df_map(con_std>0) = edf;
+    end    
     sOutput.df = df_map;
     
     sOutput.Correction   = 'no';

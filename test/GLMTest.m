@@ -28,11 +28,10 @@ classdef GLMTest < matlab.unittest.TestCase
             nb_channels=10;
             nb_active_channels=5;
             
-            [X, names,tmp] = design_matrix(dt,nb_samples);
-            X=[X ones(nb_samples,1)];
+            [X, names,tmp] = design_matrix(0:dt:(nb_samples-1));
 
             
-            [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
+            [B, active_channels] = create_B_map(nb_channels,nb_active_channels);
             y=X*B + 1e-3*randn(nb_samples,nb_channels);
             
             [B_hat,proj_X] = process_nst_glm_fit('compute_B_svd',y,X);
@@ -45,21 +44,156 @@ classdef GLMTest < matlab.unittest.TestCase
             nb_channels=10;
             nb_active_channels=5;
             
-            [X, names,tmp] = design_matrix(dt,nb_samples);
-            X=[X ones(nb_samples,1)];
+            [X, names,tmp] = design_matrix(0:dt:(nb_samples-1));
 
             
-            [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
+            [B, active_channels] = create_B_map(nb_channels,nb_active_channels);
             y=X*B + 1e-3*randn(nb_samples,nb_channels);
             
             [B_hat, covB, dfe, residuals, mse_residuals] = process_nst_glm_fit('AR1_ols_fit',y, dt, X, 0.1);
             testCase.assertTrue( all(all(abs(B - B_hat) < 1e-3)));  
          end
+
+        function test_channel_simulation_SNR_5(testCase)
+            
+            method_test=2; % 1 is to test pre-coloring, 2 is to test pre-whitening 
+            
+            repo_url = nst_get_repository_url();
+            data_fns = nst_request_files({{'unittest','nirscomp_data','GraspingRight_Hb_baseline_#1_.nirs'}}, ...
+                              1, repo_url);
+            nirs_fn = fullfile(testCase.tmp_dir, 'GraspingRight_Hb_baseline_#1_.nirs');
+            copyfile(data_fns{1}, nirs_fn);
+            
+            %% Import data in brainstorm
+            [subject_name, sSubject, iSubject] = bst_create_test_subject();
+            sDummy = utest_import_nirs_in_bst(nirs_fn, 0);
+            
+            % Load Noise
+            % Todo FIX - resample to 5Hz 
+            NewFiles = import_raw_to_db( sDummy.FileName );
+            sData = in_bst_data(NewFiles{1});
+            
+            % extract HbO channels 
+            ChannelMat = in_bst_channel(sDummy.ChannelFile);
+            ChannelMat.Nirs.Hb={'HbO'};
+
+            iHbO=[];
+
+            i=1;
+            for ichan=1:size(ChannelMat.Channel,2)
+                if strcmp(ChannelMat.Channel(ichan).Group, 'HbO')
+                    channels(i)=ChannelMat.Channel(ichan);
+                    iHbO(end+1)=i;
+                    i=i+1;
+                end    
+            end
+            ChannelMat.Channel=channels;
+            n_chan=size(channels,2);
+            ChannelMat.Comment=['NIRS-BRS sensors (' n_chan ')'];
+            
+
+            
+            
+            % create signal 
+            [X, names, events] = design_matrix(sData.Time);
+            names=names(1:2);
+            
+            [B, active_channels] = create_B_map(n_chan,round(0.5*n_chan));
+            
+            signal=X*B;
+            noise=sData.F';
+            
+            SNR=-5; %in dB
+            
+            y=zeros( size(signal));
+            
+            for ichann=1:n_chan
+                l=get_factor_SNR(signal(:,ichann),noise(:,ichann),SNR);
+                disp([' Using l= ' num2str(l) ' for chan ' num2str(ichann) ]);
+                y(:,ichann) = signal(:,ichann) + l*noise(:,ichann);
+            end
+
+            % Save Data in a new folder 
+            iStudy = db_add_condition('test_subject', 'Simulation');
+            sStudy = bst_get('Study', iStudy);
+
+            [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+            db_set_channel(iChannelStudy, ChannelMat, 0, 0);
+
+            
+            sDataOut = db_template('data');
+            sDataOut.F            = y';
+            sDataOut.Comment      = 'NIRS dHb';
+            sDataOut.ChannelFlag  =  ones(n_chan,1) ;
+            sDataOut.Time         = sData.Time;
+            sDataOut.DataType     = sData.DataType;
+            sDataOut.nAvg         = 1;
+            sDataOut.Events       = events;
+            sDataOut.DisplayUnits = 'mumol.l-1';
+            
+            % Generate a new file name in the same folder
+            dHbFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dHb');
+            sDataOut.FileName = file_short(dHbFile);
+            bst_save(dHbFile, sDataOut, 'v7');
+            db_add_data(iStudy, dHbFile, sDataOut);
+
+            sHb = bst_process('GetInputStruct', dHbFile);
+            
+            
+            sHb_filtered = bst_process('CallProcess', 'process_bandpass', sHb, [], ...
+                'sensortypes', '', ...
+                'highpass',    0.01, ...
+                'lowpass',     0.15, ...
+                'tranband',    0, ...
+                'attenuation', 'strict', ...  % 60dB
+                'ver',         '2019', ...  % 2019
+                'mirror',      0, ...
+                'overwrite',   0);
+            
+            sGlmResults = bst_process('CallProcess','process_nst_glm_fit', sHb_filtered, [], ...
+                                                    'hpf_low_cutoff',         0.01, ...
+                                                    'trim_start',             0, ...
+                                                    'fitting',                1, ...  % OLS
+                                                    'statistical_processing', method_test, ...
+                                                    'noise_model',            1, ...  % AR(1)
+                                                    'stim_events',            strjoin(names, ','), ...
+                                                    'hrf_model',              1, ...  % CANONICAL
+                                                    'trend',                  1, ...
+                                                    'save_betas',             0, ...
+                                                    'save_residuals',         0, ...
+                                                    'save_fit',               0);
+                
         
+             % Check activation detection (p-val thresholding)
+            con_sResults_stim1 = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults, [], ...
+                                                  'Contrast', '[1 -1]');
+            stat_sResults_stim1 = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
+                                                  con_sResults_stim1, [], ...
+                                                  'tail', 'two');
+            glm_results_stat = in_bst_matrix(stat_sResults_stim1.FileName);
+            thresh_options.pThreshold = 5e-2;
+            thresh_options.Correction = 'bonferroni';
+            thresh_options.Control = 1;
+            
+            [glm_results, corr_p] = bst_stat_thresh(glm_results_stat.pmap, thresh_options);
+            true_map=zeros(1,n_chan);
+            true_map(active_channels)=1;
+            
+            plot_performance(glm_results_stat,true_map);
+
+
+            
+            [TP,FP,TN,FN]=compute_performance(glm_results, true_map);
+            
+            %FPR=FP/(FP+TN);
+            %testCase.assertLessThan(FPR, 5e-2);
+            
+            %sensitivity=TP/(TP+FN);
+            %testCase.assertGreaterThan(sensitivity,0.8); 
+            
         
-        function test_channel_simulation(testCase)
-            [hb_cortex, beta_map_hb, activations, stim_event_names] = dHbO_from_simulated_channel_activation(testCase.tmp_dir);
         end
+        
         function test_cortical_simulation(testCase)
             
             % Simulate cortical signals -> dHb
@@ -322,134 +456,132 @@ hb_cortex = bst_process('CallProcess', ...
 end
 
 
-[B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels);
-
-
-nb_conditions = length(events);
-
-
-func_map_hb = zeros(length(HB_TYPES), nb_samples, nb_vertices);
-beta_map_hb = zeros(length(HB_TYPES), nb_conditions, nb_vertices);
-
-
-for ihb=1:length(HB_TYPES)
-    for icond=1:nb_conditions
-        beta_map_hb(ihb, icond, activation_scout(icond).sScout.Vertices) = delta_hb(ihb, icond);
-        nst_bst_add_surf_data(squeeze(beta_map_hb(ihb, icond, :)), 1, head_model_holder, ['simu_beta_' HB_TYPES{ihb} '_' events(icond).label], ...
-                              ['Simulated beta ' HB_TYPES{ihb} ' ' events(icond).label], [], sStudy, 'simulated', surface_file);
-    end
-    func_map_hb(ihb, :, :) = X * squeeze(beta_map_hb(ihb,:,:) ) + rand(nb_samples, nb_vertices) * 0.1 * mean(delta_hb(ihb,:));
-    nst_bst_add_surf_data(squeeze(func_map_hb(ihb,:, :))', time, head_model_holder, ['simu_sig_' HB_TYPES{ihb}], ...
-                          ['Simulated signals ' HB_TYPES{ihb}], [], sStudy, 'simulated', surface_file);
-end
-
-% Align functional data to current channel definition
-reordered_dOD = zeros(size(func_map_dOD_stacked));
-nb_pairs = size(montage_info.pair_ichans, 1);
-for ipair=1:nb_pairs
-    for imeasure=1:size(montage_info.pair_ichans, 2)
-        ichan = montage_info.pair_ichans(ipair, imeasure);
-        reordered_dOD(ichan, :) = func_map_dOD_stacked(ipair + nb_pairs*(imeasure-1), :);
-    end
-end
-
-% Add some white noise at the channel level
-sig_range = max(reordered_dOD(:)) - min(reordered_dOD(:));
-reordered_dOD = reordered_dOD + randn(size(reordered_dOD)) * 0.1 * sig_range;
-
-%% Save dOD as new data
-sDummyData = in_bst_data(sDummy.FileName);
-sDataOut = db_template('data');
-sDataOut.F            = reordered_dOD;
-sDataOut.Comment      = 'NIRS dOD simulated';
-sDataOut.ChannelFlag  = sDummyData.ChannelFlag;
-sDataOut.Time         = time;
-sDataOut.DataType     = 'recordings';
-sDataOut.nAvg         = 1;
-sDataOut.Events       = events;
-sDataOut.DisplayUnits = 'delta OD';
-
-% Generate a new file name in the same folder
-dODFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dod');
-sDataOut.FileName = file_short(dODFile);
-bst_save(dODFile, sDataOut, 'v7');
-% Register in database
-db_add_data(sDummy.iStudy, dODFile, sDataOut);
-
-%TODO: check channels that are on top of activation area but no evoked signal
-
-%% Project back on the cortex
-
-sdODInput = bst_process('GetInputStruct', dODFile);
-proj_methods = process_nst_cortical_projection('methods');
-hb_cortex = bst_process('CallProcess', ...
-                        'process_nst_cortical_projection', sdODInput, [], ...
-                        'method', proj_methods.MNE);     
-                    
-
-
-end
-
-
-
-function [X, names, events] = design_matrix(dt,nb_samples)
+function [X, names, events] = design_matrix(time)
 
 % Returned the design matrix
+% generate events with the repetition of the following paterns 
+% Stim 1 [ 20 - 30s]  - Stim 2 [20-30s] 
 
-
-time = (0:(nb_samples-1))*dt;
 
 events = db_template('event');
 stim_event_names = {'stim1', 'stim2'};
+
 events(1).label = stim_event_names{1};
-events(1).times = [10 160 200 260 300 330 360 400 440 460 490 520 550];
-events(1).epochs = ones(1, length(events(1).times));
-
 events(2).label = stim_event_names{2};
-events(2).times = [40 60 90 120 140 150 170 210 270 300 380];
-events(2).epochs = ones(1, length(events(2).times));
 
-stim_duration = 10; % sec
-events(1).times(2,:) = events(1).times(1,:) + stim_duration;
-events(2).times(2,:) = events(2).times(1,:) + stim_duration;
+t=0;
+i_event=1;
 
-% Insure rounding is consistent
-for icond=1:length(events)
-    events(icond).samples = round(events(icond).times ./ dt);
-    events(icond).times   = events(icond).samples .* dt;
+while t + 60 < time(end)
+    
+    duration_stim1=randi([20,30]);
+    duration_stim2=randi([20,30]);
+    
+    events(1).times(1,i_event)=t;
+    events(1).times(2,i_event)=t+duration_stim1;
+    
+    events(2).times(1,i_event)=t+duration_stim1;
+    events(2).times(2,i_event)=t+duration_stim1+duration_stim2;
+   
+    t=t+duration_stim1+duration_stim2;
+    i_event=i_event+1;
+    
 end
+
+events(1).epochs = ones(1, length(events(1).times));
+events(2).epochs = ones(1, length(events(2).times));
 
 hrf_types = process_nst_glm_fit('get_hrf_types');
 [X,names] = process_nst_glm_fit('make_design_matrix', time, events, ...
-                                hrf_types.CANONICAL, 25, 0);
+                                hrf_types.CANONICAL, 25, 1);
 
                             
-assert(all(strcmp(names, {events.label})));
+assert(all(strcmp(names(1:2), {events.label})));
 
 end
 
-function [B, active_channels,unactive_channels] = create_B_map(nb_channels,nb_active_channels)
+function [B, active_channels]= create_B_map(nb_channels,nb_active_channels)
     % Assume 2 conditions Stim1=Task,Stim2=Rest  
-    mean_active_b=5;
-    sigma_active_b= 0.2;
-    
-    mean_unactive_b=0;
-    sigma_unactive_b=0.2;
-    
-    mean_trend=0.3;
-    
     B=zeros(3,nb_channels);
     perm=randperm(nb_channels);
     
     active_channels=sort(perm(1:nb_active_channels));
     unactive_channels=sort(perm(nb_active_channels+1:end));
+    
+    
+    % Active channels : B1 = 0.01; B2~ 0.005, B3=N(0,0.0001)
+    B(1,active_channels)=0.01+0.0001*randn(); % Stim 1
+    B(2,active_channels)=0.005+0.0001*randn(); % Stim 2 
+    B(3,active_channels)=0.0001*randn(); % Constant 
 
-    B(1,active_channels)=mean_active_b + sigma_active_b*randn(1,nb_active_channels);
-    B(2,active_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
+    % Active channels : B1 =  N(0,0.001); B2~ N(0,0.001), B3=0
 
-    B(1,unactive_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
-    B(2,unactive_channels)=mean_unactive_b + sigma_unactive_b*randn(1,nb_active_channels);
+    B(1,unactive_channels)=0.001*randn();% Stim 1
+    B(2,unactive_channels)=0.001*randn(); % Stim 2 
+    B(3,unactive_channels)=0.0001*randn(); % Constant 
+    
+    B=B/100;
+end
 
-    B(3,:)=mean_trend;
 
+function l=get_factor_SNR(signal,noise,SNR)
+    % compute l so that y = signal + l*noise avec the correct SNR value
+    % SNR = 10 log(  <signal> / l^2 < noise > ) with <.> the signal power
+    
+    mss_signal=norm(signal,2);
+    mss_noise=norm(noise,2);
+    
+    l2= (mss_noise/mss_signal) * 10^(SNR/10);
+    l=sqrt(l2);
+end
+
+function [TP,FP,TN,FN]=compute_performance(glm_results, true_results)
+    FP= sum(glm_results( true_results == 0  ));
+    TP= sum(glm_results( true_results >  0 ));
+    
+    TN= sum(~glm_results(true_results == 0));
+    FN= sum(~glm_results(true_results  >  0 ));
+end
+
+function plot_performance(glm_results_stat,true_map)
+
+    pval= logspace(-7,0,1000);
+    
+    N=length(pval);
+    
+    FPR=zeros(1,N);
+    sensitivity=zeros(1,N);
+
+    for i=1:N
+        thresh_options.pThreshold = pval(i);
+        thresh_options.Correction = 'bonferroni';
+        thresh_options.Control = 1;
+
+        [glm_results, corr_p] = bst_stat_thresh(glm_results_stat.pmap, thresh_options);
+        [TP,FP,TN,FN]=compute_performance(glm_results, true_map);
+
+        FPR(i)=FP/(FN+TP);
+        sensitivity(i)=TP/(TP+FN);
+        
+    end
+    
+    figure(1)
+    plot(FPR,sensitivity);
+    xlabel('False Positive Rate')
+    ylabel('Sensitivity')
+    
+    figure(2)
+    plot(pval,FPR);
+    xlabel('p-value (Bonferroni correction)')
+    ylabel('False Positive Rate')
+    
+    figure(3)
+    plot(pval,sensitivity);
+    xlabel('p-value (Bonferroni correction)')
+    ylabel('Sensitivity')
+
+    save( ['/NAS/home/edelaire/Documents/output_analysis/simulation/GLM_whit_filterd_FPR.mat'], 'FPR');
+    save( ['/NAS/home/edelaire/Documents/output_analysis/simulation/GLM_whit_filterd_sens.mat'], 'sensitivity');
+
+    
 end

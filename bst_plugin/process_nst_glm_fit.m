@@ -252,7 +252,8 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
             else % Pre-whitenning
                 if sProcess.options.noise_model.Value == 1
                     method_name = 'AR1_OLS';
-                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, X_trim);
+                    hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
+                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
                 else 
                     bst_error('This method is not implemented');
                     return
@@ -497,7 +498,7 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
     n_cond=size(X,2);
     n_time=size(Y,1);
     
-    max_iter=30;
+    max_iter=10;
     B_out=zeros(n_cond,n_chan);
     
     covB_out=zeros(n_cond,n_cond,n_chan);
@@ -529,11 +530,9 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         B0=zeros(n_cond,1);
         S_prod=speye(n_time);
       
-      while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
-          disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
-          B0=B;
-        
-        
+        while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
+            B0=B;
+            
             % Estimate the AR(1) processe on the residual
             res=SY-SX*B0; 
             W=nst_math_fit_AR(res',1);
@@ -551,14 +550,15 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
             S_prod=sparse(S)*S_prod;
             
             % Apply the filtering to the data and the deisgn matrix
-            SY = S*y;
-            SX = S*X;
+            SY = S*SY;
+            SX = S*SX;
 
             % Compute B for Sy = SXB + Se following an iid normal distribution
             [B,proj_X] = compute_B_svd(SY,SX);
        
             iter=iter+1;
-      end
+            disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
+       end
        
         S=S_prod;
         Va=full(inv(S))^2;
@@ -582,7 +582,8 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
 
         dfe = trRV^2 / trRVRV;
         mse_residuals =  sigma2* (size(y,1)-1)/trRV;
-        covB= ( SY'*(R'*R)*SY)*  pSX * S_Va_S_t * pSX'/trRV; 
+        covB = pSX * pSX';
+
         
         % Save stats 
         
@@ -594,9 +595,8 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         mse_residuals_out(i_chan)=mse_residuals;
     
         disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration |res|=' num2str(norm(res)) ]) 
-    end  
-
-        
+    end
+    
 end
 
 

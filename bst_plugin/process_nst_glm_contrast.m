@@ -134,11 +134,20 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     if length(C) < nb_regressors
        C= [C zeros(1, nb_regressors - length(C)) ]; 
     end    
-     
-    con_mat = C * B;    
-    con_cov = C * covB * C';
-    con_std = sqrt(mse_res .* con_cov);
-                                 
+    %covB=covB(:,:,3); 
+    con_mat = C * B; 
+    if size(covB,3) > 1
+        nchan=size(covB,3);
+        con_cov=zeros(1,nchan);
+        con_std=zeros(1,nchan);
+        for ichan=1:nchan
+            con_cov(ichan) = C * covB(:,:,ichan) * C';
+            con_std(ichan) = sqrt(mse_res(ichan) .* con_cov(ichan));
+        end    
+    else
+        con_cov = C * covB * C';
+        con_std = sqrt(mse_res .* con_cov);
+    end                             
     % Formating a readable comment such as -Rest +Task
     comment = 'GLM con ';
     contrast = '';
