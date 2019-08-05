@@ -526,12 +526,12 @@ end
 
 function l=get_factor_SNR(signal,noise,SNR)
     % compute l so that y = signal + l*noise avec the correct SNR value
-    % SNR = 10 log(  <signal> / l^2 < noise > ) with <.> the signal power
+    % SNR = 10 log(  <signal> / l^2 < noise > ) with <.> the signal power.
     
     mss_signal=norm(signal,2);
     mss_noise=norm(noise,2);
     
-    l2= (mss_noise/mss_signal) * 10^(SNR/10);
+    l2= (mss_signal/mss_noise) * 10^(-SNR/10);
     l=sqrt(l2);
 end
 

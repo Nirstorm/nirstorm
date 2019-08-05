@@ -364,7 +364,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
                 OutputFiles{end+1} = ResultFile;
         else
             data_out = zeros(size(DataMat.F));
-            data_out(nirs_ichans, :) = residuals';
+            data_out(nirs_ichans, :) = residual';
             Out_DataMat = db_template('data');
             Out_DataMat.F           =  data_out;
             Out_DataMat.Comment     = output_comment;
