@@ -39,7 +39,7 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - 1st level design and fit';
-    sProcess.Category    = 'Custom';
+    sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1401;
     sProcess.isSeparator = 0;
@@ -512,25 +512,29 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
                                               'highpass', hpf_low_cutoff, ...
                                                0, 2, 0);
     X_hpf = [X_hpf X(:,end)];
+    
     %X_hpf=X;
     
+    [B_init,proj_X] = compute_B_svd(Y,X_hpf);
+    bst_progress('start', 'GLM - Pre-whitenning ' , 'Fitting the GLM', 1, n_chan);
     
     for i_chan=1:n_chan
         % Solve B for chan i_chan. We need to solve B for each channel
         % speratly as we are fitting one AR model per channel. This might 
         % not be a good idead in the source space. 
-       
+        t = cputime;
         iter=0;
        
         y=Y(:,i_chan);
         SX=X_hpf;
         SY=y;
        
-        [B,proj_X] = compute_B_svd(SY,SX);
+        B=B_init(:,i_chan);
         B0=zeros(n_cond,1);
         S_prod=speye(n_time);
-      
+        
         while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
+            
             B0=B;
             
             % Estimate the AR(1) processe on the residual
@@ -593,10 +597,13 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         dfe_out(i_chan)=dfe;
         residuals_out(:,i_chan)=residuals;
         mse_residuals_out(i_chan)=mse_residuals;
-    
-        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration |res|=' num2str(norm(res)) ]) 
+        e = cputime-t;
+        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration (' num2str(e) ' sec) |res|=' num2str(norm(res)) ]) 
+        bst_progress('inc', 1); 
     end
     
+    bst_progress('stop');
+
 end
 
 
