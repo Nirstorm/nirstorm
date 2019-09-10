@@ -179,6 +179,9 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
             if issparse(Y)
                 Y = full(Y);
             end
+            n_voxel=size(Y,2);
+            mask=find(~all(Y==0,1)); % Only keep channel in the field of view
+            Y=Y(:,mask);
         else
             bst_error('Cannot get signals from surface data');
         end
@@ -196,7 +199,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     elseif strcmp(DataMat.DisplayUnits, 'mmol.l-1')
         Y = Y * 1e3;
         DataMat.DisplayUnits = 'mumol.l-1';
-    elseif strcmp(DataMat.DisplayUnits, 'mumol.l-1') || strcmp(DataMat.DisplayUnits, 'mumol.l-1')
+    elseif strcmp(DataMat.DisplayUnits, 'mumol.l-1') || strcmp(DataMat.DisplayUnits, '\mumol.l-1')
         Y = Y * 1;
         DataMat.DisplayUnits = 'mumol.l-1';
     else
@@ -248,12 +251,52 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
             if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
                 method_name = 'OLS_precoloring';
                 hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
-                [B, covB, dfe, residuals, mse_residuals] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
+                [B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
+                
+                if surface_data
+                   B=zeros(nb_regressors,n_voxel);
+                   B(:,mask)=B_out;
+                    
+                   residuals=zeros( size(residuals_out,1),n_voxel);
+                   residuals(:,mask)=residuals_out;
+                    
+                   mse_residuals=zeros(1,n_voxel);
+                   mse_residuals(:,mask)=mse_residuals_out;
+                    
+                else     
+                    B=B_out;
+                    residuals=residuals_out;
+                    mse_residuals=mse_residuals_out;
+                end
             else % Pre-whitenning
                 if sProcess.options.noise_model.Value == 1
                     method_name = 'AR1_OLS';
                     hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
-                    [B, covB, dfe, residuals, mse_residuals] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
+                    [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
+                
+                     if surface_data
+                        B=zeros(nb_regressors,n_voxel);
+                        B(:,mask)=B_out;
+                        
+                        covB=zeros(nb_regressors,nb_regressors,n_voxel);
+                        covB(:,:,mask)=covB_out;
+                        
+                        dfe=zeros(1,n_voxel);
+                        dfe(mask)=dfe_out;
+                        
+                        residuals=zeros( size(residuals_out,1),n_voxel);
+                        residuals(:,mask)=residuals_out;
+                    
+                        mse_residuals=zeros(1,n_voxel);
+                        mse_residuals(:,mask)=mse_residuals_out;
+                    
+                     else     
+                        B=B_out;
+                        covB=covB_out;
+                        dfe=dfe_out;
+                        residuals=residuals_out;
+                        mse_residuals=mse_residuals_out;
+                     end
                 else 
                     bst_error('This method is not implemented');
                     return
@@ -354,22 +397,20 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     end
     
     if save_residuals
-        residual = Y - X*B; % WARNING: residuals are not consistent with beta variances -> start trimming not taken into account
         % Saving the residual matrix.
         output_tag = sprintf('ir%d_glm_res', sInput.iItem);
         output_comment = [output_prefix '- residuals'];
         if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(residual', DataMat.Time, [], output_tag, output_comment, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(residuals', DataMat.Time, [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
                 OutputFiles{end+1} = ResultFile;
         else
-            data_out = zeros(size(DataMat.F));
-            data_out(nirs_ichans, :) = residual';
+            
             Out_DataMat = db_template('data');
-            Out_DataMat.F           =  data_out;
+            Out_DataMat.F           =  residuals';
             Out_DataMat.Comment     = output_comment;
             Out_DataMat.DataType     = 'recordings';
-            Out_DataMat.Time        =  DataMat.Time;
+            Out_DataMat.Time        =  DataMat.Time((trim_start_sample+1):end);
             Out_DataMat.Events      =  DataMat.Events;
             Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
             Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
@@ -506,7 +547,6 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
     residuals_out=zeros(n_time,n_chan);
     mse_residuals_out=zeros(1,n_chan);
     
-    
     % high-pass filtering of the design matrix
     X_hpf = process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
                                               'highpass', hpf_low_cutoff, ...
@@ -518,11 +558,11 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
     [B_init,proj_X] = compute_B_svd(Y,X_hpf);
     bst_progress('start', 'GLM - Pre-whitenning ' , 'Fitting the GLM', 1, n_chan);
     
-    for i_chan=1:n_chan
+    parfor i_chan=1:n_chan
         % Solve B for chan i_chan. We need to solve B for each channel
         % speratly as we are fitting one AR model per channel. This might 
         % not be a good idead in the source space. 
-        t = cputime;
+        tic;
         iter=0;
        
         y=Y(:,i_chan);
@@ -597,8 +637,8 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
         dfe_out(i_chan)=dfe;
         residuals_out(:,i_chan)=residuals;
         mse_residuals_out(i_chan)=mse_residuals;
-        e = cputime-t;
-        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration (' num2str(e) ' sec) |res|=' num2str(norm(res)) ]) 
+        e = toc;
+        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration (' num2str(e) ' sec)']) 
         bst_progress('inc', 1); 
     end
     
