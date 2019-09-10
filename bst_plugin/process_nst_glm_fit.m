@@ -401,7 +401,7 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
         output_tag = sprintf('ir%d_glm_res', sInput.iItem);
         output_comment = [output_prefix '- residuals'];
         if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(residuals', DataMat.Time, [], output_tag, output_comment, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(residuals', DataMat.Time((trim_start_sample+1):end), [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
                 OutputFiles{end+1} = ResultFile;
         else
