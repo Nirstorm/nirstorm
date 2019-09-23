@@ -93,6 +93,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             all_cons(iInput, :) = in_data.ImageGridAmp;
             all_cons_var(iInput, :) = in_data.contrast_std.^2;
         end
+        n_chan=size(all_cons,2);
+        mask=find(~all(all_cons==0,1)); % Only keep channel in the field of view
+        all_cons=all_cons(:,mask);
+        all_cons_var=all_cons_var(:,mask);
+            
     else
         
         % Warnings : This does not check that the montage is consistent
@@ -117,14 +122,28 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     edf = nb_inputs - 1;
     inter_subj_var = sum(gp_residuals.^2) ./ edf;
     gp_var = all_cons_var + repmat(inter_subj_var, nb_inputs, 1);
-    t_stat = sum(all_cons ./ gp_var) ./ sqrt(sum(1./gp_var));
-    t_stat(isnan(t_stat)) = 0;
+    t_stat_value = sum(all_cons ./ gp_var) ./ sqrt(sum(1./gp_var));
+    t_stat_value(isnan(t_stat_value)) = 0;
     
     % Calculate p-values from t-values
-    p = process_test_parametric2('ComputePvalues', t_stat, edf, 't', ...
+    p_value = process_test_parametric2('ComputePvalues', t_stat_value, edf, 't', ...
                                  sProcess.options.tail.Value );
     
-
+    p=zeros(1,n_chan);
+    t_stat=zeros(1,n_chan);
+    df_map = zeros(1,n_chan);
+    
+    if surface_data
+        p(mask)=p_value;
+        t_stat(mask)=t_stat_value;
+        df_map(mask)=edf;
+        
+    else
+        p(:)=p_value;
+        t_stat(:)=t_stat_value;
+        df_map(sum(gp_var, 1) > 0) = edf;    
+    end    
+                             
     % === OUTPUT STRUCTURE ===
     % Initialize output structure
 
@@ -132,10 +151,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     sOutput.pmap         = p';
     sOutput.tmap         = t_stat';
     sOutput.contrast_name = con_name;
-    
-    df_map = zeros(size(sOutput.tmap));
-    df_map(sum(gp_var, 1) > 0) = edf;
-    sOutput.df = df_map;
+    sOutput.df = df_map';
     
     if surface_data 
         sOutput.HeadModelType = 'surface';
