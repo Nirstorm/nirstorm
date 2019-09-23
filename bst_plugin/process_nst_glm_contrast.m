@@ -177,7 +177,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 %     output_fn = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
 
     extra_output.contrast_name = contrast;
-    extra_output.contrast_std = con_std;
+    extra_output.Std = con_std';
     extra_output.edf = edf;
     extra_output.DisplayUnits = glm_fit.DisplayUnits;
     

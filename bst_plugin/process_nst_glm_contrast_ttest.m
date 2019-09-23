@@ -75,7 +75,7 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
     end
     edf = con_data.edf;
 
-    con_std = real(con_data.contrast_std);
+    con_std = real(con_data.Std);
 
     t_stat = con_mat ./ con_std ;
     t_stat(con_std==0) = 0;

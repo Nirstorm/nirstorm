@@ -91,7 +91,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             in_data = in_bst_data(sInputs(iInput).FileName);
             assert(strcmp(con_name, in_data.contrast_name));
             all_cons(iInput, :) = in_data.ImageGridAmp;
-            all_cons_var(iInput, :) = in_data.contrast_std.^2;
+            all_cons_var(iInput, :) = in_data.Std.^2;
         end
         n_chan=size(all_cons,2);
         mask=find(~all(all_cons==0,1)); % Only keep channel in the field of view
@@ -112,7 +112,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             in_data=getDataForChannels(sInputs(iInput),ChannelList);
             assert(strcmp(con_name, in_data.contrast_name));
             all_cons(iInput, :) = in_data.F;
-            all_cons_var(iInput, :) = in_data.contrast_std.^2;
+            all_cons_var(iInput, :) = in_data.Std.^2;
         end
 
     end
@@ -263,10 +263,10 @@ function data=getDataForChannels(sInput,ChannelList)
         [C,ia,ib]=intersect(channel_name(i_chan),ChannelList);
         if ~isempty(C) 
             F(ib)=data.F(i_chan);
-            contrast_std(ib)=data.contrast_std(i_chan);
+            contrast_std(ib)=data.Std(i_chan);
         end
     end
     data.F=F;
-    data.contrast_std=contrast_std;
+    data.Std=contrast_std;
     data.ChannelFlag=ones(n_chan,1);
 end

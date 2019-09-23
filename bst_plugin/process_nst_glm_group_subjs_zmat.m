@@ -66,7 +66,7 @@ function [OutputFiles1, OutputFiles2]  = Run(sProcess, sInputs1, sInput2) %#ok<D
     for isubj=1:length(sInputs1)
         con_data = in_bst_results(sInputs1(isubj).FileName);
         all_con(isubj, :) = con_data.ImageGridAmp;
-        all_con_std(isubj, :) = con_data.contrast_std;
+        all_con_std(isubj, :) = con_data.Std;
     end
     
     if length(sInput2) > 1
