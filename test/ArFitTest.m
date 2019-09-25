@@ -32,16 +32,18 @@ classdef ArFitTest < matlab.unittest.TestCase
             function test_ARP(testCase)
                                 
                 for order = 1:7
-                    l=cumsum(rand(1,order+1)) ;
-                    l=l/l(end);
-                    
-                    A= l(end:-1:1);
-                    
-                    x= testCase.sigma*randn(1,testCase.N);
-                    y = filter(1,A,x); 
+                    for ntrials=1:100
+                        l=cumsum(rand(1,order+1)) ;
+                        l=l/l(end);
 
-                    W=nst_math_fit_AR(y,order);
-                    assert( all( abs(W-A) < 0.1),'Failed to estimate order %s',num2str(order))
+                        A= l(end:-1:1);
+
+                        x= testCase.sigma*randn(1,testCase.N*5);
+                        y = filter(1,A,x); 
+
+                        W=nst_math_fit_AR(y,order);
+                        assert( all( abs(W-A) < 0.1),'Failed to estimate order %s',num2str(order))
+                    end
                 end
                 
             end
