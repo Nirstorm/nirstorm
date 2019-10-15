@@ -241,21 +241,26 @@ hb_unit_factor = 1e6;
 hb_unit = '\mumol.l-1';
 
 hb_types = {'HbO', 'HbR'};
+if OPTIONS.depth_weigth_MNE > 0
+    function_name='wMNE';
+else
+    function_name='MNE';
+end    
 for ihb=1:2
     [sStudy, ResultFile] = add_surf_data(squeeze(nirs_hbo_hbr(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, nirs_head_model, ...
-                                         ['wMNE sources - ' hb_types{ihb}], ...
-                                         sInputs, sStudy, 'wMNE sources reconstruction - dHb', ...
+                                         [function_name ' sources - ' hb_types{ihb}], ...
+                                         sInputs, sStudy, [function_name ' sources reconstruction - dHb'], ...
                                          hb_unit, store_sparse_results);    
     OutputFiles{end+1} = ResultFile;
 end
 
 [sStudy, ResultFile] = add_surf_data(nirs_hbt .* hb_unit_factor, sDataIn.Time, nirs_head_model, ...
-                                     'wMNE sources - HbT', ...
-                                     sInputs, sStudy, 'wMNE sources reconstruction - dHb', ...
+                                     [function_name ' sources - HbT'], ...
+                                     sInputs, sStudy, [function_name ' sources reconstruction - dHb'], ...
                                      hb_unit, store_sparse_results);
 OutputFiles{end+1} = ResultFile;
-pbar = bst_progress('stop', 'Reconstruction by cMEM', 'Finishing...');
+pbar = bst_progress('stop', 'Reconstruction by wMNE', 'Finishing...');
 % Update Brainstorm database
 bst_set('Study', sInputs.iStudy, sStudy);
 end
@@ -283,10 +288,17 @@ G = HM.Gain./MSD;
 sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
 M = M(:,sample(1):sample(2));
 
-Sigma_d    =   inv(diag(diag(real(cov(Baseline')))));
-
+if OPTIONS.NoiseCov_recompute 
+    Sigma_d    =   inv(diag(diag(real(cov(Baseline')))));
+end
 param1 = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
+
+%param1= [ 1/3 ];
+% for i=1:size(M,1)
+%     param1(i)=1/abs(snr(M(i,:))); 
+% end    
 pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... ');
+
 p = OPTIONS.depth_weigth_MNE;
 if OPTIONS.NoiseCov_recompute
     Sigma_s = diag(power(diag(G'*Sigma_d*G),p)); 
@@ -301,23 +313,29 @@ Prior = [];
 [U,S,V] = svd(G,'econ');
 G2 = U*S;
 Sigma_s2 = V'*Sigma_s*V;
+
+bst_progress('start', 'wMNE, solving MNE by L-curve ... ' , 'Solving MNE by L-curve ... ', 1, length(param1));
 for i = 1:length(param1)
     if OPTIONS.NoiseCov_recompute 
-    J = ((G2'*Sigma_d*G2+alpha(i).*Sigma_s2)^-1)*G2'*Sigma_d*M;
+        J = ((G2'*Sigma_d*G2+alpha(i).*Sigma_s2)^-1)*G2'*Sigma_d*M;
     else
-    J = ((G2'*G2+alpha(i).*Sigma_s2)^-1)*G2'*M; % Weighted MNE solution
+        J = ((G2'*G2+alpha(i).*Sigma_s2)^-1)*G2'*M; % Weighted MNE solution
     end
     Fit = [Fit,norm(M-G2*J)];       % Define Fit as a function of alpha
     Prior = [Prior,norm(W*V*J)];          % Define Prior as a function of alpha
+    
+    bst_progress('inc', 1); 
 end
+bst_progress('stop');
+
 [~,Index] = min(Fit/max(Fit)+Prior/max(Prior));  % Find the optimal alpha
 if OPTIONS.NoiseCov_recompute
-J = ((G'*Sigma_d*G+alpha(Index).*Sigma_s)^-1)*G'*Sigma_d*M;
+    J = ((G'*Sigma_d*G+alpha(Index).*Sigma_s)^-1)*G'*Sigma_d*M;
 else
-J = ((G'*G+alpha(Index).*Sigma_s)^-1)*G'*M;    
+    J = ((G'*G+alpha(Index).*Sigma_s)^-1)*G'*M;    
 end
 
-pbar = bst_progress('text', 'wMNE, solving MEN by L-curve ... done');
+pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
 
 figure()
 plot(Prior, Fit,'b.');
@@ -557,7 +575,7 @@ extinction_hbo_hbr_ref = [
 438	119140	501560;
 440	102580	413280;
 442	92780	363240;
-444	81444	282724;
+444	81444	282724;     
 446	76324	237224;
 448	67044	173320;
 450	62816	103292;
