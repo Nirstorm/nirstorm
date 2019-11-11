@@ -22,6 +22,146 @@ classdef BstHelperTest < matlab.unittest.TestCase
     
     methods(Test)
 
+        function test_run_proc_duplicate_outputs(testCase)
+            global GlobalData
+            
+            %% Prepare data
+            y = [1:10 ; 101:110];
+            dt = 0.1;
+            time = (0:(size(y,2)-1)) * dt;
+            
+            bst_create_test_subject();
+            
+            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
+                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
+                                    
+            output_name = 'dummy_resampled';
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 5);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+            
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 2);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+                    
+            try        
+                [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            catch ME
+                testCase.assertTrue(strcmp(ME.identifier, 'Nst:BstProcOutputError'));
+                testCase.assertTrue(~isempty(strfind(ME.message, 'duplicate')));
+                testCase.assertTrue(~isempty(strfind(ME.message, 'dummy_raw/dummy_resampled')));
+                exception_caught = 1;
+            end
+            testCase.assertTrue(exception_caught==1);
+        end
+        
+        
+        
+        function test_run_proc_duplicate_outputs(testCase)
+            global GlobalData
+            
+            %% Prepare data
+            y = [1:10 ; 101:110];
+            dt = 0.1;
+            time = (0:(size(y,2)-1)) * dt;
+            
+            bst_create_test_subject();
+            
+            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
+                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
+                                    
+            output_name = 'dummy_resampled';
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 5);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+            
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 2);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+                     
+            try
+                [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+                throw(MException('Nirstorm:ExceptionNotThrown', 'Exception not thrown'));
+            catch ME
+                expected_msg = 'Cannot safely manage unique outputs. Found duplicate items: dummy_raw/dummy_resampled';
+                testCase.assertTrue(~isempty(strfind(ME.message, expected_msg)));
+            end
+           
+        end
+        
+        
+        
+        function test_set_template_default_anat_not_available(testCase)
+            %% Ensure that nst_utest protocol exists
+            ProtocolName = 'nst_utest';
+            % Delete existing protocol
+            db_dir = bst_get('BrainstormDbDir');
+            gui_brainstorm('DeleteProtocol', ProtocolName);
+
+            nst_protocol_dir = fullfile(db_dir, ProtocolName);
+            if exist(nst_protocol_dir, 'dir')
+                rmdir(nst_protocol_dir, 's');
+            end
+
+            % Create new protocol with default anatomy for all subjects
+            gui_brainstorm('CreateProtocol', ProtocolName, 1, 0);
+            
+            % Make sure template is not available locally
+            template_name = 'Dummy_4NIRS';
+            template_mri_comment = 'MRI: Dummy 4NIRS';
+            template_fn = fullfile(bst_get('BrainstormUserDir'), 'defaults', 'anatomy', [template_name '.zip']);
+            if exist(template_fn, 'file')
+                delete(template_fn);
+            end
+            
+            nst_bst_set_template_anatomy(template_name, 0, 0);
+            
+            sSubject = bst_get('Subject', 0);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+
+        function test_set_template_default_anat_already_available(testCase)
+            %% Ensure that nst_utest protocol exists
+            ProtocolName = 'nst_utest';
+            % Delete existing protocol
+            db_dir = bst_get('BrainstormDbDir');
+            gui_brainstorm('DeleteProtocol', ProtocolName);
+
+            nst_protocol_dir = fullfile(db_dir, ProtocolName);
+            if exist(nst_protocol_dir, 'dir')
+                rmdir(nst_protocol_dir, 's');
+            end
+
+            % Create new protocol with default anatomy for all subjects
+            gui_brainstorm('CreateProtocol', ProtocolName, 1, 0);
+            
+            % Make sure template is available locally
+            template_name = 'Dummy_4NIRS';
+            template_bfn = [template_name '.zip'];
+            bst_anat_dir = fullfile(bst_get('BrainstormUserDir'), 'defaults', 'anatomy');
+            template_fn = fullfile(bst_anat_dir, template_bfn);
+            if ~exist(template_fn, 'file')
+                template_url = [nst_get_repository_url() '/template/' template_bfn];
+                nst_download(template_url, template_fn);
+            end
+            template_mri_comment = 'MRI: Dummy 4NIRS';            
+            nst_bst_set_template_anatomy(template_name, 0, 0);
+            
+            sSubject = bst_get('Subject', 0);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+ 
+        function test_set_template_anat(testCase)
+            [subject_name, sSubject, iSubject] = bst_create_test_subject('');
+            
+            template_name = 'Dummy_4NIRS';
+            template_mri_comment = 'MRI: Dummy 4NIRS';
+            nst_bst_set_template_anatomy(template_name, iSubject, 0);
+            
+            sSubject = bst_get('Subject', iSubject);
+            testCase.assertMatches(sSubject.Anatomy(1).Comment, template_mri_comment);
+        end
+        
         function test_str_remove_common(testCase)
            
             sl1 = {'common_prefix var1_group common_suffix', ...
@@ -324,44 +464,5 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(~isempty(strfind(GlobalData.lastestFullErrMsg, ...
                                 'Expected 2 outputs but process produced 1')));                  
         end
-        
-        function test_run_proc_duplicate_outputs(testCase)
-            global GlobalData
-            
-            %% Prepare data
-            y = [1:10 ; 101:110];
-            dt = 0.1;
-            time = (0:(size(y,2)-1)) * dt;
-            
-            bst_create_test_subject();
-            
-            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
-                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
-                                    
-            output_name = 'dummy_resampled';
-            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 5);
-            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
-                        'tag', output_name, 'isindex', 0);
-            
-            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 2);
-            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
-                        'tag', output_name, 'isindex', 0);
-                    
-                    
-            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
-            
-            testCase.assertTrue(redone==0);
-            
-            testCase.assertEmpty(sFilesOut);
-            testCase.assertTrue(~isempty(strfind(GlobalData.lastestFullErrMsg, ...
-                                'Cannot safely manage unique outputs. Found duplicate items: dummy_raw/dummy_resampled')));
-
-        end
-        
-        
-        function test_run_proc_multiple_outputs(testCase)
-            
-        end
-        
     end
 end

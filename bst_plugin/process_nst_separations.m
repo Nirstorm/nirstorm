@@ -101,14 +101,14 @@ for iInput=1:length(sInputs)
 end
 end
 
-function separations = Compute(channels, pair_indexes)
+function separations = Compute(channels, pair_ids)
 % Compute distances between sources and detectors for given channels or pairs.
 % Note: output unit is the same as the one of the input.
 %
 % Inputs:
 %    - channels (struct array):
 %       Channel brainstorm structure (see db_template('channeldesc'))
-%   [- pair_indexes ] (2d array of int): size(nb_pairs x 2)
+%   [- pair_ids ] (2d array of int): size(nb_pairs x 2)
 %      List of pairs for which to compute separations.
 %      Column 1 contains source ids and column 2 contains detector ids.
 %      Must be consistent with given channels.
@@ -131,10 +131,10 @@ if nargin < 2 % pair_indexes not given
         end
 else
     montage_info = nst_montage_info_from_bst_channels(channels);
-    separations = zeros(size(pair_indexes, 1), 1);
-    for ipair=1:size(pair_indexes, 1)
-        src_idx = montage_info.src_ids == pair_indexes(ipair, 1);
-        det_idx = montage_info.det_ids == pair_indexes(ipair, 2);
+    separations = zeros(size(pair_ids, 1), 1);
+    for ipair=1:size(pair_ids, 1)
+        src_idx = montage_info.src_ids == pair_ids(ipair, 1);
+        det_idx = montage_info.det_ids == pair_ids(ipair, 2);
         separations(ipair) = euc_dist(montage_info.src_pos(src_idx, :), ...
                                       montage_info.det_pos(det_idx, :));
     end

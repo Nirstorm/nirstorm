@@ -1,0 +1,6 @@
+function template_names = nst_core_get_available_templates()
+%TODO: add descriptions
+template_names = {'Colin27_4NIRS', ...
+                  'Colin27_4NIRS_lowres', ...
+                  'Colin27_4NIRS_Jan19'};
+end

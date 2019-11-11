@@ -1,14 +1,16 @@
-function success = nst_download(source_fn, dest_fn, download_msg)
+function success = nst_download(source_fn, dest_fn, download_msg, bst_interactive)
 global GlobalData;
 
 if nargin < 3
     download_msg = sprintf('Downloading "%s" to "%s"...\n', source_fn, dest_fn);
 end
 
-bst_interactive = ~isempty(GlobalData) && isfield(GlobalData, 'Program') && ...
-                  ~isempty(GlobalData.Program) && ...
-                  (~isfield(GlobalData.Program, 'isServer') || ...
-                   ~GlobalData.Program.isServer);
+if nargin < 4
+    bst_interactive = ~isempty(GlobalData) && isfield(GlobalData, 'Program') && ...
+                      ~isempty(GlobalData.Program) && ...
+                      (~isfield(GlobalData.Program, 'isServer') || ...
+                       ~GlobalData.Program.isServer);
+end
 
 success = 1;
 tstart = tic();
@@ -45,10 +47,13 @@ elseif ~isempty(strfind(source_fn, 'http'))
     errMsg = gui_brainstorm('DownloadFile', source_fn, dest_fn, basename_fn);
     % Error message
     if ~isempty(errMsg)
-        errMsg = ['Download data failed from:' 10 source_fn];
-        bst_error(errMsg);
-        success = 0;
-        return
+        % Try downloading without using bst
+        if ~nst_download(source_fn, dest_fn, download_msg, 0)
+            errMsg = ['Download data failed from:' 10 source_fn];
+            bst_error(errMsg);
+            success = 0;
+            return
+        end
     end
 else
     errMsg = ['Unhandled web ressource:' 10 url];

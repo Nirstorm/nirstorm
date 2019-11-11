@@ -15,9 +15,9 @@ function varargout = bst_process( varargin )
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
-% http://neuroimage.usc.edu/brainstorm
+% https://neuroimage.usc.edu/brainstorm
 % 
-% Copyright (c)2000-2017 University of Southern California & McGill University
+% Copyright (c)2000-2019 University of Southern California & McGill University
 % This software is distributed under the terms of the GNU General Public License
 % as published by the Free Software Foundation. Further details on the GPLv3
 % license can be found at http://www.gnu.org/copyleft/gpl.html.
@@ -31,7 +31,7 @@ function varargout = bst_process( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2010-2016
+% Authors: Francois Tadel, 2010-2019; Martin Cousineau, 2017
 %
 % Modified version to avoid using Brainstorm's handling of exceptions
 % but rather have access to the exception stack in matlab (for debugging)
@@ -308,7 +308,7 @@ function [sInputs, sInputs2] = Run(sProcesses, sInputs, sInputs2, isReport)
             continue;
         end
         % Import -> import: Do not update the input
-        if isequal(OutputFiles, {'import'});
+        if isequal(OutputFiles, {'import'})
             continue;
         end
         % Get new inputs structures
@@ -483,6 +483,12 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     else
         sInput.nAvg = 1;
     end
+    % Copy Leff (effective number of averages)
+    if isfield(sMat, 'Leff') && ~isempty(sMat.Leff)
+        sInput.Leff = sMat.Leff;
+    else
+        sInput.Leff = 1;
+    end
     % Raw files
     isReadAll = isRaw && isfield(sProcess.options, 'read_all') && isfield(sProcess.options.read_all, 'Value') && isequal(sProcess.options.read_all.Value, 1);
     if isRaw
@@ -611,8 +617,8 @@ function OutputFile = ProcessFilter(sProcess, sInput)
         % Get new condition name
         newStudyPath = file_unique(bst_fullfile(ProtocolInfo.STUDIES, sInput.SubjectName, newCondition));
         % Output file name derives from the condition name
-        [tmp, rawBaseOut] = bst_fileparts(newStudyPath);
-        rawBaseOut = strrep(rawBaseOut, '@raw', '');
+        [tmp, rawBaseOut, rawBaseExt] = bst_fileparts(newStudyPath);
+        rawBaseOut = strrep([rawBaseOut rawBaseExt], '@raw', '');
         % Full output filename
         RawFileOut = bst_fullfile(newStudyPath, [rawBaseOut '.bst']);
         RawFileFormat = 'BST-BIN';
@@ -657,6 +663,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     
     % ===== SPLIT IN BLOCKS =====
     OutMeasure = [];
+    OutLeff = [];
     OutputMat = [];
     OutputStd = [];
     OutputTFmask = [];
@@ -739,7 +746,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                 if isReadAll
                     sInput.A = FullFileMat(iRow, iCol);
                 else
-                    SamplesBounds = sFileIn.prop.samples(1) + iCol([1,end]) - 1;
+                    SamplesBounds = round(sFileIn.prop.times(1) .* sFileIn.prop.sfreq) + iCol([1,end]) - 1;
                     sInput.A = in_fread(sFileIn, ChannelMat, iEpoch, SamplesBounds, iRow, ImportOptions);
                 end
                 sInput.Std = [];
@@ -750,7 +757,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
             else
                 sInput.A = matValues(iRow, iCol, :);
                 if ~isempty(stdValues)
-                    sInput.Std = stdValues(iRow, iCol, :);
+                    sInput.Std = stdValues(iRow, iCol, :, :);
                 else
                     sInput.Std = [];
                 end
@@ -780,7 +787,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                 % Standard error
                 if ~isempty(sInput.Std)
                     tmp2 = sInput.Std;
-                    sInput.Std = sInput.Std(iRowProcess,:,:);
+                    sInput.Std = sInput.Std(iRowProcess,:,:,:);
                 end
                 % Process file
                 sInput = sProcess.Function('Run', sProcess, sInput);
@@ -798,7 +805,7 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                     end
                     % Standard error
                     if ~isempty(sInput.Std)
-                        tmp2(iRowProcess,:,:) = sInput.Std;
+                        tmp2(iRowProcess,:,:,:) = sInput.Std;
                         sInput.Std = tmp2;
                     end
                 end
@@ -844,7 +851,6 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                         % Update file properties
                         sFileTemplate.prop.sfreq   = 1 / (sInput.TimeVector(2) - sInput.TimeVector(1));
                         sFileTemplate.prop.times   = [OutTime(1), OutTime(end)];
-                        sFileTemplate.prop.samples = round(sFileTemplate.prop.times .* sFileTemplate.prop.sfreq);
                         % Update events
                         sFileTemplate.events = panel_record('ChangeTimeVector', sFileTemplate.events, OldFreq, sInput.TimeVector);
                     end
@@ -858,6 +864,10 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                 % Output measure
                 if isfield(sInput, 'Measure')
                     OutMeasure = sInput.Measure;                   
+                end
+                % Output Leff
+                if isfield(sInput, 'Leff')
+                    OutLeff = sInput.Leff;                   
                 end
                 % RAW: Create a new raw file to store the results
                 if isRaw
@@ -908,14 +918,14 @@ function OutputFile = ProcessFilter(sProcess, sInput)
                     end
                 else
                     % Indices to write
-                    SamplesBounds = sFileOut.prop.samples(1) + iOutTime([1,end]) - 1;
+                    SamplesBounds = round(sFileOut.prop.times(1) .* sFileOut.prop.sfreq) + iOutTime([1,end]) - 1;
                     % Write block
                     sFileOut = out_fwrite(sFileOut, ChannelMatOut, iEpoch, SamplesBounds, iRow, sInput.A);
                 end
             else
                 OutputMat(iRow,iOutTime,:) = sInput.A;
                 if ~isempty(stdValues) && ~isempty(sInput.Std)
-                    OutputStd(iRow,iOutTime,:) = sInput.Std;
+                    OutputStd(iRow,iOutTime,:,:) = sInput.Std;
                 else
                     OutputStd = [];
                 end
@@ -948,6 +958,10 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     if ~isempty(OutMeasure)
         sMat.Measure = OutMeasure;
     end
+    % Output Leff
+    if ~isempty(OutLeff)
+        sMat.Leff = OutLeff;
+    end
     % Set data fields
     if isRaw
         % Remove the string: "Link to raw file"
@@ -965,13 +979,15 @@ function OutputFile = ProcessFilter(sProcess, sInput)
     % Comment: forced in the options
     if isfield(sProcess.options, 'Comment') && isfield(sProcess.options.Comment, 'Value') && ~isempty(sProcess.options.Comment.Value)
         sMat.Comment = sProcess.options.Comment.Value;
-    else
-        % Add file tag
-        if isfield(sInput, 'CommentTag') && ~isempty(sInput.CommentTag)
-            sMat.Comment = [sMat.Comment, ' | ', sInput.CommentTag];
-        elseif ~isempty(processTag)
-            sMat.Comment = [sMat.Comment, ' | ', processTag];
-        end
+    % Modify comment based on modifications in function Run
+    elseif ~isRaw && isfield(sInput, 'Comment') && ~isempty(sInput.Comment) && ~isequal(sMat.Comment, sInput.Comment)
+        sMat.Comment = sInput.Comment;
+    % Add file tag (defined in process Run function)
+    elseif isfield(sInput, 'CommentTag') && ~isempty(sInput.CommentTag)
+        sMat.Comment = [sMat.Comment, ' | ', sInput.CommentTag];
+    % Add file tag (defined in process definition GetDescription)
+    elseif ~isempty(processTag)
+        sMat.Comment = [sMat.Comment, ' | ', processTag];
     end
     % If data + changed data type
     if isfield(sInput, 'DataType') && ~isempty(sInput.DataType) && isfield(sMat, 'DataType')
@@ -1115,6 +1131,17 @@ function OutputFile = ProcessFilter2(sProcess, sInputA, sInputB)
     else
         sInputB.nAvg = 1;
     end
+    % Copy Leff (effective number of averages)
+    if isfield(sMatA, 'Leff') && ~isempty(sMatA.Leff)
+        sInputA.Leff = sMatA.Leff;
+    else
+        sInputA.Leff = 1;
+    end
+    if isfield(sMatB, 'Leff') && ~isempty(sMatB.Leff)
+        sInputB.Leff = sMatB.Leff;
+    else
+        sInputB.Leff = 1;
+    end
     % Copy time information
     sInputA.TimeVector = sMatA.Time;
     sInputB.TimeVector = sMatB.Time;
@@ -1190,6 +1217,9 @@ function OutputFile = ProcessFilter2(sProcess, sInputA, sInputB)
     if isfield(sOutput, 'nAvg') && ~isempty(sOutput.nAvg)
         sMatOut.nAvg = sOutput.nAvg;
     end
+    if isfield(sOutput, 'Leff') && ~isempty(sOutput.Leff)
+        sMatOut.Leff = sOutput.Leff;
+    end
     % Copy time vector
     sMatOut.Time = sOutput.TimeVector;
     % Fix surface link for warped brains
@@ -1221,42 +1251,15 @@ end
 
 %% ===== PROCESS: STAT =====
 function OutputFiles = ProcessStat(sProcess, sInputA, sInputB)
-%     % Check inputs
-%     if ~isempty(strfind(GetFileTag(sInputA(1).FileName), 'connect'))
-%         bst_report('Warning', sProcess, sInputA, 'Statistical tests on connectivity results are not supported yet.');
-%     end
-    
     % ===== GET OUTPUT STUDY =====
     % Display progress bar
     bst_progress('text', 'Saving results...');
     % Get number of subjects that are involved
     isStat1 = strcmpi(sProcess.Category, 'Stat1') || isempty(sInputB);
     if isStat1
-        uniqueSubjectName = unique({sInputA.SubjectFile});
-        uniqueStudy       = unique([sInputA.iStudy]);
+        [sStudy, iStudy] = GetOutputStudy(sProcess, sInputA);
     else
-        uniqueSubjectName = unique([{sInputA.SubjectFile}, {sInputB.SubjectFile}]);
-        uniqueStudy       = unique([sInputA.iStudy, sInputB.iStudy]);
-    end
-    % If all files share same study: save in it
-    if (length(uniqueStudy) == 1)
-        [sStudy, iStudy] = bst_get('Study', uniqueStudy);
-    % If all files share the same subject: save in intra-analysis
-    elseif (length(uniqueSubjectName) == 1)
-        % Get subject
-        [sSubject, iSubject] = bst_get('Subject', uniqueSubjectName{1});
-        % Get intra-subjet analysis study for this subject
-        [sStudy, iStudy] = bst_get('AnalysisIntraStudy', iSubject);
-    else
-        % Get group analysis subject
-        [sSubject, iSubject] = bst_get('NormalizedSubject');
-        % Get intra-subject study for the group subject
-        [sStudy, iStudy] = bst_get('AnalysisIntraStudy', iSubject);        
-        % Error
-        if isempty(sStudy)
-            error(['Could not find folder "Group_analysis/@intra". Delete and create the group analysis subject again.' 10 ...
-                   'If this error happens multiple times, please report it on the user forum.']);
-        end
+        [sStudy, iStudy] = GetOutputStudy(sProcess, [sInputA, sInputB]);
     end
     % Error
     if isempty(sStudy)
@@ -1400,6 +1403,7 @@ function OutputFiles = ProcessStat(sProcess, sInputA, sInputB)
         sOutput.DisplayUnits = sStat.DisplayUnits;
         sOutput.ColormapType = sStat.ColormapType;
         sOutput.nAvg         = 1;
+        sOutput.Leff         = 1;
         % Output filetype
         if strcmpi(sInputA(1).FileType, sStat.Type)
             fileTag = bst_process('GetFileTag', sInputA(1).FileName);
@@ -1786,7 +1790,7 @@ end
 %% ===== LOAD INPUT FILE =====
 % USAGE:  [sInput, nSignals, iRows] = bst_process('LoadInputFile', FileName, Target=[], TimeWindow=[], OPTIONS=[])
 %                           OPTIONS = bst_process('LoadInputFile');
-function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow, OPTIONS) %#ok<DEFNU>
+function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow, OPTIONS)
     % Default options
     defOPTIONS = struct(...
         'LoadFull',       1, ...
@@ -1831,6 +1835,7 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
         'GridAtlas',     [], ...
         'nComponents',   [], ...
         'nAvg',          1, ...
+        'Leff',          1, ...
         'Freqs',         []);
     % Find file in database
     [sStudy, sInput.iStudy, iFile, sInput.DataType] = bst_get('AnyFile', FileName);
@@ -1865,6 +1870,7 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
         sInput.Atlas       = sMat.Atlas;
         sInput.nComponents = sMat.nComponents;
         sInput.nAvg        = sMat.nAvg;
+        sInput.Leff        = sMat.Leff;
         % If only non-All scouts: use just the scouts labels, if not use the full description string
         sScouts = sMat.Atlas.Scouts;
         if ~isequal(lower(OPTIONS.TargetFunc), 'all') && ~isempty(sScouts) && all(~strcmpi({sScouts.Function}, 'All'))
@@ -2084,6 +2090,11 @@ function [sInput, nSignals, iRows] = LoadInputFile(FileName, Target, TimeWindow,
     else
         sInput.nAvg = 1;
     end
+    if isfield(sMat, 'Leff') && ~isempty(sMat.Leff)
+        sInput.Leff = sMat.Leff;
+    else
+        sInput.Leff = 1;
+    end
     % Count output signals
     if ~isempty(sInput.ImagingKernel) 
         nSignals = size(sInput.ImagingKernel, 1);
@@ -2124,7 +2135,7 @@ end
 %         OutputFiles = bst_process('CallProcess', ProcessName, sInputs,   sInputs2,   OPTIONS)
 %         OutputFiles = bst_process('CallProcess', ProcessName, FileNames, FileNames2, OPTIONS)
 %         [OutputFiles, OutputFiles2] = bst_process('CallProcess', ...)
-function [OutputFiles, OutputFiles2, sInputs, sInputs2] = CallProcess(sProcess, sInputs, sInputs2, varargin) %ADDED TV -> avoid rebuilding sInputs afterwards
+function [OutputFiles, OutputFiles2, sInputs, sInputs2] = CallProcess(sProcess, sInputs, sInputs2, varargin)
     % Check if Brainstorm is running
     if ~isappdata(0, 'BrainstormRunning')
         error('Please start Brainstorm before calling bst_process().');
@@ -2249,7 +2260,7 @@ function [sFileOut, errMsg] = CreateRawOut(sFileIn, RawFileOut, ImportOptions, i
             % Define output filename
             sFileOut.filename = RawFileOut;
             % Copy in file to out file
-            res = copyfile(sFileIn.filename, sFileOut.filename, 'f');
+            res = file_copy(sFileIn.filename, sFileOut.filename);
             if ~res
                 error(['Could not create output file: ' sFileOut.filename]);
             end
@@ -2329,7 +2340,7 @@ function [sFileOut, errMsg] = CreateRawOut(sFileIn, RawFileOut, ImportOptions, i
                 end
                 % Copy file, replacing the name of the DS
                 if ~isempty(destfile)
-                    res = copyfile(bst_fullfile(pathIn, dirDs(iFile).name), destfile, 'f');
+                    res = file_copy(bst_fullfile(pathIn, dirDs(iFile).name), destfile);
                     if ~res
                         errMsg = ['Could not create output file: ' destfile];
                         sFileOut = [];

@@ -48,7 +48,6 @@ function [local_fns, downloaded_files] = nst_request_files(relative_fns, confirm
 %        Local repository path where to look first for requested files.
 %        Must be consistent with remote repository.
 %        Default is gotten from nst_get_local_user_dir
-%
 %  Outputs:
 %      - local_fns (cell array of string):
 %          Full local filenames for requested files.
@@ -124,7 +123,11 @@ for ifn=1:length(relative_fns)
                 continue;
             end
         end
-        to_download_sizes(idownload) = conn.getContentLength();
+        fetched_size = conn.getContentLength();
+        if fetched_size == -1
+            fetched_size = 1000; %ASSUME small text file
+        end
+        to_download_sizes(idownload) = fetched_size;
         to_download_urls{idownload} = url;
         download_targets{idownload} = local_fns{ifn};
         idownload = idownload + 1;
@@ -177,6 +180,7 @@ if ~isempty(to_download_urls)
         if ~nst_download(to_download_urls{idownload}, download_targets{idownload})
             downloads_failed{end+1} = to_download_urls{idownload};
         end
+        pause(0.1);
         bst_progress('inc',1);
     end
     bst_progress('stop');
@@ -198,11 +202,7 @@ else
     else
         message = 'Nothing to download';        
     end
-    if confirm_download && bst_interactive
-        java_dialog('msgbox', message, download_title);
-    else
-        fprintf('Nirstorm:RequestFiles >>> %s\n', message);
-    end
+    fprintf('Nirstorm:RequestFiles >>> %s\n', message);
 end
 
 if ~isempty(downloads_failed)
