@@ -21,6 +21,40 @@ classdef BstHelperTest < matlab.unittest.TestCase
     end
     
     methods(Test)
+
+        function test_run_proc_duplicate_outputs(testCase)
+            global GlobalData
+            
+            %% Prepare data
+            y = [1:10 ; 101:110];
+            dt = 0.1;
+            time = (0:(size(y,2)-1)) * dt;
+            
+            bst_create_test_subject();
+            
+            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
+                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
+                                    
+            output_name = 'dummy_resampled';
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 5);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+            
+            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 2);
+            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
+                        'tag', output_name, 'isindex', 0);
+                    
+            try        
+                [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
+            catch ME
+                testCase.assertTrue(strcmp(ME.identifier, 'Nst:BstProcOutputError'));
+                testCase.assertTrue(~isempty(strfind(ME.message, 'duplicate')));
+                testCase.assertTrue(~isempty(strfind(ME.message, 'dummy_raw/dummy_resampled')));
+                exception_caught = 1;
+            end
+            testCase.assertTrue(exception_caught==1);
+        end
+        
         
         function test_set_template_default_anat_not_available(testCase)
             %% Ensure that nst_utest protocol exists
@@ -395,40 +429,6 @@ classdef BstHelperTest < matlab.unittest.TestCase
             testCase.assertTrue(~isempty(strfind(GlobalData.lastestFullErrMsg, ...
                                 'Expected 2 outputs but process produced 1')));                  
         end
-        
-        function test_run_proc_duplicate_outputs(testCase)
-            global GlobalData
-            
-            %% Prepare data
-            y = [1:10 ; 101:110];
-            dt = 0.1;
-            time = (0:(size(y,2)-1)) * dt;
-            
-            bst_create_test_subject();
-            
-            sRaw = bst_create_nirs_data('dummy_raw', y, time, {'S1D1WL690','S1D1WL832'},...
-                                        [1 1;1 1;1 1], [1.01 1.01;1 1;1 1]);
-                                    
-            output_name = 'dummy_resampled';
-            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 5);
-            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
-                        'tag', output_name, 'isindex', 0);
-            
-            sFilesOut = bst_process('CallProcess', 'process_resample', sRaw, [], 'freq', 2);
-            bst_process('CallProcess', 'process_set_comment', sFilesOut, [], ...
-                        'tag', output_name, 'isindex', 0);
-                    
-                    
-            [sFilesOut, redone] = nst_run_bst_proc(output_name, 0, 'process_resample', sRaw, [], 'freq', 5);
-            
-            testCase.assertTrue(redone==0);
-            
-            testCase.assertEmpty(sFilesOut);
-            testCase.assertTrue(~isempty(strfind(GlobalData.lastestFullErrMsg, ...
-                                'Cannot safely manage unique outputs. Found duplicate items: dummy_raw/dummy_resampled')));
-
-        end
-        
         
         function test_run_proc_multiple_outputs(testCase)
             

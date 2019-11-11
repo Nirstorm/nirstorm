@@ -188,7 +188,7 @@ for i_item=1:length(outputs)
 end
 
 if ~isempty(duplicates)
-    error(sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', ')));
+    throw(MException('Nst:BstProcOutputError', sprintf('Cannot safely manage unique outputs. Found duplicate items: %s', strjoin(duplicates, ', '))));
 %     sFilesOut = {};
 %     return;
 end
