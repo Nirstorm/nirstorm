@@ -70,7 +70,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         B = glm_fit.ImageGridAmp';
     else
         surface_data = 0;
-        B = glm_fit.F;
+        B = glm_fit.F';
     end
     covB = glm_fit.beta_cov;
     edf = glm_fit.edf;        
@@ -134,11 +134,20 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     if length(C) < nb_regressors
        C= [C zeros(1, nb_regressors - length(C)) ]; 
     end    
-     
-    con_mat = C * B;    
-    con_cov = C * covB * C';
-    con_std = sqrt(mse_res .* con_cov);
-                                 
+    %covB=covB(:,:,3); 
+    con_mat = C * B; 
+    if size(covB,3) > 1
+        nchan=size(covB,3);
+        con_cov=zeros(1,nchan);
+        con_std=zeros(1,nchan);
+        for ichan=1:nchan
+            con_cov(ichan) = C * covB(:,:,ichan) * C';
+            con_std(ichan) = sqrt(mse_res(ichan) .* con_cov(ichan));
+        end    
+    else
+        con_cov = C * covB * C';
+        con_std = sqrt(mse_res .* con_cov);
+    end                             
     % Formating a readable comment such as -Rest +Task
     comment = 'GLM con ';
     contrast = '';
@@ -168,7 +177,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 %     output_fn = bst_process('GetNewFilename', fileparts(sStudyIntra.FileName), 'pdata_ttest_matrix');
 
     extra_output.contrast_name = contrast;
-    extra_output.contrast_std = con_std;
+    extra_output.Std = con_std';
     extra_output.edf = edf;
     extra_output.DisplayUnits = glm_fit.DisplayUnits;
     
@@ -182,10 +191,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     else
         %TODO: check channel-space output
         sDataOut = db_template('data');
-        sDataOut.F            = con_mat;
+        sDataOut.F            = con_mat';
         sDataOut.Comment      = comment;
         sDataOut.ChannelFlag  = glm_fit.ChannelFlag;
-        sDataOut.Time         = 1;
+        sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = glm_fit.DisplayUnits; %TODO: check scaling
@@ -193,8 +202,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         % Add extra fields
         extra_fields = fieldnames(extra_output);
         for ifield = 1:length(extra_fields)
-            assert(~isfield(sDataOut, extra_fields{ifield}));
-            sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+            if ~isfield(sDataOut, extra_fields{ifield})
+                sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+            end
         end
         
         % Save to bst database
@@ -202,7 +212,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut.FileName = file_short(glm_fn);
         bst_save(glm_fn, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInput.iStudy, glm_fn, sDataOut);
+        db_add_data(sInputs(1).iStudy, glm_fn, sDataOut);
         OutputFiles{end+1} = glm_fn;
     end
 

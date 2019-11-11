@@ -1,5 +1,4 @@
-function varargout = nst_ppl_1st_level_channel_V1(arg1, arg2, glm_contrasts, ...
-                                                  options, force_redo)
+function varargout = nst_ppl_1st_level_channel_V1(action, options, arg1, arg2)
 %NST_PPL_1ST_LEVEL_CHANNEL_V1    
 % Run a full channel-space intra-subject pipeline
 % starting from raw NIRS data up to GLM contrasts (effect and t-stat maps).
@@ -49,59 +48,177 @@ function varargout = nst_ppl_1st_level_channel_V1(arg1, arg2, glm_contrasts, ...
 % - wiki page
 % - utest
 % 
-options.PIPELINE_TAG = '_nspc_V1';
+options.PIPELINE_TAG = get_ppl_tag();
 
-if ischar(arg1) && strcmp(arg1, 'setup')
-    if nargin > 1
-        assert(ischar(arg2));
-        varargout{1} = setup(arg2);
+
+switch action
+    case 'get_options'
+        if nargin > 1
+            protocol_name = options;
+            assert(ischar(protocol_name));
+            varargout{1} = get_options(protocol_name);
+        else
+            varargout{1} = get_options();
+        end
+        return;
+    case 'import_nirs'
+        if nargin >= 4
+            subject_names = arg2;
+        else
+            subject_names = cell(size(arg1));
+            subject_names(:) = {''};
+        end
+        [imported_files, redone] = import_nirs_files(arg1, subject_names, options);
+        varargout{1} = imported_files;
+        varargout{2} = redone;
+        return;
+        
+    case 'import_subjects'
+        [imported_files, redone] = import_subjects(options);
+        
+        varargout{1} = imported_files;
+        varargout{2} = redone;
+        return;
+    case 'analyse'
+    otherwise
+        error('Unknown action: %s', action);
+end
+
+if isempty(arg1)
+    error('Empty input group or subjects definition');
+else
+    if isstruct(arg1)
+        groups = arg1;
+        assert(isfield(groups, 'label'));
+        assert(isfield(groups, 'subject_names'));
     else
-        varargout{1} = setup();
+        groups.label = '';
+        groups.subject_names = arg1;
     end
-    return;
-else
-    file_raw = arg1;
-    glm_events_order = arg2;
-end
-
-if nargin < 5
-    force_redo = 0;
+    %TODO: check groups -> warn if they are overlapping
 end
 
 
-if ~isempty(file_raw)
-    [sFile_preprocessed, redone_preprocs, preproc_folder_raw, preproc_folder_hb] = preprocs(file_raw, options, force_redo);
-else
-    error('Given raw data is empty');
+if strcmp(options.save_fig_method, 'export_fig') && ~function_exists('export_fig')
+    error('"export_fig" not found. Can be installed from "https://github.com/altmany/export_fig"');
 end
 
-[sFiles_GLM, redone_any_contrast, glm_folder] = glm_1st_level(sFile_preprocessed, glm_events_order, glm_contrasts, options, redone_preprocs | force_redo);
+force_redo = options.redo_all;
 
-if options.clean_preprocessings
-    full_preproc_folder = fileparts(sFiles_preprocessed{1});
-    [sStudy, iStudy] = bst_get('StudyWithCondition', full_preproc_folder);
-    db_delete_studies(iStudy);
+protocol_info = bst_get('ProtocolInfo');
+if protocol_info.UseDefaultAnat~=1
+    error('Protocol should use default anatomy for all subjects');
 end
 
-if nargout >= 1
-    varargout{1} = sFiles_GLM;
+create_dir(options.fig_dir);
+create_dir(options.moco.export_dir);
+create_dir(options.tag_bad_channels.export_dir);
+create_dir(options.GLM_group.rois_summary.csv_export_output_dir);
+
+file_raw1 = nst_get_bst_func_files(groups(1).subject_names{1}, ['origin' get_ppl_tag()], 'Raw');
+if isempty(file_raw1)
+    error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                  groups(1).subject_names{1})); %#ok<SPERR>
 end
 
-if nargout >= 2
-    varargout{2} = redone_any_contrast;
-end
+nb_groups = length(groups);
+group_condition_names = cell(1, nb_groups);
+any_rois_summary_redone = 0;
+all_sFiles_con = cell(1, nb_groups);
 
-if nargout >= 3 
-    varargout{3} = glm_folder;
-end
+for igroup=1:nb_groups
+    redo_group = options.GLM_group.redo;
+    subject_names = groups(igroup).subject_names;
+    group_label = groups(igroup).label;
+    
+    %% Within-subject analyses
+    for isubject=1:length(subject_names)
 
-if nargout >= 4 && ~options.clean_preprocessings
-    varargout{4} = preproc_folder_raw;
-end
+        subject_name = subject_names{isubject};
+        file_raw = nst_get_bst_func_files(subject_name, ['origin' get_ppl_tag()], 'Raw');
+        if isempty(file_raw)
+            error(sprintf('Cannot find "origin/Raw" data for subject "%s". Consider using nst_ppl_surface_template_V1(''import'',...).',  ...
+                          subject_name)); %#ok<SPERR>
+        end
+        
+        % Run preprocessings
+        [sFiles_preprocessed{1}, redone_preprocs, preproc_folder_raw, preproc_folder_hb] = preprocs(file_raw,options, force_redo);        
+        % Run 1st level GLM
+        [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
+                                                                                  redone_preprocs | force_redo);
+        
+        if isubject==1
+            nb_contrasts = size(sFiles_con, 2);
+            all_sFiles_con{igroup} = cell(nb_contrasts, length(subject_names));
+        else
+            %assert(size(sFiles_con, 1) == nb_hb_types);
+            assert(size(sFiles_con, 2) == nb_contrasts);
+        end
+        all_sFiles_con{igroup}(:, isubject) = sFiles_con;
 
-if nargout >= 5 && ~options.clean_preprocessings
-    varargout{5} = preproc_folder_hb;
-end
+        if options.clean_preprocessings
+            full_preproc_folder = fileparts(sFiles_preprocessed{1});
+            [sStudy, iStudy] = bst_get('StudyWithCondition', full_preproc_folder);
+            db_delete_studies(iStudy);
+        end
+
+        redo_group = redo_group | redone_any_contrast;
+    end
+
+    %% Group-level analysis
+    if length(subject_names) <= 2
+       if ~isempty(group_label)
+           group_msg = [' of ' group_label];
+       else
+           group_msg = '';
+       end
+       warning('Not enough data for group analysis%s.\n', group_msg);
+       return;
+    end
+    sSubjectDefault = bst_get('Subject', 0); %TODO: use this also for 1st level
+    contrasts = options.GLM_1st_level.contrasts;
+    if options.GLM_group.do
+       
+        if ~isempty(group_label) 
+            group_condition_name = [group_label '_'];
+        else
+            group_condition_name = '';
+        end
+        group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
+        group_condition_names{igroup} = group_condition_name;
+        for icon=1:nb_contrasts
+            item_comment = ['Group analysis/' group_condition_name '/ | con_t-+ ' contrasts(icon).label];
+            [sFile_GLM_gp_ttest, redone] = nst_run_bst_proc(item_comment, redo_group, ...
+                                                            'process_nst_glm_group_ttest', all_sFiles_con{igroup}(icon, :), [], ...
+                                                            'tail', 'two');
+            fig_bfn = sprintf('group_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
+                          group_label, options.GLM_group.contrast_tstat.plot.pvalue_mcc_method,...
+                          nst_format_pval(options.GLM_group.contrast_tstat.plot.pvalue_threshold), ...
+                          contrasts(icon).label);
+            fig_fn = fullfile(options.fig_dir, fig_bfn);
+            if ~isempty(options.fig_dir) && options.make_figs && ...
+                options.GLM_group.contrast_tstat.plot.do && ...
+                (redone || options.GLM_group.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))   
+                plot_stat(sFile_GLM_gp_ttest, fig_fn, options, 0, 1, sSubjectDefault);
+            end
+
+            if options.GLM_group.rois_summary.do
+
+                if igroup==1 && ihb==1 && icon==1
+                    sFile_gp_masks = cell(nb_groups, nb_hb_types, nb_contrasts);
+                end
+
+                [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/ | con_t-+ ' contrasts(icon).label ' | mask'], ...
+                                                            redone | options.GLM_group.rois_summary.redo, ...
+                                                            'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
+                                                            'do_atlas_inter', 1, ...
+                                                            'min_atlas_roi_size', 3, ...
+                                                            'atlas', options.GLM_group.rois_summary.atlas);
+                 sFile_gp_masks{igroup, icon} = sFile_gp_mask;
+            end   
+        end % loop over contrasts
+    end % If do group level    
+end % Loop over groups
 
 end
 
@@ -156,7 +273,7 @@ redo_parent = redo_parent | options.MBLL.redo;
                                             'option_do_plp_corr',     1, ...
                                             'option_dpf_method',      2, ...  % DUNCAN1996
                                             'option_baseline_method', options.MBLL.baseline_method, ...  % median
-                                            'timewindow',             []);
+                                            'timewindow',             [0 options.MBLL.timewindow]);
               
 % Band pass filter
 redo_parent = redo_parent | options.high_pass_filter.redo;
@@ -170,103 +287,193 @@ redo_parent = redo_parent | options.high_pass_filter.redo;
 redone = redo_parent;
 end
 
-function [sFiles_GLM, redone_any_contrast, glm_folder] = glm_1st_level(sFile, stim_events, contrasts, options, force_redo)
+function [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles, options, force_redo)
 
-if nargin < 5
-    force_redo = 1;
+if nargin < 3
+    force_redo = 0;
 end
-glm_folder = sprintf('GLM_%s/', options.PIPELINE_TAG);
 
-[SubjectName, preprocs_folder] = bst_fileparts(bst_fileparts(sFile), 1); %#ok<ASGLU>
+stim_events = options.GLM_1st_level.stimulation_events;
+if isempty(stim_events)
+   error('Stimulation events not defined for building the design matrix.');
+   %TODO: use all found events?
+end
+
+contrasts = options.GLM_1st_level.contrasts;
+if isempty(contrasts)
+    warning('Contrasts not defined. Using default single-condition contrasts.');
+    contrasts = nst_make_basic_contrasts(stim_events);
+end
+
+glm_folder = sprintf('GLM%s/', get_ppl_tag());
+
+[SubjectName, preprocs_folder] = bst_fileparts(bst_fileparts(sFiles{1}), 1);
 sSubject = bst_get('Subject', SubjectName);
 
 redone_any_contrast = 0; % Track if any contrast for any file had to be recomputed
+sFiles_GLM = cell(1, length(sFiles));
 
-redo_parent = force_redo | options.GLM.redo;
+redo_parent = force_redo | options.GLM_1st_level.redo;
+for ifile=1:length(sFiles)
+    data_cmt = load(file_fullpath(sFiles{ifile}), 'Comment');
     
-% Process: GLM - design and fit
-
-comment_glm_prefix = [glm_folder 'GLM '];
-output_names = {[comment_glm_prefix ' | fitted model']};
-if options.GLM.save_fit
-    output_names{end+1} = [comment_glm_prefix ' | signal fit'];
+    comment_glm_prefix{ifile} = [glm_folder 'GLM ' data_cmt.Comment];
+    % Process: GLM - design and fit
+    [sFiles_GLM{ifile}, redone_fit] = nst_run_bst_proc([comment_glm_prefix{ifile} ' | fitted model'], redo_parent, ...
+                                                       'process_nst_glm_fit', sFiles{ifile}, [], ...
+                                                       'fitting',        1, ...  % OLS 
+                                                       'statistical_processing', 1, ... % precoloring
+                                                       'hpf_low_cutoff', options.high_pass_filter.low_cutoff, ...
+                                                       'stim_events',    strjoin(stim_events, ', '), ...
+                                                       'hrf_model',      1, ...  % CANONICAL
+                                                       'trend',          1, ...
+                                                       'trim_start', options.GLM_1st_level.trim_start, ...
+                                                       'save_residuals', 0, ...
+                                                       'save_betas',     0, ...
+                                                       'save_fit',       0);
 end
-[sFiles_GLM, redone_fit] = nst_run_bst_proc(output_names, redo_parent, ...
-                                            'process_nst_compute_glm', sFile, [], ...
-                                            'stim_events',    strjoin(stim_events, ', '), ...
-                                            'hrf_model',      1, ...  % CANONICAL
-                                            'trend',          1, ...
-                                            'fitting',        1, ...  % OLS - precoloring
-                                            'hpf_low_cutoff', options.high_pass_filter.low_cutoff, ...
-                                            'trim_start', options.GLM.trim_start, ...
-                                            'save_residuals', 0, ...
-                                            'save_betas',     0, ...
-                                            'save_fit',  options.GLM.save_fit);
 
-if 1 %HACK
-    chans_oi = {'S1D1HbO', 'S1D1HbR', 'S1D2HbO', 'S1D2HbR'};
-    cond_colors = [[1 125/255 125/255] ; [125/255 125/255 1]; [125/255 1 125/255]; [.5 1 0]; [0 1 .5]];
-
-    in_data_mat = in_bst_data(sFile);
-    ChannelMat = in_bst_channel(bst_get('ChannelFileForStudy', sFile));
-    glm_fit_mat = in_bst_data(sFiles_GLM{2}); % GLM signal fit
-    
-    trim_start_sample = round(options.GLM.trim_start / diff(in_data_mat.Time(1:2)));
-    trimmed_smpl = (trim_start_sample+1):length(in_data_mat.Time);
-    
-    in_data_mat.F = in_data_mat.F * 1e6; %convert to mumol
-    
-    for ichan_oi=1:length(chans_oi)
-        ichan = strcmp({ChannelMat.Channel.Name}, chans_oi{ichan_oi});
-        hfig = figure(); hold on;
-        ymin = min(in_data_mat.F(ichan, trimmed_smpl));
-        ymax = max(in_data_mat.F(ichan, trimmed_smpl));
-        plot_paradigm(in_data_mat.Events, ymin, ymax, cond_colors);
-        plot(in_data_mat.Time(trimmed_smpl), in_data_mat.F(ichan, trimmed_smpl), 'b', 'LineWidth', 2);
-        plot(in_data_mat.Time(trimmed_smpl), glm_fit_mat.F(ichan, trimmed_smpl), 'r', 'LineWidth', 2);
-        saveas(hfig, fullfile(options.fig_dir, sprintf('%s_glm_fit_%s.png', SubjectName, chans_oi{ichan_oi})));
-        close(hfig);
-    end
-end
-                                        
-for icon=1:length(contrasts)
-    % Process: GLM - intra subject contrast
-    redo = redone_fit | options.contrast.redo;
-    %TODO: store contrast in main GLM result
-    [sFiles_GLM_ttest, redone_con] = nst_run_bst_proc([comment_glm_prefix ' | con_t-+ ' contrasts(icon).label], redo, ...
-                                                      'process_nst_compute_ttest', sFiles_GLM{1}, [], ...
-                                                      'Contrast', contrasts(icon).vector, ...
-                                                      'tail',     'two');  
-    % Plots
-    data_tag = get_bst_file_tag(sFiles_GLM{1});
-    
-    %TODO: use current pval
-    pval = 0.05;
-
-    if options.make_figs && (redo || options.contrast_plot.redo || ~exist(fig_fn, 'file'))
-        % Apply correct thresholding
-        hFigTopoData = view_topography(sFiles_GLM_ttest, 'NIRS', '3DOptodes');
+sFiles_con = cell(length(sFiles_GLM), length(contrasts));
+for ifile=1:length(sFiles_GLM)
+    for icon=1:length(contrasts)
+        % Process: GLM - intra subject contrast
+        redo = redone_fit | options.GLM_1st_level.contrast_redo;
         
-        % TODO: set stat thresholding
-
-        hb_types = {'HbO', 'HbR'}; 
-        for ihb=1:length(hb_types)
-            panel_montage('SetCurrentMontage', hFigTopoData, [hb_types{ihb} '[tmp]']);
-            bst_figures('SetBackgroundColor', hFigTopoData, [1 1 1]);
-            bst_colormaps('SetDisplayColorbar', 'stat2', 1);
-            view([89 24]); %TODO: expose as option
-            %zoom(hFigTopoData, 1.3);
-            fig_bfn = sprintf('%s_topo_%s_tmap_%1.1e_%s.png', SubjectName, hb_types{ihb}, pval, contrasts(icon).label);
+        [sFile_GLM_con, redone_con] = nst_run_bst_proc([comment_glm_prefix{ifile} ' | con ' contrasts(icon).label], redo, ...
+                                                       'process_nst_glm_contrast', sFiles_GLM{ifile}, [], ...
+                                                       'Contrast', contrasts(icon).vector);
+        sFiles_con{ifile,icon} = sFile_GLM_con;
+        
+        % GLM - tmaps
+        if options.GLM_1st_level.contrast_tstat.do
+            redo = redone_con | options.GLM_1st_level.contrast_tstat.redo;
+            sFile_GLM_ttest = nst_run_bst_proc([comment_glm_prefix{ifile} ' | con_t-+ ' contrasts(icon).label], redo, ...
+                                               'process_nst_glm_contrast_ttest', sFile_GLM_con, [], ...
+                                               'tail', 'two');
+        
+            % Plots
+            data_tag = get_bst_file_tag(sFiles{ifile});
+            fig_bfn = sprintf('%s_%s_tmap_mcc_%s_pv_thresh_%s_%s.png', ...
+                SubjectName, data_tag, options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method,...
+                nst_format_pval(options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold), ...
+                contrasts(icon).label);
             fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
-            export_fig(fig_fn, '-transparent', sprintf('-r%d', options.fig_dpi));
+            if ~isempty(options.fig_dir) && options.make_figs && ...
+                    options.GLM_1st_level.contrast_tstat.plot.do && ...
+                    (redo || options.GLM_1st_level.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))
+                hFigSurfData = view_surface_data(sSubject.Surface(sSubject.iCortex).FileName, ...
+                    sFile_GLM_ttest, 'NIRS', 'NewFigure');
+                StatThreshOptions = bst_get('StatThreshOptions');
+                StatThreshOptions.pThreshold = options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold;
+                StatThreshOptions.Correction = options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method;
+                %StatThreshOptions.Control    = [1 2 3]; % ???
+                bst_set('StatThreshOptions', StatThreshOptions);
+            
+                % TODO: set surface smoothing
+                % TODO: set better colormap that does not span values betwn -3 and 3
+                if ~isempty(options.fig_background)
+                    bst_figures('SetBackgroundColor', hFigSurfData, options.fig_background);
+                end
+                bst_colormaps('SetDisplayColorbar', 'stat2', 0);
+                view(options.fig_cortex_view);
+                zoom(hFigSurfData, options.fig_cortex_zoom);
+                nst_save_figure(fig_fn, options, hFigSurfData);
+                close(hFigSurfData);
+            end
         end
-
-        close(hFigTopoData);
+        
+        redone_any_contrast = redone_any_contrast | redone_con;
     end
+end
+end
 
-    redone_any_contrast = redone_any_contrast | redone_con;
+
+
+function options = get_options()
+
+options.redo_all = 0;
+
+
+options.import.redo = 0;
+options.import.subject{1}.name='';
+options.import.subject{1}.nirs_fn='';
+options.import.subject{1}.additional_headpoints='';
+options.sci.redo = 0;
+
+
+options.deglitch.do = 0;
+options.deglitch.redo = 0;
+options.deglitch.agrad_std_factor = 2.5;
+
+options.moco.redo = 0;
+options.moco.export_dir = ''; % Where to export motion correction events manually tagged (for backup) 
+                              % -> will be exported before running the analysis
+                              % -> will be reimported everytime the importation
+                              %    stage is run
+options.resample.redo = 0;
+options.resample.freq = 5; % Hz
+
+options.MBLL.redo = 0;
+options.MBLL.age = 60;
+options.MBLL.pvf = 50;
+options.MBLL.baseline_method = 2; % 1:mean, 2:median
+options.MBLL.timewindow=60;
+
+options.high_pass_filter.redo = 0;
+options.high_pass_filter.low_cutoff = 0.01; %Hz
+
+options.tag_bad_channels.redo = 0;
+options.tag_bad_channels.max_prop_sat_ceil = 1; % no tagging
+options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
+options.tag_bad_channels.export_dir = ''; % Where to export bad channel taggings (backup) 
+                                          % -> will be exported before
+                                          %    running the analysis
+                                          % -> will be reimported everytime 
+                                          %    the importation stage is run 
+options.clean_preprocessings = 0;
+
+options.GLM_1st_level.redo = 0;
+options.GLM_1st_level.trim_start = 0; % sec
+
+options.GLM_1st_level.contrast_redo = 0;
+options.GLM_1st_level.stimulation_events = [];
+options.GLM_1st_level.contrasts = []; 
+
+options.GLM_1st_level.contrast_tstat.do = 0; % not active by default -> only beta values are mandatory for group-level analysis
+options.GLM_1st_level.contrast_tstat.redo = 0;
+options.GLM_1st_level.contrast_tstat.plot.do = 0; % not active by default -> can produce a lot of figures
+options.GLM_1st_level.contrast_tstat.plot.redo = 0; 
+options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold = 0.05;
+options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method = 'none';
+
+options.GLM_group.do = 1;
+options.GLM_group.redo = 0;
+
+options.GLM_group.contrast_tstat.plot.do = 1;
+options.GLM_group.contrast_tstat.plot.redo = 0;
+options.GLM_group.contrast_tstat.plot.pvalue_threshold = 0.001;
+options.GLM_group.contrast_tstat.plot.pvalue_mcc_method = 'none';
+
+options.GLM_group.rois_summary.do = 0;
+options.GLM_group.rois_summary.atlas = 'MarsAtlas';
+options.GLM_group.rois_summary.matrix_col_prefix = '';
+options.GLM_group.rois_summary.csv_export_output_dir = '';
+
+options.make_figs = 1;
+options.save_fig_method = 'saveas'; % 'saveas', 'export_fig'
+options.export_fig_dpi = 90;
+options.fig_dir = '';
+options.fig_background = []; % use default background
+options.fig_cortex_view = [89 -24]; % Azimuth and Elevation
+                                    % to adjust them manually, right-click on fig 
+                                    % then Figure > Matlab controls
+                                    % use rotate 3D tool, while moving Az and El
+                                    % are displayed in the bottom right of the figure.
+options.fig_cortex_smooth = 0;
+options.fig_cortex_show_sulci = 0;
+options.fig_cortex_zoom = 1;
 end
-end
+
 
 function options = setup(protocol_name)
 
@@ -282,14 +489,6 @@ options.sci.redo = 0;
 
 options.moco.redo = 0;
 options.moco.export_dir = fullfile('.', 'moco_marking');
-
-options.resample.redo = 0;
-options.resample.freq = 5; % Hz
-
-options.MBLL.redo = 0;
-options.MBLL.age = 60;
-options.MBLL.pvf = 50;
-options.MBLL.baseline_method = 2; % 1:mean, 2:median
 
 options.high_pass_filter.redo = 0;
 options.high_pass_filter.low_cutoff = 0.01; %Hz
@@ -323,6 +522,157 @@ end
 
 end
 
+function [files_in, redone_imports] = import_nirs_files(nirs_fns, subject_names, options)
+files_in = cell(size(nirs_fns));
+redone_imports = zeros(size(nirs_fns));
+for ifile=1:length(nirs_fns)
+    %% Import data
+    nirs_fn = nirs_fns{ifile};
+    if isempty(subject_names{ifile})
+        [root, subject_name, ext] = fileparts(nirs_fn);
+    else
+        subject_name = subject_names{ifile};
+    end
+    condition = ['origin' get_ppl_tag()];
+    [file_in, redone] = nst_run_bst_proc([subject_name '/' condition '/Raw'], options.import.redo, ...
+                                           'process_import_data_time', [], [], ...
+                                           'subjectname',  subject_name, ...
+                                           'condition',    condition, ...
+                                           'datafile',     {nirs_fn, 'NIRS-BRS'}, ...
+                                           'timewindow',   [], ...
+                                           'split',        0, ...
+                                           'ignoreshort',  1, ...
+                                           'channelalign', 1, ...
+                                           'usectfcomp',   0, ...
+                                           'usessp',       0, ...
+                                           'freq',         [], ...
+                                           'baseline',     []);
+    redone_imports(ifile) = redone;
+    %% Manage movement event markings TODO
+    if redone
+        evt_formats = bst_get('FileFilters', 'events');
+        evt_format = evt_formats(strcmp('BST', evt_formats(:,3)), :);
+
+        moco_fn = get_moco_markings_fn(subject_name, options.moco.export_dir);
+        if exist(moco_fn, 'file')
+            % Load event from pre-saved file
+            % TODO: test
+            sFile_in = load(file_fullpath(file_in));
+            [sFile_in, events] = import_events(sFile_in, [], moco_fn, evt_format);   
+        else
+            % Create empty event group
+            movement_events = db_template('event');
+            movement_events.label = 'movement_artefacts';
+            sFile_in = bst_process('GetInputStruct', file_in);
+            process_nst_import_csv_events('import_events', [], sFile_in, movement_events);
+        end
+
+        bad_chans_fn = get_bad_chan_markings_fn(subject_name, options.tag_bad_channels.export_dir);
+        if exist(bad_chans_fn, 'file')
+            % TODO: load content of .mat and set channel flag
+            % TODO: save data -> see process_nst_tag_bad_channels
+        end
+    end
+    %% Manage bad channel markins
+    % TODO: update channel flags
+    % 
+    files_in{ifile} = file_in;
+end
+
+end
+
+function [file_in, redone] = import_nirs_file(options,i_subject)
+subject=options.import.subject{i_subject};
+
+%% Import data
+nirs_fn = subject.nirs_fn;
+
+if isempty(subject.name)
+   [root, subject_name, ext] = fileparts(nirs_fn);
+else
+    subject_name = subject.name;
+end
+
+condition = ['origin' get_ppl_tag()];
+[file_in, redone] = nst_run_bst_proc([subject_name '/' condition '/Raw'], options.import.redo, ...
+                                       'process_import_data_time', [], [], ...
+                                       'subjectname',  subject_name, ...
+                                       'condition',    condition, ...
+                                       'datafile',     {nirs_fn, 'NIRS-BRS'}, ...
+                                       'timewindow',   [], ...
+                                       'split',        0, ...
+                                       'ignoreshort',  1, ...
+                                       'channelalign', 1, ...
+                                       'usectfcomp',   0, ...
+                                       'usessp',       0, ...
+                                       'freq',         [], ...
+                                       'baseline',     []);
+%% If available import additional headpoints, and refine the registration
+if redone && ~isempty(subject.additional_headpoints)  && exist(subject.additional_headpoints)
+    % Import head points
+    bst_process('CallProcess', 'process_headpoints_add', file_in, [], ...
+                'channelfile', {subject.additional_headpoints, 'ASCII_NXYZ'}, ...
+                'fixunits',    0.1, ...
+                'vox2ras',     1);
+
+    %  Refine registration
+    bst_process('CallProcess', 'process_headpoints_refine', file_in, []);
+    
+end 
+
+%% Manage movement event markings TODO
+if redone
+    evt_formats = bst_get('FileFilters', 'events');
+    evt_format = evt_formats(strcmp('BST', evt_formats(:,3)), :);
+
+    moco_fn = get_moco_markings_fn(subject_name, options.moco.export_dir);
+    if exist(moco_fn, 'file')
+        % Load event from pre-saved file
+        % TODO: test
+        sFile_in = load(file_fullpath(file_in));
+        [sFile_in, events] = import_events(sFile_in, [], moco_fn, evt_format);   
+    else
+        % Create empty event group
+        movement_events = db_template('event');
+        movement_events.label = 'movement_artefacts';
+        sFile_in = bst_process('GetInputStruct', file_in);
+        process_nst_import_csv_events('import_events', [], sFile_in, movement_events);
+    end
+
+    bad_chans_fn = get_bad_chan_markings_fn(subject_name, options.tag_bad_channels.export_dir);
+    if exist(bad_chans_fn, 'file')
+        % TODO: load content of .mat and set channel flag
+        % TODO: save data -> see process_nst_tag_bad_channels
+    end
+    
+end
+%% Manage bad channel markins
+% TODO: update channel flags
+% 
+
+end
+
+function [files_in, redone_imports] = import_subjects(options)
+nb_subjects = length(options.import.subject);
+
+files_in = cell(1,nb_subjects);
+redone_imports = zeros(1,nb_subjects);
+
+for i=1:nb_subjects
+    sSubject = bst_get('Subject', options.import.subject{i}.name, 1);
+    if isempty(sSubject)
+        [sSubject, iSubject] = db_add_subject(options.import.subject{i}.name, [], 1, 0);
+    end
+
+    db_save();
+
+    [imported_files, redone] = import_nirs_file(options,i);
+    files_in{i} = imported_files;
+    redone_imports(i)=redone;
+end
+
+end
+
 function hplots = plot_paradigm(paradigm, y_min, y_max, cond_colors)
 
 hold on;
@@ -341,23 +691,29 @@ end
 
 
 %% Helper functions
+function ptag = get_ppl_tag()
+ptag = '_nspc_V1';
+end
 
 function folder = create_dir(folder)
 % Create folder if does not exist. 
 % Check that folder is not a subfolder of nirstorm sources (encourage good practice
 % not to store data in source code folders)
 
-if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
-        exist(fullfile(folder, '..', 'nst_install.m'), 'file') || ...
-        exist(fullfile(folder, '..', '..', 'nst_install.m'), 'file')
-    warning('Data folder should not be part of nirstorm source folders');
+if ~isempty(folder)
+    if exist(fullfile(folder, 'nst_install.m'), 'file') || ...
+            exist(fullfile(folder, '..', 'nst_install.m'), 'file') || ...
+            exist(fullfile(folder, '..', '..', 'nst_install.m'), 'file')
+        warning('Processing folder should not be part of nirstorm source folders (%s)', folder);
+    end
+
+    if ~exist(folder, 'dir')
+        mkdir(folder);
+    end
 end
 
-if ~exist(folder, 'dir')
-    mkdir(folder);
 end
 
-end
 
 function tag = get_bst_file_tag(fn)
 
@@ -394,4 +750,22 @@ sfn = strrep(s, ' | ', '--');
 sfn = strrep(s, ' : ', '--');
 sfn = strrep(s, ' :', '--');
 sfn = strrep(s, ' ', '_');
+end
+
+
+function markings_fn = get_moco_markings_fn(subject_name, export_dir)
+markings_fn = '';
+if ~isempty(export_dir)
+    assert(exist(export_dir, 'dir')~=0);
+    markings_fn = fullfile(export_dir, [subject_name '_motion_events.mat']);
+end
+end
+
+
+function markings_fn = get_bad_chan_markings_fn(subject_name, export_dir)
+markings_fn = '';
+if ~isempty(export_dir)
+    assert(exist(export_dir, 'dir')~=0);
+    markings_fn = fullfile(export_dir, [subject_name '_bad_channels.mat']);
+end
 end
