@@ -4,7 +4,7 @@ function run_tests(to_run, stop_on_error, do_coverage, re_match_filter)
 %    - package: tests related to functions in bst_plugin
 %    - source: tests of tools used on package sources (eg dist_tools)
 %    - scripts: execute tutorial script (download data if not available).
-%               WARNING: script tests take time!!
+%               WARNING: tests of scripts take time!!
 % 
 install_error_msg = sprintf(['To run unit tests, nirstorm debug functions must be installed.\n'...
                             ' Use nst_install(''copy'', ''debug'') or ' ...

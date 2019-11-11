@@ -22,6 +22,24 @@ classdef GLMTest < matlab.unittest.TestCase
     
     methods(Test)
         
+        function test_ols_svd(testCase)
+            dt = 1; %sec
+            nb_samples = 700;
+            nb_channels=10;
+            nb_active_channels=5;
+            
+            [X, names,tmp] = design_matrix(0:dt:(nb_samples-1));
+
+            
+            [B, active_channels] = create_B_map(nb_channels,nb_active_channels);
+            y=X*B + 1e-3*randn(nb_samples,nb_channels);
+            
+            [B_hat,proj_X] = process_nst_glm_fit('compute_B_svd',y,X);
+            testCase.assertTrue( all(all(abs(B - B_hat) < 1e-3)));
+            
+            
+        end
+        
         function test_cortical_simulation(testCase)
             
             % Simulate cortical signals -> dHb
@@ -30,97 +48,102 @@ classdef GLMTest < matlab.unittest.TestCase
             % ASSUME: sHbCortex(1) is HbO and sHbCortex(2) is HbR
             % TODO: use common enum for safer identification
             
-            % Run GLM
-            sGlmResults = cell(1, length(sHbCortex));
-            for ihb=1:length(sHbCortex)
-                sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_glm_fit', sHbCortex(ihb), [], ...
-                                                'stim_events',    strjoin(stim_event_names, ','), ...
-                                                'hrf_model',      1, ...  % CANONICAL
-                                                'trend',          1, ...
-                                                'fitting',        1, ...  % OLS - precoloring
-                                                'save_residuals', 0, ...
-                                                'save_betas',     0);
-            end
-            
-            % Check beta estimates, non-regression test at specific voxel
-            % where esimtates are the most accurate
-            
-            % TODO: better handle unit conversion
-            %glm_results_hbo = nst_convert_unit(glm_results_hbo, 'mol.l-1', 'mumol.l-1');
-            beta_map_hb = beta_map_hb * 1e6; %convert to mumol
-            glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
-            poi_activ = 4491; % for condition 1
-            testCase.assertTrue( abs(beta_map_hb(1, 1, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 1)) < 5);
-            poi_activ = 4890; % for condition 2
-            testCase.assertTrue( abs(beta_map_hb(1, 2, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 2)) < 1);
-            
-            glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
-            poi_activ = 4539; % for condition 1
-            testCase.assertTrue( abs(beta_map_hb(2, 1, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 1)) < 2);
-            poi_activ = 4780; % for condition 2
-            testCase.assertTrue( abs(beta_map_hb(2, 2, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 2)) < 0.2);
+            for statistical_processing_method=1:2 %1=OLS 2=pre-zhitening 
+                % Run GLM 
+                sGlmResults = cell(1, length(sHbCortex));
+                for ihb=1:length(sHbCortex)
+                    sGlmResults{ihb} = bst_process('CallProcess', 'process_nst_glm_fit', sHbCortex(ihb), [], ...
+                                                   'hpf_low_cutoff',         0.01, ...
+                                                   'trim_start',             0, ...
+                                                   'fitting',                1, ...  % OLS
+                                                   'statistical_processing', statistical_processing_method, ...  % Pre-coloring
+                                                   'noise_model',            1, ...  % AR(1)
+                                                   'stim_events',             strjoin(stim_event_names, ','), ...
+                                                   'hrf_model',              1, ...  % CANONICAL
+                                                   'trend',                  1, ...
+                                                   'save_betas',             0, ...
+                                                   'save_residuals',         0, ...
+                                                   'save_fit',               0);
+                end
 
-            % Check activation detection (p-val thresholding)
-            con_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{1}, [], ...
-                                                  'Contrast', '[1 0]');
-            stat_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
-                                                  con_sResults_stim1_hbo, [], ...
-                                                  'tail', 'two');
-            con_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{2}, [], ...
-                                                  'Contrast', '[0 1]');
-            stat_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
-                                                  con_sResults_stim2_hbo, [], ...
-                                                  'tail', 'two');
-                                   
-            stat_results_stim1_hbo = in_bst_results(stat_sResults_stim1_hbo.FileName);
-            stat_results_stim2_hbo = in_bst_results(stat_sResults_stim2_hbo.FileName);
+                % Check beta estimates, non-regression test at specific voxel
+                % where esimtates are the most accurate
 
-            thresh_options.pThreshold = 5e-2;
-            thresh_options.Correction = 'bonferroni';
-            thresh_options.Control = 1;
-            
-            % Load scalp/cortex geometry and compute depth
-            sCortex = in_tess_bst(stat_results_stim1_hbo.SurfaceFile);
-            sSubject = bst_get('Subject', sHbCortex.SubjectName);
-            sScalp = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-            [scalp_points, depth] = nst_knnsearch(sScalp.Vertices, sCortex.Vertices);
-            
-            %TODO: fix number of tests according to cortical coverage
-            [pmask_stim1_hbo, corr_p] = bst_stat_thresh(stat_results_stim1_hbo.pmap, thresh_options);
-            [pmask_stim2_hbo, corr_p] = bst_stat_thresh(stat_results_stim2_hbo.pmap, thresh_options);
+                % TODO: better handle unit conversion
+                %glm_results_hbo = nst_convert_unit(glm_results_hbo, 'mol.l-1', 'mumol.l-1');
+                beta_map_hb = beta_map_hb * 1e6; %convert to mumol
+                glm_results_hbo = in_bst_matrix(sGlmResults{1}.FileName);
+                poi_activ = 4491; % for condition 1
+                testCase.assertTrue( abs(beta_map_hb(1, 1, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 1)) < 5);
+                poi_activ = 4890; % for condition 2
+                testCase.assertTrue( abs(beta_map_hb(1, 2, poi_activ)-glm_results_hbo.ImageGridAmp(poi_activ, 2)) < 1);
 
-            activation_mask_stim1_hbo = zeros(size(pmask_stim1_hbo));
-            activation_mask_stim1_hbo(activation_scout(1).sScout.Vertices) = 1;
+                glm_results_hbr = in_bst_matrix(sGlmResults{2}.FileName);
+                poi_activ = 4539; % for condition 1
+                testCase.assertTrue( abs(beta_map_hb(2, 1, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 1)) < 2);
+                poi_activ = 4780; % for condition 2
+                testCase.assertTrue( abs(beta_map_hb(2, 2, poi_activ)-glm_results_hbr.ImageGridAmp(poi_activ, 2)) < 0.2);
 
-            activation_mask_stim2_hbo = zeros(size(pmask_stim2_hbo));
-            activation_mask_stim2_hbo(activation_scout(2).sScout.Vertices) = 1;
-            
-            % Test that all truely activated vertices are detected 
-            % limit to vertices not too deep (<3cm)
-            %TODO: check activation tests again
-            max_depth = 0.03; % meter
-            testCase.assertTrue(all(pmask_stim1_hbo(activation_mask_stim1_hbo & depth<max_depth)==1));
-            testCase.assertTrue(all(pmask_stim2_hbo(activation_mask_stim2_hbo & depth<max_depth)==1));
+                % Check activation detection(p-val thresholding)
+                con_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{1}, [], ...
+                                                      'Contrast', '[1 0]');
+                stat_sResults_stim1_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
+                                                      con_sResults_stim1_hbo, [], ...
+                                                      'tail', 'two');
+                con_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast', sGlmResults{2}, [], ...
+                                                      'Contrast', '[0 1]');
+                stat_sResults_stim2_hbo = bst_process('CallProcess', 'process_nst_glm_contrast_ttest', ...
+                                                      con_sResults_stim2_hbo, [], ...
+                                                      'tail', 'two');
 
-            % Non regression test on the number of false positive
-            % TODO: improve / fix
-            if sum(pmask_stim1_hbo(~activation_mask_stim1_hbo)) > 300
-                warning('GLM: number of false positives too large for stim1');
-            end
-            if sum(pmask_stim2_hbo(~activation_mask_stim2_hbo)) > 1
-                warning('GLM: number of false positives too large for stim2');
-            end
-            
-%             testCase.assertLessThan(sum(pmask_stim1_hbo(~activation_mask_stim1_hbo)), 300);
-%             testCase.assertLessThan(sum(pmask_stim2_hbo(~activation_mask_stim2_hbo)), 1);
+                stat_results_stim1_hbo = in_bst_results(stat_sResults_stim1_hbo.FileName);
+                stat_results_stim2_hbo = in_bst_results(stat_sResults_stim2_hbo.FileName);
 
-            % TODO: test bilateral            
+                thresh_options.pThreshold = 5e-2;
+                thresh_options.Correction = 'bonferroni';
+                thresh_options.Control = 1;
+
+                % Load scalp/cortex geometry and compute depth
+                sCortex = in_tess_bst(stat_results_stim1_hbo.SurfaceFile);
+                sSubject = bst_get('Subject', sHbCortex.SubjectName);
+                sScalp = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+                [scalp_points, depth] = nst_knnsearch(sScalp.Vertices, sCortex.Vertices);
+
+                %TODO: fix number of tests according to cortical coverage
+                [pmask_stim1_hbo, corr_p] = bst_stat_thresh(stat_results_stim1_hbo.pmap, thresh_options);
+                [pmask_stim2_hbo, corr_p] = bst_stat_thresh(stat_results_stim2_hbo.pmap, thresh_options);
+
+                activation_mask_stim1_hbo = zeros(size(pmask_stim1_hbo));
+                activation_mask_stim1_hbo(activation_scout(1).sScout.Vertices) = 1;
+
+                activation_mask_stim2_hbo = zeros(size(pmask_stim2_hbo));
+                activation_mask_stim2_hbo(activation_scout(2).sScout.Vertices) = 1;
+
+                % Test that all truely activated vertices are detected 
+                % limit to vertices not too deep (<3cm)
+                %TODO: check activation tests again
+                max_depth = 0.03; % meter
+                testCase.assertTrue(all(pmask_stim1_hbo(activation_mask_stim1_hbo & depth<max_depth)==1));
+                testCase.assertTrue(all(pmask_stim2_hbo(activation_mask_stim2_hbo & depth<max_depth)==1));
+
+                % Non regression test on the number of false positive
+                % TODO: improve / fix
+                if sum(pmask_stim1_hbo(~activation_mask_stim1_hbo)) > 300
+                    warning('GLM: number of false positives too large for stim1');
+                end
+                if sum(pmask_stim2_hbo(~activation_mask_stim2_hbo)) > 1
+                    warning('GLM: number of false positives too large for stim2');
+                end
+
+    %             testCase.assertLessThan(sum(pmask_stim1_hbo(~activation_mask_stim1_hbo)), 300);
+    %             testCase.assertLessThan(sum(pmask_stim2_hbo(~activation_mask_stim2_hbo)), 1);
+
+                % TODO: test bilateral            
+            end  
         end
-        
-    end
-    
-end
 
+    end
+end    
 function converted = nst_convert_unit(values, unit_in, unit_out)
 %TODO: test & doc
 assert(units_homogeneous(unit_in, unit_out));
@@ -158,6 +181,7 @@ hrf_types = process_nst_glm_fit('get_hrf_types');
 [X,names] = process_nst_glm_fit('make_design_matrix', time, events, ...
                                 hrf_types.CANONICAL, 25, 0);
 assert(all(strcmp(names, {events.label})));
+
 
 %% Retrieve data
 repo_url = nst_get_repository_url();
@@ -248,9 +272,9 @@ for ipair=1:nb_pairs
     end
 end
 
-% Add some noise at the channel level
+% Add some white noise at the channel level
 sig_range = max(reordered_dOD(:)) - min(reordered_dOD(:));
-reordered_dOD = reordered_dOD + rand(size(reordered_dOD)) * 0.1 * sig_range;
+reordered_dOD = reordered_dOD + randn(size(reordered_dOD)) * 0.1 * sig_range;
 
 %% Save dOD as new data
 sDummyData = in_bst_data(sDummy.FileName);
@@ -280,4 +304,84 @@ proj_methods = process_nst_cortical_projection('methods');
 hb_cortex = bst_process('CallProcess', ...
                         'process_nst_cortical_projection', sdODInput, [], ...
                         'method', proj_methods.MNE);                  
+end
+
+
+function [X, names, events,hrf] = design_matrix(time)
+
+% Returned the design matrix
+% generate events with the repetition of the following paterns 
+% Stim 1 [ 20 - 30s]  - Stim 2 [20-30s] 
+
+
+events = db_template('event');
+stim_event_names = {'stim1', 'stim2'};
+
+events(1).label = stim_event_names{1};
+events(2).label = stim_event_names{2};
+
+t=0;
+i_event=1;
+
+while t + 60 < time(end)
+    
+    duration_stim1=randi([20,30]);
+    duration_stim2=randi([20,30]);
+    
+    events(1).times(1,i_event)=t;
+    events(1).times(2,i_event)=t+duration_stim1;
+    
+    events(2).times(1,i_event)=t+duration_stim1;
+    events(2).times(2,i_event)=t+duration_stim1+duration_stim2;
+   
+    t=t+duration_stim1+duration_stim2;
+    i_event=i_event+1;
+    
+end
+
+events(1).epochs = ones(1, length(events(1).times));
+events(2).epochs = ones(1, length(events(2).times));
+
+hrf_types = process_nst_glm_fit('get_hrf_types');
+[X,names,hrf] = process_nst_glm_fit('make_design_matrix', time, events, ...
+                                hrf_types.CANONICAL, 25, 1);
+
+                            
+assert(all(strcmp(names(1:2), {events.label})));
+
+end
+
+function [B, active_channels]= create_B_map(nb_channels,nb_active_channels)
+    % Assume 2 conditions Stim1=Task,Stim2=Rest  
+    B=zeros(3,nb_channels);
+    perm=randperm(nb_channels);
+    
+    active_channels=sort(perm(1:nb_active_channels));
+    unactive_channels=sort(perm(nb_active_channels+1:end));
+    
+    
+    % Active channels : B1 = 0.01; B2~ 0.005, B3=N(0,0.0001)
+    B(1,active_channels)=0.01+0.0001*randn(); % Stim 1
+    B(2,active_channels)=0.005+0.0001*randn(); % Stim 2 
+    B(3,active_channels)=0.0001*randn(); % Constant 
+
+    % Active channels : B1 =  N(0,0.001); B2~ N(0,0.001), B3=0
+
+    B(1,unactive_channels)=0.001*randn();% Stim 1
+    B(2,unactive_channels)=0.001*randn(); % Stim 2 
+    B(3,unactive_channels)=0.0001*randn(); % Constant 
+    
+    B=B/100;
+end
+
+
+function l=get_factor_SNR(signal,noise,SNR)
+    % compute l so that y = signal + l*noise avec the correct SNR value
+    % SNR = 10 log(  <signal> / l^2 < noise > ) with <.> the signal power.
+    
+    mss_signal=norm(signal,2);
+    mss_noise=norm(noise,2);
+    
+    l2= (mss_signal/mss_noise) * 10^(-SNR/10);
+    l=sqrt(l2);
 end
