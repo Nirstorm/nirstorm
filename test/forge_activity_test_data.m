@@ -5,6 +5,7 @@ function forge_activity_test_data(dest_dir)
 % nst_request_data({{'unittest', 'activity_test_subject', 'activity_test_subject.zip'},...
 %                   {'unittest', 'activity_test_subject', 'activity_info.mat'}});
 % So this function should not be used directly within unit tests.
+% See load_activity_test_subject
 %
 % The anatomy is Colin27_4NIRS.
 %
@@ -21,7 +22,7 @@ function forge_activity_test_data(dest_dir)
 % The intended usage is to analyse them separately.
 
 if nargin < 1
-    dest_dir = fullfile(nst_get_local_user_dir(), 'unittest', ...
+    dest_dir = fullfile(nst_get_local_user_dir(), 'unittest', ...   
                         'activity_test_subject');
     if ~exist(dest_dir, 'dir')
         mkdir(dest_dir);
