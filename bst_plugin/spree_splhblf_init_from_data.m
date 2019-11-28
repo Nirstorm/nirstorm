@@ -1,4 +1,4 @@
-function  [model] = model_mc_splhblf_init_from_data(model, nirs)
+function  [model] = spree_splhblf_init_from_data(model, nirs)
 % Args:
 %   - data: NirsData (see nirs_data.m)
 %

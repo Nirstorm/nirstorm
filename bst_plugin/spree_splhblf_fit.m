@@ -1,9 +1,9 @@
-function [fitted_model] = model_mc_splhblf_fit(model, not_to_track)
+function [fitted_model] = spree_splhblf_fit(model, not_to_track)
 
 if nargin < 2
     not_to_track = {};
 end
-fitted_model = itmethod(model, @gs_sampling, model.max_iterations, ...
+fitted_model = nst_algo_itmethod(model, @gs_sampling, model.max_iterations, ...
     model.var_hist_pace, @cpt_gs_observables, ...
     model.burnin_period, model.obs_hist_pace, @(m) 0, not_to_track);
 
@@ -13,11 +13,16 @@ end
 
 function [model_upd] = gs_sampling(model)
 
+% Required matlab toolboxes:
+%   - Signal Processing Toolbox ()
+%   - Statistics and Machine Learning Toolbox
+%   - Curve Fitting Toolbox 
+
 if model.iteration == 5
     tic
 end
 
-% f1
+% f1stats
 if model.variables_to_estimate.f1
     if ~model.options.use_true_stim_induced
         model.tmp.part_res_f1 = ...
@@ -27,7 +32,7 @@ if model.variables_to_estimate.f1
         model.tmp.part_res_f1 = model.other_true_val.stim_induced;
     end
     
-    if 1
+    if 1 % version all channels at once
         %TODO: put this in tmp to gain a little time:
         pp_post_var = zeros(model.constants.f1_nb_coeffs, model.constants.f1_nb_coeffs, model.constants.n_channels);
         pp_post_mean = zeros(model.constants.n_channels, model.constants.f1_nb_coeffs);
@@ -55,7 +60,7 @@ if model.variables_to_estimate.f1
 %                 rethrow(ME);
 %             end
 %        end
-    else
+    else % version channel by channels
         for ic=1:model.constants.n_channels
             inv_post_var = model.constants.PXXP ./ model.variables.noise_var(ic) ...
                 + inv(model.constants.D) ./ model.variables.f1_var(ic);
@@ -167,7 +172,7 @@ if model.variables_to_estimate.trend_coeffs
             post_mean;
         model.variables.trend(:, ic) = ...
             unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs(:, ic), model.constants.npb_mirror_trend_fix);
-    else
+    else % All channels at once (faster)
         if ~model.options.use_true_trend
             model.tmp.part_res_trend = ...
                 model.constants.y - ...

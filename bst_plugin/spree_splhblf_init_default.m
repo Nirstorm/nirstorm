@@ -1,4 +1,4 @@
-function model = model_mc_splhblf_init_default()
+function model = spree_splhblf_init_default()
 
 model.var_hist_pace = 1;
 model.obs_hist_pace = 1;

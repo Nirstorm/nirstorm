@@ -1,4 +1,4 @@
-function model = nirs_model_set_estimation(model, vars_to_estimate)
+function model = spree_set_estimation(model, vars_to_estimate)
 % Enable the estimation of the given variable and disable the estimation
 % of all others
 %
@@ -33,7 +33,7 @@ for iv=1:length(vars_to_estimate)
     elseif isfield(model, 'cst_to_estimate') && ismember(vname, cst_names)
         model.cst_to_estimate.(vname) = 1;
     else
-        throw(MException('NIRSDynaError:WrongVariableName', ...
+        throw(MException('SpreeError:WrongVariableName', ...
                          ['Cannot find variable ' vname]));
     end
 end
