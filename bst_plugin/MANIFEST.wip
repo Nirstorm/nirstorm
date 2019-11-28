@@ -1,3 +1,8 @@
+spree_set_estimation.m
+spree_splhblf_init_default.m
+spree_splhblf_init_from_data.m
+spree_splhblf_fit.m
+process_nst_spree.m
 process_nst_combine_masks.m
 process_nst_extract_fov_mask_cortical.m
 process_nst_save_matrix_csv.m

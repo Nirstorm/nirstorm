@@ -56,7 +56,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.option_nb_iterations.Comment = 'Nb iterations';
     sProcess.options.option_nb_iterations.Type    = 'value';
-    sProcess.options.option_nb_iterations.Value   = {3000, '', 0};
+    sProcess.options.option_nb_iterations.Value   = {2000, '', 0};
     
     % Separator
     sProcess.options.separator.Type = 'separator';
@@ -68,10 +68,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.save_betas.Comment = 'Effect maps';
     sProcess.options.save_betas.Type    = 'checkbox';
     sProcess.options.save_betas.Value   =  0;
-
-    sProcess.options.save_residuals.Comment = 'Residuals';
-    sProcess.options.save_residuals.Type    = 'checkbox';
-    sProcess.options.save_residuals.Value   =  0;
     
     sProcess.options.save_fit.Comment = 'Fit';
     sProcess.options.save_fit.Type    = 'checkbox';
@@ -100,16 +96,14 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     end
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
-    
+
     % Get option values   
     nb_iterations   = sProcess.options.option_nb_iterations.Value{1};
-    event_names =  cellfun(@(s) strtrim(s), {strsplit(sProcess.options.option_event_names.Value, ',')});
     
-    export_response_figs = sProcess.options.option_do_export_response_figs.Value;
+    % export_response_figs = sProcess.options.option_do_export_response_figs.Value;
     
     DataMat = in_bst_data(sInput.FileName);
 
-    
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
         parent_data = in_bst_data(DataMat.DataFile);
@@ -134,6 +128,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         Y = DataMat.F(nirs_ichans,:)';
     end
     
+    % Convert to micromol
     if strcmp(DataMat.DisplayUnits, 'mol.l-1')
         Y = Y * 1e6;
         DataMat.DisplayUnits = 'mumol.l-1';
@@ -170,16 +165,15 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
          return;
     end
 
-    [responses, responses_std, response_time_axis, residuals, summary_stats] = ...
-        Compute(fnirs, time, selected_events, nb_iterations); % might be a bug here 
-    % nb_iterations should be the 5th input in the Compute function line 291, the 4th
-    % input is response_duration
-    
-    if export_response_figs
-        fig_prefix = [sInputs.SubjectName '_' sInputs.Condition '_'];
-        plot_responses(responses, responses_std, response_time_axis, ...
-                       residuals, summary_stats, ChanneMat, fig_dir.Value{1}, fig_prefix);
-    end
+    response_duration = 30; % seconds
+    [responses, responses_std, response_time_axis, summary_stats] = ...
+        Compute(fnirs, time, selected_events, response_duration, nb_iterations); 
+        
+%     if export_response_figs
+%         fig_prefix = [sInputs.SubjectName '_' sInputs.Condition '_'];
+%         plot_responses(responses, responses_std, response_time_axis, ...
+%                        residuals, summary_stats, ChanneMat, fig_dir.Value{1}, fig_prefix);
+%     end
     
     nb_channels = size(sDataIn.F, 1);
     nb_response_samples = length(response_time_axis);
@@ -201,7 +195,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     sDataOut.Device       = 'Brainstorm';
     sDataOut.DataType     = 'recordings'; 
     sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = 'mol.l-1';
+    sDataOut.DisplayUnits = 'micromol.l-1';
     sDataOut.Std = responses_std_full';
     sDataOut.ColormapType = [];
     sDataOut.Events = [];
@@ -314,35 +308,40 @@ bst_progress('stop');
 close(h);
 end
 
-function [responses, responses_std, response_time_axis, residuals, summary_stats] = ...
+function [responses, responses_pstd, response_time_axis, summary_stats] = ...
     Compute(nirs_sig, time, events, response_duration, nb_iterations)
 %% Apply 
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
-%        Measured nirs Hb signal in mol.L-1.cm-1.
+%        Measured nirs Hb signal in micromol.L-1.cm-1.
 %    - time: array of double, size: nb_samples x 1
 %        Time axis of the input nirs signal.
-%    - channel_def: struct
-%        Defintion of channels as given by brainstorm
-%        Used fields: Nirs.Wavelengths, Channel
-%        ASSUME: channel coordinates are in meters
+%    - events:
+%    - response_duration: float
+%      Response duration in second.
 %    [- nb_iterations ]: positive double, default is 50
 % 
 % Output: 
 %   - responses: matrix of double, size: nb_samples x nb_channels
-%     Responses in delta [HbO/R/T] in mol.L-1.cm-1 evoked by 
-%     given paradigm (events). They are rescaled to have the height
-%     as the fitted stim-induced signal -> compensate descaling by event duration.
+%     Responses in delta [HbO/R/T] in micromol.L-1.cm-1.
+%     These are "block" responses, ie the convolution of the average stimulus with the HRFs. 
+%     This is to have a more meaningful scale that the HRF which associated 
+%     with a Dirac stimulus event.
 %   - responses_std: matrix of double, size: nb_samples x nb_channels
-%     Response standard deviations in delta [HbO/R/T] in mol.L-1.cm-1 
+%     Response standard deviations in delta [HbO/R/T] in micromol.L-1.cm-1 
 %   - response_time_axis: 1d array of double
+%   - summary_stats: struct with fields:
+%         * activating_positions
+%         * + PPM stats
+%         * time_to_peak
+%         * time_to_peak_std
 %     
 
-if nargin < 3
+if nargin < 5
     nb_iterations = 50;
 end
 
-nirs.data = nirs_sig * 1000; % convert to millimol for better numerical stability
+nirs.data = nirs_sig;
 nirs.time = time;
 for ievt=1:length(events)
     nirs.paradigm.conditions{ievt} = events(ievt).label;
@@ -355,48 +354,35 @@ for ievt=1:length(events)
 end
 
 %% Setup model
-model = model_mc_splhblf_init_default();
-model.options.baseline_type = 'cosine';
-model.options.physio_bands =  [0 1/response_duration]; %0.025 for Aude's data, 0.0167 for Romain's
+model = spree_splhblf_init_default(); 
+model.options.trend_type = 'cosine';
+model.options.trend_bands(1).name = 'baseline';
+model.options.trend_bands(1).bounds = [0 1/response_duration]; %[0 0.01]; % .[0 0.0225]
+model.options.trend_bands(2).name = 'respiration';
+model.options.trend_bands(2).bounds = [1/5 1/3];
+model.options.trend_bands(3).name = 'heart';
+model.options.trend_bands(3).bounds = [0.8 1.7];
+model.options.npb_mirror_trend_fix = 150; %nb  samples to mirror at boundaries
 
-model.options.response_duration = 24;
 model.options.knots_type = 'regular';
-model.options.regular_knots_dt = 6; %TODO: expose TODO: test if all values are allowed or just multiples of response_duration
+model.options.response_duration = 30;
+model.options.regular_knots_dt = 5;
 model.options.bandpass_residuals = [];
-model = model_set_estimation(model, {'f1', 'noise_var', 'f1_var', 'response', 'trend_coeffs', 'trend_var'});
+model = spree_set_estimation(model, {'f1', 'noise_var', 'f1_var', 'response', 'trend_coeffs', 'trend_var'}); % model_set_estimation
 model.max_iterations = nb_iterations;
 model.var_hist_pace = 1; %TODO: debug when pace > 1
 model.obs_hist_pace = 1;
-model = model_mc_splhblf_init_from_data(model, nirs);
+model = spree_splhblf_init_from_data(model, nirs);
 model.burnin_period = round(model.max_iterations/3);
 
 %% Fit model
-fitted_model = model_mc_splhblf_fit(model);
-%     if imeasure == 1
-%         response_nsamples = length(fitted_model.constants.response_time_axis);
-%         responses = zeros(response_nsamples, fitted_model.constants.n_channels, length(nirs.measure_labels));
-%         responses_std = zeros(response_nsamples, fitted_model.constants.n_channels, length(nirs.measure_labels));
-%     end
-%     responses(:,:, imeasure) = fitted_model.observables.response_pm;
-%     responses_std(:,:,imeasure) = fitted_model.observables.response_pstd;
-% end
+fitted_model = spree_splhblf_fit(model);
 
-% responses = responses(:, pair_indexes);
-% responses_std = responses_std(:, pair_indexes);
-
-% rescale to input signal range
-sfit = fitted_model.constants.XP * fitted_model.observables.f1_pm;
-response_pm = fitted_model.observables.response_pm;
-scale_factor = (max(sfit) - min(sfit)) ./ (max(response_pm) - min(response_pm));
-scale_factor = repmat(scale_factor, size(response_pm, 1), 1);
-% convert back to mol.L-1.cm-1
-responses = fitted_model.observables.response_pm .* scale_factor ./ 1000; 
-responses_std = fitted_model.observables.response_pstd .* scale_factor ./ 1000;
-response_time_axis = fitted_model.constants.response_time_axis;
-
-residuals = (fitted_model.constants.y - fitted_model.stim_induced_fit) ./ 1000;
+%% Outputs
+responses = fitted_model.observables.response_block_pm;
+responses_pstd = fitted_model.observables.response_block_pstd;
+response_time_axis = constants.response_block_time_axis;
 summary_stats = fitted_model.summary;
-
 end
 
 
