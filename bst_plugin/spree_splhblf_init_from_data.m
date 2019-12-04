@@ -94,23 +94,42 @@ elseif isfield(nirs, 'paradigm')
                                                      1/model.constants.sampling_freq, ...
                                                      session_duration, ...
                                                      model.constants.response_nb_coeffs);
+
     assert(size(model.constants.X, 1) >= size(model.constants.y, 1));
     model.constants.X = model.constants.X(1:size(model.constants.y, 1), :);
     model.constants.paradigm = nirs.paradigm;
+elseif isfield(nirs, 'events')
+    assert(length(nirs.events) == 1) % mono-condition model only for now
+    model.constants.X = nst_make_event_toeplitz_mtx(nirs.events(1), nirs.time, model.constants.response_nb_coeffs);
+    model.constants.X = model.constants.X{1};
+    
+    for ievt=1:length(nirs.events)
+        model.constants.paradigm.conditions{ievt} = nirs.events(ievt).label;
+        model.constants.paradigm.onsets{ievt} = nirs.events(ievt).times(1,:);
+        if size(nirs.events(ievt).times, 1) == 2 % extended events
+            model.constants.paradigm.durations{ievt} = diff(nirs.events(ievt).times, 1);
+        else % simple events -> assume brief stimuli
+            model.constants.paradigm.durations{ievt} = diff(nirs.time(1:2));
+        end
+    end
+    
 end
-block_duration = nirs.paradigm.durations{1}(1) + model.constants.response_time_axis(end);
-model.constants.X_block = nst_build_onset_toeplitz_mtx([0], ...
-    nirs.paradigm.durations{1}(1), ...
-    1/model.constants.sampling_freq, ...
-    block_duration, ...
-    model.constants.response_nb_coeffs);
+block_duration = diff(nirs.events(1).times(:,1)) + model.constants.response_time_axis(end);
+dummy_block_event = db_template('event');
+dummy_block_event.times = [0;block_duration];
+model.constants.X_block = nst_make_event_toeplitz_mtx(dummy_block_event, ...
+                                                      0:dt:(dummy_block_event.times(2,1)), ...
+                                                      model.constants.response_nb_coeffs);
+model.constants.X_block = model.constants.X_block{1};
 model.constants.response_block_time_axis = (1:size(model.constants.X_block,1))' * dt;
 
 % adjust threshold for proba
 % 1% of variation within expected hemodynamics band
 %TODO: expose options
 response_length = model.constants.response_nb_coeffs;
-response_cano = spm_hrf(dt, [5., 16, 1, 1, 6, 0, response_duration]);
+% response_cano = spm_hrf(dt, [5., 16, 1, 1, 6, 0, response_duration]);
+response_cano = process_nst_glm_fit('cpt_hrf_canonical', model.constants.response_time_axis);
+
 if length(response_cano) > response_length
     response_cano = response_cano(1:response_length);
 elseif length(response_cano) < response_length
@@ -290,8 +309,8 @@ else
         model.constants.trend_bands.bounds = [];
         model.constants.trend_bands.coeff_indexes = 1:trend_bsize;
     elseif strcmp(model.options.trend_type, 'cosine')
-        [trend_mat, band_indexes] = build_basis_dct(n_samples_trend, 1/dt, ...
-                                                    vertcat(model.options.trend_bands.bounds), 0);
+        [trend_mat, band_indexes] = nst_math_build_basis_dct(n_samples_trend, 1/dt, ...
+                                                             vertcat(model.options.trend_bands.bounds), 0);
          for iband=1:length(band_indexes)
              model.constants.trend_bands(iband).name = model.options.trend_bands(iband).name;
              model.constants.trend_bands(iband).bounds = model.options.trend_bands(iband).bounds;
@@ -302,7 +321,7 @@ else
     end
     model.constants.T = trend_mat;
     model = init_variable(model, 'trend_coeffs', {'coeff', 'channel'}, ...
-                          trend_mat' * mirror_sig_bounds(model.constants.y, ...
+                          trend_mat' * nst_misc_mirror_sig_bounds(model.constants.y, ...
                                                          model.constants.npb_mirror_trend_fix));
 end
 model.constants.Tt = model.constants.T';
@@ -310,7 +329,7 @@ assert(size(model.constants.T, 1) == model.constants.n_samples + 2 * model.const
 
 if 1
 % trend signal
-trend_init = unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs, model.constants.npb_mirror_trend_fix);
+trend_init = nst_misc_unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs, model.constants.npb_mirror_trend_fix);
 if isfield(simulation, 'trend')
     model = init_variable(model, 'trend', {'time', 'channel'}, ...
                           trend_init, simulation.trend);
@@ -368,4 +387,74 @@ function model = init_variable(model, var_name, var_dnames, var_init, ...
         model.variables.(var_name) = model.var_true_val.(var_name);
     end
     model.var_dnames.(var_name) = var_dnames;
+end
+
+
+
+function [data_filt] = mfip_IIR_butter(data,fs,opt)
+
+data=double(data);
+
+order=opt.order;
+ftype=opt.ftype;
+flag_keepMean=opt.flag_keepMean;
+
+nSamples=size(data,1);
+meanMatrix=repmat(mean(data),nSamples,1);
+
+%=========================================================================
+% IIR filtering: BUTTER FILTER
+%=========================================================================
+
+if flag_keepMean
+    
+    switch ftype
+        % HP filtering
+        case {'high', 'highpass'}
+            [b,a]= butter(order,opt.low_cutoff*2/fs, 'high');
+            data_filt = filtfilt(b,a,data-meanMatrix)+meanMatrix;
+            
+        % LP filtering
+        case {'low' , 'lowpass'}
+            [b,a]= butter(order,opt.high_cutoff*2/fs, 'low');
+            data_filt = filtfilt(b,a,data-meanMatrix)+meanMatrix;
+            
+        % BP filtering
+        case {'bandpass' ,'band'}
+            [b,a]= butter(order,[opt.low_cutoff*2/fs opt.high_cutoff*2/fs]);
+            data_filt = filtfilt(b,a,data-meanMatrix)+meanMatrix;
+        
+        case {'bandstop' , 'stop'}
+            [b,a]= butter(order,[opt.low_cutoff*2/fs  opt.high_cutoff*2/fs],'stop');
+           
+            data_filt = filtfilt(b,a,data-meanMatrix)+meanMatrix;   
+    end
+    
+    
+else
+    
+    switch ftype
+        % HP filtering
+        case 'high'
+            [b,a]= butter(order,opt.low_cutoff*2/fs, 'high');
+            data_filt = filtfilt(b,a,data);
+            
+        % LP filtering
+        case 'low'
+            [b,a]= butter(order,opt.high_cutoff*2/fs, 'low');
+            data_filt = filtfilt(b,a,data);
+            
+        % BP filtering
+        case 'bandpass'
+            [b,a]= butter(order,[opt.low_cutoff*2/fs opt.high_cutoff*2/fs]);
+            data_filt = filtfilt(b,a,data);
+            
+        case 'bandstop'
+            [b,a]= butter(order,[opt.low_cutoff*2/fs opt.high_cutoff*2/fs], 'stop');
+            data_filt = filtfilt(b,a,data);
+            
+    end
+end
+
+
 end

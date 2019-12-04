@@ -32,9 +32,10 @@ classdef SpreeTest < matlab.unittest.TestCase
             [nirs_chan_fn, nirs_cortex_hbo, nirs_cortex_hbr, activity] = load_activity_test_subject();
 
             spree_result_chan = bst_process('CallProcess', 'process_nst_spree', nirs_chan_fn, [], ...
-                                       'lf_cutoff', 0.01, ...
-                                       'trim_start', 0, ...
-                                       'stim_events', strjoin({activity.condition_name}, ','));
+                                            'stim_events', strjoin({activity.condition_name}, ','), ...
+                                            'nb_iterations', 200, ...
+                                            'save_full_fitted_model', 1);
+            check_response_estimation(spree_result_chan)                                
             check_chan_activity_detection(spree_result_chan.activ_chans, activity);
             
             spree_result_cortex_hbo = bst_process('CallProcess', 'process_nst_spree', ...
@@ -47,16 +48,33 @@ classdef SpreeTest < matlab.unittest.TestCase
     end
 end
 
+
+
 function [chan_fn, cortex_hbo, cortex_hbr, activity] = load_activity_test_subject()
 
 % Setup utest protocol
+use_default_anatomy = 0;
+bst_create_test_protocol(use_default_anatomy);
 
 % Request activity test data
-
+repo_url = nst_get_repository_url();
+%TODO: add ground-truth HRF in forged subject data
+data_fns = nst_request_files({{'unittest','activity_test_subject','activity_test_subject.zip'}, ...
+                              {'unittest','activity_test_subject','activity_info.mat'}}, ...
+                              1, repo_url);
+                          
 % Import data in bst
+import_subject(data_fns{1});
 
 % Retrieve file names
+% TODO: rename test_subject to activity_test_subject
+%       and condition to "evoked_activity_high_SNR"
+chan_fn = nst_get_bst_func_files('test_subject', 'test', 'Hb');
+cortex_hbo = nst_get_bst_func_files('test_subject', 'test', 'HbO cortex');
+cortex_hbr = nst_get_bst_func_files('test_subject', 'test', 'HbR cortex');
 
+activity_info_data = load(data_fns{2}, '-mat');
+activity = activity_info_data.activity_info;
 end
 
 

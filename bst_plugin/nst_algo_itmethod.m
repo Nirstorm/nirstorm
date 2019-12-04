@@ -1,4 +1,4 @@
-function [iterated_model]  = itmethod(model, update_variables, max_iterations, varargin) 
+function [iterated_model]  = nst_algo_itmethod(model, update_variables, max_iterations, varargin) 
 % itmethod - iterative method implementation that sequentially updates a
 % set of variables according to the given update rule and manage history 
 % tracking of variables and observables.
@@ -120,13 +120,13 @@ function [iterated_model]  = itmethod(model, update_variables, max_iterations, v
     %% Argument processing
     ip_ = inputParser;
     ip_.addRequired('model', @isstruct);
-    ip_.addRequired('update_variables', @isfunction);
+    ip_.addRequired('update_variables', @nst_misc_isfunction);
     ip_.addRequired('max_iterations', @isnumeric);
     ip_.addOptional('var_history_pace', 0, @isnumeric);
-    ip_.addOptional('compute_observables', @isfunction);
+    ip_.addOptional('compute_observables', @nst_misc_isfunction);
     ip_.addOptional('obs_cpt_start', 1, @isnumeric);
     ip_.addOptional('obs_history_pace', 0, @isnumeric);
-    ip_.addOptional('stop_criterion', @(w) 0, @isfunction);
+    ip_.addOptional('stop_criterion', @(w) 0, @nst_misc_isfunction);
     ip_.addOptional('not_to_track', {}, @iscell);
     ip_.parse(model, update_variables, max_iterations, varargin{:});
     model = ip_.Results.model;

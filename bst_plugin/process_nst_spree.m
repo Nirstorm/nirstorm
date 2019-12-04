@@ -18,12 +18,8 @@ function varargout = process_nst_spree( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2016-2017)
+% Authors: Thomas Vincent (2016-2019)
 %
-% ****************
-% WORK IN PROGRESS
-% ****************
-% dev nirs_dyna folder must be in path!
 %
 eval(macro_method);
 end
@@ -54,9 +50,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
     
-    sProcess.options.option_nb_iterations.Comment = 'Nb iterations';
-    sProcess.options.option_nb_iterations.Type    = 'value';
-    sProcess.options.option_nb_iterations.Value   = {2000, '', 0};
+    sProcess.options.nb_iterations.Comment = 'Nb iterations';
+    sProcess.options.nb_iterations.Type    = 'value';
+    sProcess.options.nb_iterations.Value   = {2000, '', 0};
     
     % Separator
     sProcess.options.separator.Type = 'separator';
@@ -73,6 +69,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.save_fit.Type    = 'checkbox';
     sProcess.options.save_fit.Value   =  0;
     
+    sProcess.options.save_full_fitted_model.Comment = 'Save all';
+    sProcess.options.save_full_fitted_model.Type    = 'checkbox';
+    sProcess.options.save_full_fitted_model.Hidden  = 1;
+    sProcess.options.save_full_fitted_model.Value   =  0;
+    
     %TODO: add option flag to rescale response to signal fit
     
 end
@@ -85,9 +86,7 @@ end
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
-
-    trim_start = sProcess.options.trim_start.Value{1};
-    
+   
     %% Select events
     % TODO: utests with all events found, no event selected, no available
     %       event in data, one event missing
@@ -98,11 +97,11 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
                                    'UniformOutput', 0);
 
     % Get option values   
-    nb_iterations   = sProcess.options.option_nb_iterations.Value{1};
+    nb_iterations   = sProcess.options.nb_iterations.Value{1};
     
     % export_response_figs = sProcess.options.option_do_export_response_figs.Value;
     
-    DataMat = in_bst_data(sInput.FileName);
+    DataMat = in_bst_data(sInputs(1).FileName);
 
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
@@ -123,7 +122,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     else
         surface_data = 0;
         % Get signals of NIRS channels only:
-        ChannelMat = in_bst_channel(sInput.ChannelFile);
+        ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
         Y = DataMat.F(nirs_ichans,:)';
     end
@@ -135,7 +134,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     elseif strcmp(DataMat.DisplayUnits, 'mmol.l-1')
         Y = Y * 1e3;
         DataMat.DisplayUnits = 'mumol.l-1';
-    else
+    elseif ~strcmp(DataMat.DisplayUnits, 'mumol.l-1')
         if ~isempty(DataMat.DisplayUnits)
             warning('Cannot interpret data unit: %s.', DataMat.DisplayUnits);
         else
@@ -157,7 +156,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % TODO: also handle single events for event-related design
     isExtended = false(1,length(ievents));
     for ievt=1:length(ievents)
-        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).samples, 1) == 2);
+        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).times, 1) == 2);
     end
     if ~all(isExtended)
          bst_error(sprintf('Simple events not supported: %s ', ...
@@ -166,8 +165,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     end
 
     response_duration = 30; % seconds
-    [responses, responses_std, response_time_axis, summary_stats] = ...
-        Compute(fnirs, time, selected_events, response_duration, nb_iterations); 
+    [responses, responses_std, response_time_axis, summary_stats, fmodel] = ...
+        Compute(Y, DataMat.Time, DataMat.Events(ievents), response_duration, nb_iterations); 
         
 %     if export_response_figs
 %         fig_prefix = [sInputs.SubjectName '_' sInputs.Condition '_'];
@@ -175,140 +174,60 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 %                        residuals, summary_stats, ChanneMat, fig_dir.Value{1}, fig_prefix);
 %     end
     
-    nb_channels = size(sDataIn.F, 1);
-    nb_response_samples = length(response_time_axis);
-    
-    responses_full = nan(nb_response_samples, nb_channels);
-    responses_full(:, to_treat) = responses;
-
-    responses_std_full = nan(nb_response_samples, nb_channels);
-    responses_std_full(:, to_treat) = responses_std;
-
-    sStudy = bst_get('Study', sInputs.iStudy); 
-    
-    % Save time-series data
-    %sDataOut = db_template('data');
-    sDataOut.F            = responses_full';
-    sDataOut.Comment      = [sDataIn.Comment ' | response'];
-    sDataOut.ChannelFlag  = to_treat; %ones(size(responses, 2), 1);
-    sDataOut.Time         = response_time_axis';
-    sDataOut.Device       = 'Brainstorm';
-    sDataOut.DataType     = 'recordings'; 
-    sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = 'micromol.l-1';
-    sDataOut.Std = responses_std_full';
-    sDataOut.ColormapType = [];
-    sDataOut.Events = [];
-
-    % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_deconv');
-    bst_save(OutputFile, sDataOut, 'v6');
-    % Register in database
-    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
-end
-
-function plot_responses(responses, responses_std, response_time_axis, ...
-                        residuals, summary_stats, channel_def, fig_dir, fig_prefix)
-IHBO = 1;
-IHBR = 2;
-hb_types = {'HbO', 'HbR'};
-peak_types = {'peak', 'undershoot'};
-
-               % HbO                  % HbR
-resid_colors = {[255 216 207] / 255,  [207 216 255] / 255};
-curve_colors = {[1, .2, 0],  [0, .2, 1]};
-
-hrf_ylims = [-30e-6 30e-6]; %TODO: auto tune %HACK
-t_axis = response_time_axis;
-
-[pair_names, chan_indexes] = get_pairs(channel_def);
-nb_pairs = length(pair_names);
-pctl = 5; % percentage
-npctls = round(1/pctl * 100);
-res_qtls = quantile(residuals, npctls);
-
-h = figure('Visible', 'off');
-bst_progress('start', 'Saving images...','Export figs of responses', 1, nb_pairs);
-for ipair=1:nb_pairs
-    bst_progress('inc',1);
-    clf(h); hold on;
-    % Plot curves
-    for ihb=1:length(hb_types)
-        ichan = chan_indexes(ipair, ihb);
-        curve_color = curve_colors{ihb};
-        plot(t_axis, responses(:, ichan), 'Color', curve_color, ...
-            'LineWidth', 2.5);
-        errorbar(t_axis(1:8:end), responses(1:8:end, ichan), ...
-            responses_std(1:8:end, ichan), 'Color', curve_color, ...
-            'LineWidth', 2.5, 'LineStyle', 'none');
+    output_prefix = [sInputs(1).Comment ' | Spree '];
+    extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
+    extra_output.spree_summary_stats = summary_stats;
+    if sProcess.options.save_full_fitted_model.Value
+        extra_output.spree_fmodel = fmodel;
     end
-    ylabel('\Delta [Hb]');
-    ylim(hrf_ylims);
-    
-    % Plot annotations
-    ylims = ylim();
-    dy = diff(ylims);
-    prev_taus = [];
-    for ipeak_type=1:length(peak_types)
-        plab = peak_types{ipeak_type};
-        for ihb=1:length(hb_types)
-            ichan = chan_indexes(ipair, ihb);
-            curve_color = curve_colors{ihb};
-            ipeak = summary_stats.(['i' plab])(ichan);
-            
-            tau_hat = summary_stats.(['tau_' plab '_hat'])(ichan);
-            line([tau_hat, tau_hat], ...
-                [ylims(1), responses(ipeak, ichan)], ...
-                'Linewidth', 2, 'Color',  curve_color, 'LineStyle', '--');
-            if any(abs(prev_taus - tau_hat) < 3)
-                txt_y = ylims(1) - (2 -1 +0.1) *dy*.07;
-            else
-                txt_y = ylims(1);
-            end
-            text(tau_hat, txt_y, ...
-                ['$$' num2str(tau_hat) '$$'], 'VerticalAlignment', 'top', ...
-                'HorizontalAlignment', 'center', 'fontsize', 18, ...
-                'Color', curve_color, 'interpreter', 'latex');
-            prev_taus = [prev_taus tau_hat];
-        end
-        set(gca, 'XTick', 0);
-        xlim([t_axis(1) t_axis(end)*1.1]);
-    end
-    
-    % Plot residual spread
-    for ihb=1:length(hb_types)
-        ichan = chan_indexes(ipair, ihb);
-        resid_color = resid_colors{ihb};
-        xlims = xlim();
-        rectangle('Position', [xlims(1) res_qtls(1, ichan) ...
-                               diff(xlims) res_qtls(end, ichan)-res_qtls(1, ichan)], ...
-                  'FaceColor', resid_color, 'Linestyle', 'none');
         
+    output_comment = [output_prefix ' result'];
+    if surface_data
+        [sStudy, ResultFile] = nst_bst_add_surf_data(responses', response_time_axis, [], 'surf_spree_res', output_comment, ...
+                                                     [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
+        OutputFile = ResultFile;
+    else
+    
+        nb_channels = length(ChannelMat.Channel);
+        nb_response_samples = length(response_time_axis);
+
+        responses_full = nan(nb_response_samples, nb_channels);
+        responses_full(:, nirs_ichans) = responses;
+
+        responses_std_full = nan(nb_response_samples, nb_channels);
+        responses_std_full(:, nirs_ichans) = responses_std;
+
+        sStudy = bst_get('Study', sInputs(1).iStudy); 
+
+        % Save time-series data
+        %sDataOut = db_template('data');
+        sDataOut.F            = responses_full';
+        sDataOut.Comment      = output_comment;
+        sDataOut.ChannelFlag  = DataMat.ChannelFlag; %ones(size(responses, 2), 1);
+        sDataOut.Time         = response_time_axis';
+        sDataOut.DataType     = 'recordings'; 
+        sDataOut.nAvg         = 1;
+        sDataOut.Std = responses_std_full';
+        sDataOut.ColormapType = [];
+        sDataOut.Events = [];
+
+        % Add extra fields
+        extra_fields = fieldnames(extra_output);
+        for ifield = 1:length(extra_fields)
+            sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+        end
+        
+        % Generate a new file name in the same folder
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),...
+                                 'data_spree');
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInputs(1).iStudy, OutputFile, sDataOut);
     end
-    hstack = get(gca, 'Children');
-    set(gca, 'Children', [hstack(3:end) ; hstack(1:2)]);
-    xlim([t_axis(1), t_axis(end)]);
-    
-    
-    fig_fn = fullfile(fig_dir, [fig_prefix 'deconv_responses_' ...
-                                pair_names{ipair} '.png']);
-    ax = get(h,'CurrentAxes');
-%     outerpos = ax.OuterPosition;
-%     ti = ax.TightInset;
-%     left = outerpos(1) + ti(1);
-%     bottom = outerpos(2) + ti(2);
-%     ax_width = outerpos(3) - ti(1) - ti(3);
-%     ax_height = outerpos(4) - ti(2) - ti(4);
-%     ax.Position = [left bottom-ax_height*0.1 ax_width ax_height*1.1];
-    print(fig_fn, '-dpng', '-r300');
-    
-    
-end
-bst_progress('stop');
-close(h);
+    OutputFile = {OutputFile};
 end
 
-function [responses, responses_pstd, response_time_axis, summary_stats] = ...
+function [responses, responses_pstd, response_time_axis, summary_stats, fitted_model] = ...
     Compute(nirs_sig, time, events, response_duration, nb_iterations)
 %% Apply 
 % Args
@@ -343,15 +262,21 @@ end
 
 nirs.data = nirs_sig;
 nirs.time = time;
-for ievt=1:length(events)
-    nirs.paradigm.conditions{ievt} = events(ievt).label;
-    nirs.paradigm.onsets{ievt} = events(ievt).times(1,:);
-    if size(events(ievt).times, 1) == 2 % extended events
-        nirs.paradigm.durations{ievt} = diff(events(ievt).times, 1);
-    else % simple events -> assume brief stimuli
-        nirs.paradigm.durations{ievt} = diff(time(1:2));
-    end
+
+if length(events) > 1
+    warning('Only one condition is handled. Taking only 1st one');
 end
+
+nirs.events = events(1);
+% for ievt=1:length(events)
+%     nirs.paradigm.conditions{ievt} = events(ievt).label;
+%     nirs.paradigm.onsets{ievt} = events(ievt).times(1,:);
+%     if size(events(ievt).times, 1) == 2 % extended events
+%         nirs.paradigm.durations{ievt} = diff(events(ievt).times, 1);
+%     else % simple events -> assume brief stimuli
+%         nirs.paradigm.durations{ievt} = diff(time(1:2));
+%     end
+% end
 
 %% Setup model
 model = spree_splhblf_init_default(); 
@@ -381,7 +306,7 @@ fitted_model = spree_splhblf_fit(model);
 %% Outputs
 responses = fitted_model.observables.response_block_pm;
 responses_pstd = fitted_model.observables.response_block_pstd;
-response_time_axis = constants.response_block_time_axis;
+response_time_axis = fitted_model.constants.response_block_time_axis;
 summary_stats = fitted_model.summary;
 end
 

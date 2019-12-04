@@ -1,3 +1,7 @@
+nst_misc_isfunction.m
+nst_misc_unmirror_sig_bounds.m
+nst_misc_mirror_sig_bounds.m
+nst_math_build_basis_dct.m
 nst_algo_itmethod.m
 spree_set_estimation.m
 spree_splhblf_init_default.m

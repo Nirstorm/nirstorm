@@ -165,13 +165,13 @@ if model.variables_to_estimate.trend_coeffs
         post_var = 1 / (1 / model.variables.trend_var + ...
             1 / model.variables.noise_var(ic));
         post_mean = post_var .* ...
-            model.constants.Tt * mirror_sig_bounds(model.tmp.part_res_trend(:, ic), model.constants.npb_mirror_trend_fix) ./ ...
+            model.constants.Tt * nst_misc_mirror_sig_bounds(model.tmp.part_res_trend(:, ic), model.constants.npb_mirror_trend_fix) ./ ...
             model.variables.noise_var(ic);
         model.variables.trend_coeffs(:, ic) = ...
             randn(size(model.constants.T, 2),1) * sqrt(post_var) + ...
             post_mean;
         model.variables.trend(:, ic) = ...
-            unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs(:, ic), model.constants.npb_mirror_trend_fix);
+            nst_misc_unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs(:, ic), model.constants.npb_mirror_trend_fix);
     else % All channels at once (faster)
         if ~model.options.use_true_trend
             model.tmp.part_res_trend = ...
@@ -182,13 +182,13 @@ if model.variables_to_estimate.trend_coeffs
         end
         post_var = 1 ./ (1 / model.variables.trend_var + ...
                          1 ./ model.variables.noise_var);
-        unscaled_post_mean = model.constants.Tt * mirror_sig_bounds(model.tmp.part_res_trend, model.constants.npb_mirror_trend_fix);
+        unscaled_post_mean = model.constants.Tt * nst_misc_mirror_sig_bounds(model.tmp.part_res_trend, model.constants.npb_mirror_trend_fix);
         post_mean = repmat(post_var ./ model.variables.noise_var, size(unscaled_post_mean,1), 1) .* unscaled_post_mean;
         model.variables.trend_coeffs = ...
             randn(size(model.constants.T, 2), model.constants.n_channels) .* sqrt(post_var) + ...
             post_mean;
         model.variables.trend = ...
-            unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs, model.constants.npb_mirror_trend_fix);
+            nst_misc_unmirror_sig_bounds(model.constants.T * model.variables.trend_coeffs, model.constants.npb_mirror_trend_fix);
     end
 end
 
@@ -275,7 +275,7 @@ for ic=1:size(fmodel.signal_fit, 2)
     fmodel.stim_induced_fit(:,ic) = fmodel.constants.X * ...
         fmodel.observables.response_pm(:, ic);
     if ~isfield(fmodel.observables, 'trend_pm')
-        trend = unmirror_sig_bounds(fmodel.constants.T * fmodel.observables.trend_coeffs_pm(:, ic), ...
+        trend = nst_misc_unmirror_sig_bounds(fmodel.constants.T * fmodel.observables.trend_coeffs_pm(:, ic), ...
             fmodel.constants.npb_mirror_trend_fix);
     else
         trend = fmodel.observables.trend_pm;
@@ -299,7 +299,7 @@ fmodel.summary.a_max_pm = fmodel.observables.response_max_pm; % \hat{\ab}_max
 fmodel.summary.a_min_pm = fmodel.observables.response_min_pm; % \hat{\ab}_min
 a_max_smpls = fmodel.vars_history.response_max(bup:end, :); % p(\ab_max | y)
 a_min_smpls = fmodel.vars_history.response_min(bup:end, :); % p(\ab_min | y)
-t_a_max_smpls = fmodel.vars_history.response_time_to_peak(bup:end, 1, :);
+t_a_max_smpls = fmodel.vars_history.response_time_to_peak(bup:end, :);
 t_a_min_smpls = fmodel.vars_history.response_time_to_undershoot(bup:end, :);
 
 f_smpls = fmodel.vars_history.response(bup:end, :, :);
