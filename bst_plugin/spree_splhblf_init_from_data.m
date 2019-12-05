@@ -114,11 +114,12 @@ elseif isfield(nirs, 'events')
     end
     
 end
-block_duration = diff(nirs.events(1).times(:,1)) + model.constants.response_time_axis(end);
+block_stim_duration = diff(nirs.events(1).times(:,1));
+block_duration = block_stim_duration + model.constants.response_time_axis(end);
 dummy_block_event = db_template('event');
-dummy_block_event.times = [0;block_duration];
+dummy_block_event.times = [0;block_stim_duration];
 model.constants.X_block = nst_make_event_toeplitz_mtx(dummy_block_event, ...
-                                                      0:dt:(dummy_block_event.times(2,1)), ...
+                                                      0:dt:block_duration, ...
                                                       model.constants.response_nb_coeffs);
 model.constants.X_block = model.constants.X_block{1};
 model.constants.response_block_time_axis = (1:size(model.constants.X_block,1))' * dt;

@@ -31,12 +31,34 @@ classdef SpreeTest < matlab.unittest.TestCase
             %                 that are activating for this condition
             [nirs_chan_fn, nirs_cortex_hbo, nirs_cortex_hbr, activity] = load_activity_test_subject();
 
+            
+            if 1
+                % Requires figtk
+                fig_options.DefaultFigureVisible = 'on';
+                fig_options.fig_height = 5;
+                fig_options.fig_width = 6;
+                fig_options.DefaultAxesFontSize = 22;
+                fig_options.DefaultTextFontSize = 22;
+                figtk_setup(fig_options);
+                
+                output_fig_dir = '/tmp/nst_spree_utest/';
+            else
+                output_fig_dir = '';
+            end
+            
             spree_result_chan = bst_process('CallProcess', 'process_nst_spree', nirs_chan_fn, [], ...
-                                            'stim_events', strjoin({activity.condition_name}, ','), ...
+                                            'stim_events', 'stim2', ...
                                             'nb_iterations', 200, ...
+                                            'save_fit', 1, ...,
+                                            'output_fig_dir', output_fig_dir, ...
                                             'save_full_fitted_model', 1);
-            check_response_estimation(spree_result_chan)                                
+                         
+            % Only check S1D1
+            check_response_estimation(spree_result_chan);                                
             check_chan_activity_detection(spree_result_chan.activ_chans, activity);
+            
+            % Only check S2D2
+            
             
             spree_result_cortex_hbo = bst_process('CallProcess', 'process_nst_spree', ...
                                                   nirs_cortex_hbo, [], ...
@@ -76,7 +98,6 @@ cortex_hbr = nst_get_bst_func_files('test_subject', 'test', 'HbR cortex');
 activity_info_data = load(data_fns{2}, '-mat');
 activity = activity_info_data.activity_info;
 end
-
 
 function check_chan_activity_detection()
 
