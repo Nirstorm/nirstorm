@@ -93,22 +93,21 @@ if model.variables_to_estimate.f1
         end
 
     end
-    [peak_val, ittp] = max(model.variables.response(:, ic));
-    ttp = model.constants.response_time_axis(ittp);
+    
+    model.variables.response = model.constants.P1 * model.variables.f1;
+    model.variables.response_block = model.constants.X_block * model.variables.response;
+    
+    [model.variables.response_max, ittp] = max(model.variables.response);
+    model.variables.response_time_to_peak = model.constants.response_time_axis(ittp);
     
     %         edge_tol = 1; %2*model.constants.dt; %TODO: expose as parameter
     %         if ttp <= edge_tol || ttp >= model.constants.response_time_axis(end) - edge_tol
     %             ttp = model.constants.response_time_axis(end);
     %             peak_val = 0;
     %         end
-    model.variables.response_time_to_peak(ic) = ttp;
-    model.variables.response_max(ic) = peak_val;
     
-    [undershoot_val, ittu] = min(model.variables.response(:, ic));
-    model.variables.response_min(ic) = undershoot_val;
-    model.variables.response_time_to_undershoot(ic) = model.constants.response_time_axis(ittu);
-    model.variables.response = model.constants.P1 * model.variables.f1;
-    model.variables.response_block = model.constants.X_block * model.variables.response;
+    [model.variables.response_min, ittu] = min(model.variables.response);
+    model.variables.response_time_to_undershoot = model.constants.response_time_axis(ittu);
 end
 
 % f1 variance

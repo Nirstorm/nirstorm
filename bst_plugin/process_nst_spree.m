@@ -60,16 +60,24 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.output_cmt.Comment = '<B>Extra outputs</B>:';
     sProcess.options.output_cmt.Type    = 'label';
-        
-    sProcess.options.save_betas.Comment = 'Effect maps';
-    sProcess.options.save_betas.Type    = 'checkbox';
-    sProcess.options.save_betas.Value   =  0;
+
+    sProcess.options.save_evoked_response.Comment = 'Evoked responses';
+    sProcess.options.save_evoked_response.Type    = 'checkbox';
+    sProcess.options.save_evoked_response.Value   =  0;
+    
+    sProcess.options.save_effect.Comment = 'Effects map';
+    sProcess.options.save_effect.Type    = 'checkbox';
+    sProcess.options.save_effect.Value   =  0;
+
+    sProcess.options.save_ppm.Comment = 'Posterior probability maps';
+    sProcess.options.save_ppm.Type    = 'checkbox';
+    sProcess.options.save_ppm.Value   =  0;
     
     sProcess.options.save_fit.Comment = 'Fit';
     sProcess.options.save_fit.Type    = 'checkbox';
     sProcess.options.save_fit.Value   =  0;
     
-    sProcess.options.save_full_fitted_model.Comment = 'Save all';
+    sProcess.options.save_full_fitted_model.Comment = 'Save full fitted model';
     sProcess.options.save_full_fitted_model.Type    = 'checkbox';
     sProcess.options.save_full_fitted_model.Hidden  = 1;
     sProcess.options.save_full_fitted_model.Value   =  0;
@@ -91,9 +99,6 @@ end
 
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
-    
-    save_fit = sProcess.options.save_fit.Value;
-
        
     %% Select events
     % TODO: utests with all events found, no event selected, no available
@@ -173,71 +178,135 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     end
 
     response_duration = 30; % seconds
-    [responses, responses_std, response_time_axis, summary_stats, fmodel] = ...
-        Compute(Y, DataMat.Time, DataMat.Events(ievents), response_duration, nb_iterations); 
-        
-%     if export_response_figs
-%         fig_prefix = [sInputs.SubjectName '_' sInputs.Condition '_'];
-%         plot_responses(responses, responses_std, response_time_axis, ...
-%                        residuals, summary_stats, ChanneMat, fig_dir.Value{1}, fig_prefix);
-%     end
-    
+    fmodel = Compute(Y, DataMat.Time, DataMat.Events(ievents), response_duration, nb_iterations); 
+           
     output_prefix = [sInputs(1).Comment ' | Spree '];
+    
+    extra_output = struct();
     extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
-    extra_output.spree_summary_stats = summary_stats;
     if sProcess.options.save_full_fitted_model.Value
         extra_output.spree_fmodel = fmodel;
-    end
-        
+    end    
+    
     output_comment = [output_prefix ' result'];
     if surface_data
-        [sStudy, ResultFile] = nst_bst_add_surf_data(responses', response_time_axis, [], 'surf_spree_res', output_comment, ...
+        [sStudy, ResultFile] = nst_bst_add_surf_data(fmodel.observables.response_pm', ...
+                                                     fmodel.constants.response_time_axis, [], ...
+                                                     'surf_spree_res', output_comment, ...
                                                      [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
         OutputFile = ResultFile;
-    else
-    
+    else     
         nb_channels = length(ChannelMat.Channel);
-        nb_response_samples = length(response_time_axis);
+        nb_response_samples = length(fmodel.constants.response_time_axis);
 
-        responses_full = nan(nb_response_samples, nb_channels);
-        responses_full(:, nirs_ichans) = responses;
+        response_impulse = nan(nb_response_samples, nb_channels);
+        response_impulse(:, nirs_ichans) = fmodel.observables.response_pm;
 
-        responses_std_full = nan(nb_response_samples, nb_channels);
-        responses_std_full(:, nirs_ichans) = responses_std;
+        response_impulse_std = nan(nb_response_samples, nb_channels);
+        response_impulse_std(:, nirs_ichans) = fmodel.observables.response_pstd;
 
         sStudy = bst_get('Study', sInputs(1).iStudy); 
 
-        % Save time-series data
-        %sDataOut = db_template('data');
-        sDataOut.F            = responses_full';
-        sDataOut.Comment      = output_comment;
-        sDataOut.ChannelFlag  = DataMat.ChannelFlag; %ones(size(responses, 2), 1);
-        sDataOut.Time         = response_time_axis';
-        sDataOut.DataType     = 'recordings'; 
-        sDataOut.nAvg         = 1;
-        sDataOut.Std = responses_std_full';
-        sDataOut.ColormapType = [];
-        sDataOut.Events = [];
+        OutputFile = save_chan_output(response_impulse', response_impulse_std', ...
+                                      fmodel.constants.response_time_axis', ...
+                                      'data_spree', output_comment, DataMat, ... 
+                                      sStudy, sInputs(1).iStudy, extra_output);
+                                   
+                                   
+%         % Save time-series data
+%         %sDataOut = db_template('data');
+%         sDataOut.F            = responses_full';
+%         sDataOut.Comment      = output_comment;
+%         sDataOut.ChannelFlag  = DataMat.ChannelFlag; %ones(size(responses, 2), 1);
+%         sDataOut.Time         = response_time_axis';
+%         sDataOut.DataType     = 'recordings'; 
+%         sDataOut.nAvg         = 1;
+%         sDataOut.Std = responses_std_full';
+%         sDataOut.ColormapType = [];
+%         sDataOut.Events = [];
+% 
+%         % Add extra fields
+%         extra_fields = fieldnames(extra_output);
+%         for ifield = 1:length(extra_fields)
+%             sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+%         end
+%         
+%         % Generate a new file name in the same folder
+%         OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),...
+%                                  'data_spree');
+%         bst_save(OutputFile, sDataOut, 'v7');
+%         % Register in database
+%         db_add_data(sInputs(1).iStudy, OutputFile, sDataOut);
+    end
 
-        % Add extra fields
-        extra_fields = fieldnames(extra_output);
-        for ifield = 1:length(extra_fields)
-            sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
-        end
+
+    if sProcess.options.save_evoked_response.Value
+        output_comment = [output_prefix '- evoked response'];
+        extra_output = struct();
+        extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
+        if surface_data
+            [sStudy, ResultFile] = nst_bst_add_surf_data(fmodel.observables.response_block_pm', response_time_axis, [], 'surf_spree_res', output_comment, ...
+                                                         [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
+            OutputFile = ResultFile;
+        else     
+            nb_channels = length(ChannelMat.Channel);
+            nb_response_samples = length(fmodel.constants.response_block_time_axis);
+
+            response_block = nan(nb_response_samples, nb_channels);
+            response_block(:, nirs_ichans) = fmodel.observables.response_block_pm;
+
+            response_block_std = nan(nb_response_samples, nb_channels);
+            response_block_std(:, nirs_ichans) = fmodel.observables.response_block_pstd;
+
+            sStudy = bst_get('Study', sInputs(1).iStudy); 
+
+            OutputFile = save_chan_output(response_block', response_block_std', fmodel.constants.response_block_time_axis', ...
+                                          'data_spree', output_comment, DataMat, ... 
+                                           sStudy, sInputs(1).iStudy, extra_output);
+        end        
+    end
+ 
+   
+    if sProcess.options.save_effect.Value
+        output_comment = [output_prefix '- effects'];
+        extra_output = struct();
+        extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
+        if surface_data
+            [sStudy, ResultFile] = nst_bst_add_surf_data(fmodel.observables.response_block_pm', response_time_axis, [], 'surf_spree_res', output_comment, ...
+                                                         [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
+            OutputFile = ResultFile;
+        else     
+            nb_channels = length(ChannelMat.Channel);
+
+            effects = nan(1, nb_channels);
+            all_effects = [fmodel.observables.response_max_pm ; fmodel.observables.response_min_pm];
+            all_effects_std = [fmodel.observables.response_max_pstd ; fmodel.observables.response_min_pstd];
+            [vv, ii] = max(abs(all_effects));
+            sign = ii;
+            sign(sign==2) = -1;
+            effects(:, nirs_ichans) = vv .* sign;
+
+            effects_std = nan(1, nb_channels);
+            for ichan=1:nb_channels
+                effects_std(:, ichan) = all_effects_std(ii(ichan), ichan);
+            end
+            
+            sStudy = bst_get('Study', sInputs(1).iStudy); 
+
+            OutputFile = save_chan_output(effects', [], [1], ...
+                                          'data_spree', output_comment, DataMat, ... 
+                                           sStudy, sInputs(1).iStudy, extra_output);
+        end        
         
-        % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),...
-                                 'data_spree');
-        bst_save(OutputFile, sDataOut, 'v7');
-        % Register in database
-        db_add_data(sInputs(1).iStudy, OutputFile, sDataOut);
-        
-        
-        
-        ChannelMat
     end
     
-    if save_fit
+    if sProcess.options.save_ppm.Value
+        output_comment = [output_prefix '- PPM activation'];
+        
+        output_comment = [output_prefix '- PPM deactivation'];
+    end
+    
+    if sProcess.options.save_fit.Value
         fit = fmodel.signal_fit;
         output_tag = sprintf('ir%d_spree_signal_fit', sInputs(1).iItem);
         output_comment = [output_prefix '- signal fit'];
@@ -247,22 +316,25 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         else
             data_out = zeros(size(DataMat.F));
             data_out(nirs_ichans, :) = fit';
-            Out_DataMat = db_template('data');
-            Out_DataMat.F           = data_out;
-            Out_DataMat.Comment     = output_comment;
-            Out_DataMat.DataType     = 'recordings';
-            Out_DataMat.Time        =  DataMat.Time;
-            Out_DataMat.Events      =  DataMat.Events;
-            Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
-            Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
-            Out_DataMat.nAvg         = 1;
-            
-            Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
-            Out_DataMat = bst_history('add', Out_DataMat, 'Spree', FormatComment(sProcess));
-            fit_fn = bst_process('GetNewFilename', fileparts(sInputs(1).FileName), 'data_spree_fit');
-            Out_DataMat.FileName = file_short(fit_fn);
-            bst_save(fit_fn, Out_DataMat, 'v7');
-            db_add_data(sInputs(1).iStudy, fit_fn, Out_DataMat);
+            save_chan_output(data_out, [], DataMat.Time, 'data_spree_fit', output_comment, DataMat, ... 
+                             sStudy, sInputs(1).iStudy, extra_output, DataMat.Events);
+                        
+%             Out_DataMat = db_template('data');
+%             Out_DataMat.F           = data_out;
+%             Out_DataMat.Comment     = output_comment;
+%             Out_DataMat.DataType     = 'recordings';
+%             Out_DataMat.Time        =  DataMat.Time;
+%             Out_DataMat.Events      =  DataMat.Events;
+%             Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
+%             Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
+%             Out_DataMat.nAvg         = 1;
+%             
+%             Out_DataMat = bst_history('add', Out_DataMat, DataMat.History, '');
+%             Out_DataMat = bst_history('add', Out_DataMat, 'Spree', FormatComment(sProcess));
+%             fit_fn = bst_process('GetNewFilename', fileparts(sInputs(1).FileName), 'data_spree_fit');
+%             Out_DataMat.FileName = file_short(fit_fn);
+%             bst_save(fit_fn, Out_DataMat, 'v7');
+%             db_add_data(sInputs(1).iStudy, fit_fn, Out_DataMat);
         end        
     end
     
@@ -279,8 +351,43 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFile = {OutputFile};
 end
 
-function [responses, responses_pstd, response_time_axis, summary_stats, fitted_model] = ...
-    Compute(nirs_sig, time, events, response_duration, nb_iterations)
+
+function OutputFile = save_chan_output(data, data_std, time_axis, data_tag, comment, DataMat, ... 
+                                       sStudy, iStudy, extra_output, events)
+                                   
+    if nargin < 10
+        events = [];
+    end
+    
+    % Save time-series data
+    %sDataOut = db_template('data');
+    sDataOut.F            = data;
+    sDataOut.Comment      = comment;
+    sDataOut.ChannelFlag  = DataMat.ChannelFlag; 
+    sDataOut.Time         = time_axis;
+    sDataOut.DataType     = 'recordings'; 
+    sDataOut.nAvg         = 1;
+    sDataOut.Std = data_std;
+    sDataOut.ColormapType = [];
+    sDataOut.Events = events;
+
+    % Add extra fields
+    extra_fields = fieldnames(extra_output);
+    for ifield = 1:length(extra_fields)
+        sDataOut.(extra_fields{ifield}) = extra_output.(extra_fields{ifield});
+    end
+
+    % Generate a new file name in the same folder
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),...
+                             data_tag);
+    sDataOut.FileName = file_short(OutputFile);
+    bst_save(OutputFile, sDataOut, 'v7');
+    % Register in database
+    db_add_data(iStudy, OutputFile, sDataOut);
+end
+
+
+function fitted_model = Compute(nirs_sig, time, events, response_duration, nb_iterations)
 %% Apply 
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
@@ -292,21 +399,21 @@ function [responses, responses_pstd, response_time_axis, summary_stats, fitted_m
 %      Response duration in second.
 %    [- nb_iterations ]: positive double, default is 50
 % 
-% Output: 
-%   - responses: matrix of double, size: nb_samples x nb_channels
-%     Responses in delta [HbO/R/T] in micromol.L-1.cm-1.
-%     These are "block" responses, ie the convolution of the average stimulus with the HRFs. 
-%     This is to have a more meaningful scale that the HRF which associated 
-%     with a Dirac stimulus event.
-%   - responses_std: matrix of double, size: nb_samples x nb_channels
-%     Response standard deviations in delta [HbO/R/T] in micromol.L-1.cm-1 
-%   - response_time_axis: 1d array of double
-%   - summary_stats: struct with fields:
-%         * activating_positions
-%         * + PPM stats
-%         * time_to_peak
-%         * time_to_peak_std
-%     
+% Output:
+%   - fitted_model (struct), main fields:
+%        * observables.response_block_pm: matrix of double, size: nb_samples x nb_channels
+%             Responses in delta [HbO/R/T] in micromol.L-1.cm-1.
+%             These are "block" responses, ie the convolution of the average stimulus with the HRFs. 
+%             This is to have a more meaningful scale that the HRF which associated 
+%             with a Dirac stimulus event.
+%        * responses_std: matrix of double, size: nb_samples x nb_channels
+%             Response standard deviations in delta [HbO/R/T] in micromol.L-1.cm-1 
+%        * response_time_axis: 1d array of double
+%        * summary_stats: struct with fields:
+%             * activating_positions
+%             * + PPM stats
+%             * time_to_peak
+%             * time_to_peak_std
 
 if nargin < 5
     nb_iterations = 50;
@@ -355,11 +462,6 @@ model.burnin_period = round(model.max_iterations/3);
 %% Fit model
 fitted_model = spree_splhblf_fit(model);
 
-%% Outputs
-responses = fitted_model.observables.response_block_pm;
-responses_pstd = fitted_model.observables.response_block_pstd;
-response_time_axis = fitted_model.constants.response_block_time_axis;
-summary_stats = fitted_model.summary;
 end
 
 
@@ -673,11 +775,20 @@ peak_ic = prctile(peak_samples, percentiles);
 if var(peak_ttp_samples) > eps && var(peak_samples) > eps
     resp_max = max(max(model.vars_history.response(warm_idx, :, ichan))) * 1.01;
     resp_min = min(min(model.vars_history.response(warm_idx, :, ichan))) * 1.01;
-    [f, xi] = ksdensity([peak_ttp_samples peak_samples], ...
-                        'support', [model.constants.response_time_axis(1)-eps resp_min; ...
-                                    model.constants.response_time_axis(end)+eps resp_max]);
-    plot_contour_ksdensity(xi, f, cmap_density);
-
+    try
+        support = [model.constants.response_time_axis(1)-eps resp_min; ...
+                                    model.constants.response_time_axis(end)+eps resp_max];
+        [f, xi] = ksdensity([peak_ttp_samples peak_samples], ...
+                            'support', support);
+        plot_contour_ksdensity(xi, f, cmap_density);
+    catch ME
+        if strcmp(ME.identifier, 'stats:ksdensity:BadSupport2')
+            warning('cannot plot TTP density - bad support:');
+            disp(support);
+        else
+            rethrow(ME);
+        end
+    end
     ylims = ylim();
     ylim([min(ylims(1), peak_ic(1)), max(ylims(2), peak_ic(2))]); 
 end
