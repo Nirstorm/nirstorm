@@ -42,7 +42,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
-    sProcess.options.stim_events.Comment = 'Stimulation events: ';
+    sProcess.options.stim_events.Comment = 'Stimulation event: ';
     sProcess.options.stim_events.Type    = 'text';
     sProcess.options.stim_events.Value   = '';
         
@@ -63,7 +63,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 
     sProcess.options.save_evoked_response.Comment = 'Evoked responses';
     sProcess.options.save_evoked_response.Type    = 'checkbox';
-    sProcess.options.save_evoked_response.Value   =  0;
+    sProcess.options.save_evoked_response.Value   =  1;
     
     sProcess.options.save_effect.Comment = 'Effects map';
     sProcess.options.save_effect.Type    = 'checkbox';
@@ -177,7 +177,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
          return;
     end
 
-    response_duration = 30; % seconds
+    response_duration = 36; % seconds
     fmodel = Compute(Y, DataMat.Time, DataMat.Events(ievents), response_duration, nb_iterations); 
            
     output_prefix = [sInputs(1).Comment ' | Spree '];
@@ -271,39 +271,42 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         output_comment = [output_prefix '- effects'];
         extra_output = struct();
         extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
-        if surface_data
-            [sStudy, ResultFile] = nst_bst_add_surf_data(fmodel.observables.response_block_pm', response_time_axis, [], 'surf_spree_res', output_comment, ...
-                                                         [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
-            OutputFile = ResultFile;
-        else     
-            nb_channels = length(ChannelMat.Channel);
-
-            effects = nan(1, nb_channels);
-            all_effects = [fmodel.observables.response_max_pm ; fmodel.observables.response_min_pm];
-            all_effects_std = [fmodel.observables.response_max_pstd ; fmodel.observables.response_min_pstd];
-            [vv, ii] = max(abs(all_effects));
-            sign = ii;
-            sign(sign==2) = -1;
-            effects(:, nirs_ichans) = vv .* sign;
-
-            effects_std = nan(1, nb_channels);
-            for ichan=1:nb_channels
-                effects_std(:, ichan) = all_effects_std(ii(ichan), ichan);
-            end
-            
-            sStudy = bst_get('Study', sInputs(1).iStudy); 
-
-            OutputFile = save_chan_output(effects', [], [1], ...
-                                          'data_spree', output_comment, DataMat, ... 
-                                           sStudy, sInputs(1).iStudy, extra_output);
-        end        
         
+        warning('Effects output not implemented');
+        
+        if 0
+            if surface_data
+                [sStudy, ResultFile] = nst_bst_add_surf_data(fmodel.observables.response_block_pm', response_time_axis, [], 'surf_spree_res', output_comment, ...
+                                                             [], sStudy, 'Spree', DataMat.SurfaceFile, 0, extra_output);
+                OutputFile = ResultFile;
+            else     
+                nb_channels = length(ChannelMat.Channel);
+
+                effects = nan(1, nb_channels);
+                all_effects = [fmodel.observables.response_max_pm ; fmodel.observables.response_min_pm];
+                all_effects_std = [fmodel.observables.response_max_pstd ; fmodel.observables.response_min_pstd];
+                [vv, ii] = max(abs(all_effects));
+                sign = ii;
+                sign(sign==2) = -1;
+                effects(:, nirs_ichans) = vv .* sign;
+
+                effects_std = nan(1, nb_channels);
+                for ichan=1:nb_channels
+                    effects_std(:, ichan) = all_effects_std(ii(ichan), ichan);
+                end
+
+                sStudy = bst_get('Study', sInputs(1).iStudy); 
+
+                OutputFile = save_chan_output(effects', [], [1], ...
+                                              'data_spree', output_comment, DataMat, ... 
+                                               sStudy, sInputs(1).iStudy, extra_output);
+            end
+        end
     end
     
     if sProcess.options.save_ppm.Value
-        output_comment = [output_prefix '- PPM activation'];
-        
-        output_comment = [output_prefix '- PPM deactivation'];
+        output_comment = [output_prefix '- PPM'];
+        warning('PPM output not implemented');
     end
     
     if sProcess.options.save_fit.Value
@@ -441,7 +444,7 @@ nirs.events = events(1);
 model = spree_splhblf_init_default(); 
 model.options.trend_type = 'cosine';
 model.options.trend_bands(1).name = 'baseline';
-model.options.trend_bands(1).bounds = [0 1/response_duration]; %[0 0.01]; % .[0 0.0225]
+model.options.trend_bands(1).bounds = [0 0.01]; %[0 0.01]; % .[0 0.0225]
 model.options.trend_bands(2).name = 'respiration';
 model.options.trend_bands(2).bounds = [1/5 1/3];
 model.options.trend_bands(3).name = 'heart';
@@ -450,7 +453,7 @@ model.options.npb_mirror_trend_fix = 150; %nb  samples to mirror at boundaries
 
 model.options.knots_type = 'regular';
 model.options.response_duration = 30;
-model.options.regular_knots_dt = 5;
+model.options.regular_knots_dt = 6;
 model.options.bandpass_residuals = [];
 model = spree_set_estimation(model, {'f1', 'noise_var', 'f1_var', 'response', 'trend_coeffs', 'trend_var'}); % model_set_estimation
 model.max_iterations = nb_iterations;
