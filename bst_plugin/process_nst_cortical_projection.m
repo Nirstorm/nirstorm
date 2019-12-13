@@ -45,6 +45,10 @@ choices = methods();
 sProcess.options.method.Value   = {choices.Sensitivity_based_interpolation, ...
                                    fieldnames(choices)};
 
+sProcess.options.min_separation_cm.Comment = 'Minimum separation';
+sProcess.options.min_separation_cm.Type    = 'value';
+sProcess.options.min_separation_cm.Value   = {-1, 'cm', 2};                     
+                               
 sProcess.options.compute_hbt.Comment = 'Compute HbT';
 sProcess.options.compute_hbt.Type    = 'checkbox';
 sProcess.options.compute_hbt.Value   =  0;                        
@@ -90,6 +94,8 @@ if ndims(head_model.Gain) ~= 3
     return;
 end
 
+min_separation_m = sProcess.options.min_separation_cm.Value{1} / 100;
+
 % Load recordings
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
@@ -100,11 +106,18 @@ end
 % Select valid NIRS channels
 
 montage_info = nst_montage_info_from_bst_channels(ChanneMat.Channel, sDataIn.ChannelFlag);
-nirs_sig_wl1 = sDataIn.F(montage_info.pair_ichans(:,1),:);
-nirs_sig_wl2 = sDataIn.F(montage_info.pair_ichans(:,2),:);
+separations_by_pairs = process_nst_separations('Compute', ChanneMat.Channel, montage_info.pair_sd_indexes);
+if min_separation_m > 0
+    selected_pairs = separations_by_pairs >= min_separation_m;
+else
+    selected_pairs = true(size(montage_info.pair_ichans, 1), 1);
+end
+nirs_sig_wl1 = sDataIn.F(montage_info.pair_ichans(selected_pairs,1),:);
+nirs_sig_wl2 = sDataIn.F(montage_info.pair_ichans(selected_pairs,2),:);
 nb_samples = size(sDataIn.F, 2);
 
-sensitivity_surf = process_nst_import_head_model('get_sensitivity_from_chans', head_model, montage_info.pair_names);
+sensitivity_surf = process_nst_import_head_model('get_sensitivity_from_chans', head_model, ...
+                                                 montage_info.pair_names(selected_pairs));
     
 % nb_wavelengths x [HbO, HbR]
 % cm^-1.l.mol^-1

@@ -150,6 +150,7 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 %   -> store analysis date 
 %   -> compare dates before running analysis, redo if analysis date < marking date
 %   -> for now, must be handled by the user.
+% - TOFIX if channel definition changes -> saved channel tagging may become inconsistent
 % - handle when no contrast defined
 % - options documentation
 % - wiki page
@@ -596,7 +597,9 @@ if redo_parent
                 'option_remove_negative', 1, ...
                 'option_invalidate_paired_channels', 1, ...
                 'option_max_sat_prop', options.tag_bad_channels.max_prop_sat_ceil, ...
-                'option_min_sat_prop', options.tag_bad_channels.max_prop_sat_floor);
+                'option_min_sat_prop', options.tag_bad_channels.max_prop_sat_floor, ...
+                'option_max_separation', options.tag_bad_channels.max_separation_cm, ...
+                'option_min_separation', options.tag_bad_channels.min_separation_cm);
 end
 % Convert to delta OD
 redo_parent = redo_parent | options.dOD.redo;
@@ -631,6 +634,7 @@ end
 [sFilesHbProj, redo_parent] = nst_run_bst_proc(proj_outputs,  redo_parent, ... 
                                                 'process_nst_cortical_projection', sFile_dOD_filtered, [], ...
                                                 'method', proj_method, ...
+                                                'min_separation_cm', options.projection.min_separation_cm, ...
                                                 'compute_hbt', options.projection.compute_hbt, ...
                                                 'sparse_storage', options.projection.sparse_storage);
 
@@ -866,6 +870,8 @@ options.high_pass_filter.low_cutoff = 0.01; %Hz
 options.tag_bad_channels.redo = 0;
 options.tag_bad_channels.max_prop_sat_ceil = 1; % no tagging
 options.tag_bad_channels.max_prop_sat_floor = 1; % no tagging
+options.tag_bad_channels.max_separation_cm = -1; % no tagging
+options.tag_bad_channels.min_separation_cm = -1; % no tagging
 
 options.projection.redo = 0;
 proj_methods = process_nst_cortical_projection('methods');
@@ -943,6 +949,7 @@ for ifile=1:length(nirs_fns)
         subject_name = subject_names{ifile};
     end
     condition = ['origin' get_ppl_tag()];
+    
     [file_in, redone] = nst_run_bst_proc([subject_name '/' condition '/Raw'], options.import.redo, ...
                                            'process_import_data_time', [], [], ...
                                            'subjectname',  subject_name, ...
@@ -1002,16 +1009,16 @@ end
 
 function import_markings(sFiles, subject_names, options)
 io_markings(sFiles, subject_names, @nst_bst_import_events, @get_events_fn, ...
-                 'export_dir_events', 1, 'Loaded events', options);
+                 'export_dir_events', 1, 'Loaded events from: %s', options);
 io_markings(sFiles, subject_names, @nst_bst_import_channel_flags, @get_channel_flags_fn, ...
-                 'export_dir_channel_flags', 1, 'Loaded channel flags', options);
+                 'export_dir_channel_flags', 1, 'Loaded channel flags from: %s', options);
 end
 
 function export_markings(sFiles, subject_names, options)
 io_markings(sFiles, subject_names, @nst_bst_export_events, @get_events_fn, ...
-               'export_dir_events', 0, 'Saved events', options);
+               'export_dir_events', 0, 'Saved events to: %s', options);
 io_markings(sFiles, subject_names, @nst_bst_export_channel_flags, @get_channel_flags_fn, ...
-               'export_dir_channel_flags', 0, 'Saved channel flags', options);
+               'export_dir_channel_flags', 0, 'Saved channel flags to: %s', options);
 end
 
 function io_markings(sFiles, subject_names, io_func, get_fn_func, dir_option_name, ...
@@ -1023,7 +1030,7 @@ if ~isempty(options.(dir_option_name))
                                   options.(dir_option_name));
         if ~check_exist || exist(markings_fn, 'file')==2
             io_func(sFiles{isubject}, markings_fn);
-            write_log(sprintf('%s to: %s\n', msg, markings_fn));
+            write_log(sprintf([msg '\n'], markings_fn));
         end
     end
 end
