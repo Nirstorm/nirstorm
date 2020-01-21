@@ -29,8 +29,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Extract cortical FOV mask';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1405;
-    sProcess.isSeparator = 0;
+    sProcess.Index       = 1402;
+    sProcess.isSeparator = 1;
     sProcess.Description = '';
     % todo add a new tutorial
     

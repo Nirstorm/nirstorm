@@ -28,8 +28,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'GLM - group roi-based subjects z-matrix';
     sProcess.Category    = 'Custom2';
     sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1403;
-    sProcess.isSeparator = 0;
+    sProcess.Index       = 1606;
+    sProcess.isSeparator = 1;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
     % todo add a new tutorial
     

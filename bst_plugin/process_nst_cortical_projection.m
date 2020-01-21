@@ -29,7 +29,7 @@ sProcess.Comment     = 'Cortical projection';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
 sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1206;
+sProcess.Index       = 1501;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};
@@ -37,7 +37,6 @@ sProcess.InputTypes  = {'data', 'raw'};
 sProcess.OutputTypes = {'results', 'results'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
-sProcess.isSeparator = 1;
 
 sProcess.options.method.Comment = 'Method';
 sProcess.options.method.Type    = 'combobox';
