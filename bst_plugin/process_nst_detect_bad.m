@@ -34,9 +34,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1003; %0: not shown, >0: defines place in the list of processes
+    sProcess.Index       = 1301; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Bad_channel_tagging';
-    % sProcess.isSeparator = 0; % add a horizontal bar after the process in
+    sProcess.isSeparator = 0; % add a horizontal bar after the process in
     %                             the list
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};

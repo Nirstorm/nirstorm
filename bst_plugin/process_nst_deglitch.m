@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Remove glitches';
     sProcess.Category    = 'Filter';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1403;
+    sProcess.Index       = 1302;
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Remove-glitches';
     
