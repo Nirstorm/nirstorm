@@ -67,5 +67,5 @@ if ~exist(bst_process_folder, 'dir')
     return;
 end
 addpath(fullfile(pwd, 'dist_tools'));
-%install_package('brainentropy', 'best_fork', bst_folder, mode, {}, dry);
+install_package('brainentropy', 'best_fork', bst_folder, mode, {}, dry);
 install_package('nirstorm', 'bst_plugin', bst_process_folder, mode, extra, dry);
