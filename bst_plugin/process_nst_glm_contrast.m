@@ -33,7 +33,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - 1st level contrast';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'NIRS - wip';
+    sProcess.SubGroup    = 'NIRS';
     sProcess.Index       = 1602;
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';

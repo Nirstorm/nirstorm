@@ -12,12 +12,6 @@ process_nst_combine_masks.m
 process_nst_extract_fov_mask_cortical.m
 process_nst_save_matrix_csv.m
 process_nst_concat_matrices.m
-process_nst_glm_group_subjs_zmat.m
-process_nst_glm_contrast_mask.m
-process_nst_glm_fit.m
-process_nst_glm_contrast.m
-process_nst_glm_contrast_ttest.m
-process_nst_glm_group_ttest.m
 nst_save_figure.m
 nst_ppl_1st_level_channel_V1.m
 process_nst_convert_to_stat.m
@@ -28,4 +22,3 @@ process_nst_surfacedepth.m
 process_nst_cmem_fusion.m
 process_nst_dOD_SSR.m
 process_nst_mbll_SSR.m
-nst_math_fit_AR.m

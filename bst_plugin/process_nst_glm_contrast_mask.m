@@ -27,7 +27,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - group t-contrast mask';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS - wip';
+    sProcess.SubGroup    = 'NIRS';
     sProcess.Index       = 1603;
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
