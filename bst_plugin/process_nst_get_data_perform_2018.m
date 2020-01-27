@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Setup workshop PERFORM 2018';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1300;
+sProcess.Index       = 1902;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Workshop-PERFORM-Week-2018#download-data-sets-and-check-installation';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};

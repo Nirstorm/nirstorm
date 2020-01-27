@@ -28,8 +28,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Import nirs as stat map';
     sProcess.Category    = 'Stat1';
     sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1402;
-    sProcess.isSeparator = 0;
+    sProcess.Index       = 1101;
+    sProcess.isSeparator = 1;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
     
     % Definition of the input accepted by this process

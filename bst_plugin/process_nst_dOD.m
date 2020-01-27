@@ -27,11 +27,11 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'raw to delta OD';
+    sProcess.Comment     = 'Raw to delta OD';
     sProcess.FileTag     = ' | dOD';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1004; %0: not shown, >0: defines place in the list of processes
+    sProcess.Index       = 1303; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = '';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};

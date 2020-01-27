@@ -1,4 +1,0 @@
-2.6.3
-july 25th, 2017
-Minor change:
-- launch from the 2016 SOURCE PANEL is now operational

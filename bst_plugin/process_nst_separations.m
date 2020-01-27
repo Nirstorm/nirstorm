@@ -31,8 +31,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute separations';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1001;
-sProcess.isSeparator = 0;
+sProcess.Index       = 1202;
+sProcess.isSeparator = 1;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 
 % Definition of the input accepted by this process

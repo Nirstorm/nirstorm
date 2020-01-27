@@ -32,7 +32,7 @@ sProcess.Comment     = 'Compute fluences for optodes by MCXlab';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1200;
+sProcess.Index       = 1402;
 sProcess.Description = 'http://mcx.sourceforge.net/cgi-bin/index.cgi';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};

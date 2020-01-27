@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Compute Voronoi volume-to-cortex interpolator';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1200;
+    sProcess.Index       = 1401;
     sProcess.Description = '';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'import'};
@@ -36,7 +36,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'import'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 0;
-   
+    sProcess.isSeparator = 0;
     % Option: Subject name
     sProcess.options.subjectname.Comment = 'Subject name:';
     sProcess.options.subjectname.Type    = 'subjectname';

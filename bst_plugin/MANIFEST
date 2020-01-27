@@ -37,6 +37,12 @@ process_nst_compute_voronoi.m
 process_nst_detect_bad.m
 process_nst_export_nirs.m
 process_nst_extract_sensitivity_from_head_model.m
+process_nst_glm_group_subjs_zmat.m
+process_nst_glm_contrast_mask.m
+process_nst_glm_fit.m
+process_nst_glm_contrast.m
+process_nst_glm_contrast_ttest.m
+process_nst_glm_group_ttest.m
 process_nst_import_evt_events.m
 process_nst_import_head_model.m
 process_nst_mbll.m
@@ -58,4 +64,5 @@ nst_request_files.m
 dg_voronoi.m
 dg_voronoi.mexa64
 dg_voronoi.mexglx
+nst_math_fit_AR.m
 
