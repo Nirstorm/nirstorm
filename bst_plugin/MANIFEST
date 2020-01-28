@@ -45,6 +45,7 @@ process_nst_glm_contrast_ttest.m
 process_nst_glm_group_ttest.m
 process_nst_import_evt_events.m
 process_nst_import_head_model.m
+process_nst_iir_filter.m
 process_nst_mbll.m
 process_nst_motion_correction.m
 process_nst_OM_from_cortex.m
