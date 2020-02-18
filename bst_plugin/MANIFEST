@@ -30,6 +30,7 @@ process_nst_separations.m
 process_nst_sci.m
 process_nst_get_data_perform_2018.m
 process_nst_cmem.m
+process_nst_OM_from_cap.m
 process_nst_cpt_fluences_from_cortex.m
 process_nst_cpt_fluences_from_head.m
 process_nst_ComputeFluencesforOptodes.m

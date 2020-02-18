@@ -313,18 +313,42 @@ for ipair=1:size(montage_pairs, 1)
         num2str(round(montage_weight(ipair,:),3))]);
     for iwl=1:length(wavelengths)
         
-        ChannelMat.Channel(iChan).Name    = sprintf('S%dD%dWL%d', idx_src, idx_det, ...
-            ChannelMat.Nirs.Wavelengths(iwl));
+        ChannelMat.Channel(iChan).Name    = sprintf('S%dD%dWL%d', idx_src, idx_det, ChannelMat.Nirs.Wavelengths(iwl));
         ChannelMat.Channel(iChan).Type    = 'NIRS';
         
         ChannelMat.Channel(iChan).Loc(:,1)  = head_vertices_coords(ihead_vertex_src, :);
         ChannelMat.Channel(iChan).Loc(:,2)  = head_vertices_coords(ihead_vertex_det, :);
         ChannelMat.Channel(iChan).Orient  = [];
         ChannelMat.Channel(iChan).Weight  = 1;
-        ChannelMat.Channel(iChan).Comment = [];
+        
         ChannelMat.Channel(iChan).Group = sprintf('WL%d', round(ChannelMat.Nirs.Wavelengths(iwl)));
+        
+        % OM from cap - make the link between optodes and references name
+        % in eeg cap 
+        if isfield(sProcess,'reference') && isfield(sProcess,'additional_channel')
+            idx_eeg_src= knnsearch(sProcess.reference.loc, head_vertices_coords(ihead_vertex_src, :));
+            idx_eeg_det= knnsearch(sProcess.reference.loc, head_vertices_coords(ihead_vertex_det, :));
+            
+            ChannelMat.Channel(iChan).Comment =  sprintf('%s - %s',sProcess.reference.name{idx_eeg_src},sProcess.reference.name{idx_eeg_det} ); 
+            sProcess.additional_channel.Channel(idx_eeg_src).Comment=sprintf('S%d', idx_src);
+            sProcess.additional_channel.Channel(idx_eeg_det).Comment=sprintf('D%d', idx_det);
+        end     
         iChan = iChan + 1;
     end
+end
+if isfield(sProcess,'reference') &&  isfield(sProcess,'additional_channel')
+    for ieeg=1:size(sProcess.additional_channel.Channel,2)
+        if ~isempty( sProcess.additional_channel.Channel(ieeg).Comment)
+            ChannelMat.Channel(iChan).Name    = sProcess.additional_channel.Channel(ieeg).Name;
+            ChannelMat.Channel(iChan).Type    = sProcess.additional_channel.Channel(ieeg).Type;
+            ChannelMat.Channel(iChan).Loc     = sProcess.additional_channel.Channel(ieeg).Loc;
+            ChannelMat.Channel(iChan).Comment = sProcess.additional_channel.Channel(ieeg).Comment;
+            ChannelMat.Channel(iChan).Orient  = [];
+            ChannelMat.Channel(iChan).Weight  = 1;
+        
+            iChan = iChan + 1;
+        end
+    end 
 end
 
 iStudy = db_add_condition(sSubject.Name, condition_name);
