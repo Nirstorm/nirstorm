@@ -41,7 +41,7 @@ sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
 sProcess.Index       = 1408;
 sProcess.Description = '';
-sProcess.isSeparator = 1;
+sProcess.isSeparator = 0;
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process
