@@ -59,68 +59,7 @@ sProcess.options.subject.Type    = 'subjectname';
 sProcess.options.subject.Value   = [];
 
   
-sProcess.options = add_OM_options(sProcess.options);
-end
-
-function options = add_OM_options(options)
-
-% Add selector of cortical scout for target VOI
-options = nst_add_scout_sel_options(options, 'roi', 'Cortical scout (target ROI):', ...
-    'cortex', {'User scouts'}, 1);
-
-options.condition_name.Comment = 'Output condition name:';
-options.condition_name.Type = 'text';
-options.condition_name.Value = '';
-
-options.wavelengths.Comment = 'Wavelengths (nm) [coma-separated list]';
-options.wavelengths.Type    = 'text';
-options.wavelengths.Value = '';
-
-options.data_source.Comment = 'Fluence Data Source (URL or path)';
-options.data_source.Type    = 'text';
-options.data_source.Value = [nst_get_repository_url() '/fluence/'];
-
-options.nb_sources.Comment = 'Number of sources:';
-options.nb_sources.Type = 'value';
-options.nb_sources.Value = {4,'',0};
-
-options.nb_detectors.Comment = 'Number of detectors:';
-options.nb_detectors.Type = 'value';
-options.nb_detectors.Value =  {8,'',0};
-
-options.nAdjacentDet.Comment = 'Number of Adjacent:';
-options.nAdjacentDet.Type = 'value';
-options.nAdjacentDet.Value = {2,'',0};
-
-options.sep_optode.Comment = 'Range of optodes distance:';
-options.sep_optode.Type = 'range';
-options.sep_optode.Value = {[15 55],'mm',0};
-
-
-
-% WIP: add option to cache weight table and avoid recomputation TODO: make
-% more robust and clearer usage
-options.exist_weight.Hidden = 1;
-options.exist_weight.Comment = 'Use existing weight tables (speed up)';
-options.exist_weight.Type = 'checkbox';
-options.exist_weight.Value = 0;
-
-SelectOptions = {...
-    '', ...                            % Filename
-    '', ...                            % FileFormat
-    'save', ...                        % Dialog type: {open,save}
-    'Select output folder...', ...     % Window title
-    'ExportData', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-    'single', ...                      % Selection mode: {single,multiple}
-    'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-    {{'.folder'}, '*.*'}, ... % Available file formats
-    'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-% Option definition
-% TODO: add flag to enable ouput
-options.outputdir.Hidden = 1;
-options.outputdir.Comment = 'Folder for weight table:';
-options.outputdir.Type    = 'filename';
-options.outputdir.Value   = SelectOptions;
+sProcess.options = process_nst_OM_from_head('add_OM_options', sProcess.options);
 end
 
 %% ===== FORMAT COMMENT =====
@@ -174,6 +113,6 @@ head_vertices = knnsearch(head_vertices_mri, src_locs_mri);
 %sSubject = head_scout_selection.sSubject;
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
 
-OutputFiles = process_nst_OM_from_head('Compute',sProcess,sSubject, sHead, head_vertices);
+OutputFiles = process_nst_OM_from_head('Compute',sProcess,sSubject, sHead, head_vertices, sInputs);
 
 end
