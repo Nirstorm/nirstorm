@@ -29,7 +29,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1201;
+    sProcess.Index       = 1405;
     sProcess.Description = '';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};

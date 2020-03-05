@@ -31,8 +31,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'IIR filter';
     sProcess.FileTag     = '_IIR-filtered';
     sProcess.Category    = 'Filter';
-    sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1006; %0: not shown, >0: defines place in the list of processes
+    sProcess.SubGroup    = 'NIRS';
+    sProcess.Index       = 1306; %0: not shown, >0: defines place in the list of processes
+    sProcess.isSeparator = 1;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSDataProcess';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'}; %TODO: check processing of link to raw data

@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute fluences from cortical scout';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1200;
+sProcess.Index       = 1403;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};

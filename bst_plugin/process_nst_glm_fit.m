@@ -41,7 +41,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'GLM - 1st level design and fit';
     sProcess.Category    = 'File2';
     sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1401;
+    sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';

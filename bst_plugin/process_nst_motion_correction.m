@@ -32,9 +32,9 @@ sProcess.Comment     = 'Motion correction';
 sProcess.FileTag     = 'mvt corr';
 sProcess.Category    = 'File';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1002; %0: not shown, >0: defines place in the list of processes
+sProcess.Index       = 1305; %0: not shown, >0: defines place in the list of processes
 sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
-% sProcess.isSeparator = 0; % add a horizontal bar after the process in
+sProcess.isSeparator = 0; % add a horizontal bar after the process in
 %                             the list
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};

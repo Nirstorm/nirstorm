@@ -29,7 +29,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1007;
+    sProcess.Index       = 1901;
+    sProcess.isSeparator = 0;
     sProcess.Description = '';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
@@ -37,7 +38,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'data', 'raw'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    sProcess.isSeparator = 1;
     % Definition of the options    
 
     SelectOptions = {...

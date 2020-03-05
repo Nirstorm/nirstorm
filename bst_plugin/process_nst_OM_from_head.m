@@ -39,8 +39,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute optimal montage from head scout';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 998;
+sProcess.Index       = 1408;
 sProcess.Description = '';
+sProcess.isSeparator = 1;
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process
