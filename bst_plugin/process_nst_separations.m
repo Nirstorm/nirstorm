@@ -68,7 +68,7 @@ for iInput=1:length(sInputs)
     separations = Compute(ChannelMat.Channel(nirs_ichans)) * 100; %convert to cm
     
     if isempty(separations)
-        return;
+        continue;
     end
     
     % Save time-series data
@@ -116,8 +116,8 @@ function separations = Compute(channels, pair_ids)
 % Outputs:
 %    1D array of double containing separations in the same unit as
 %    in given channel.
-%    If pairs_indexes is not given, then size(separations) = nb_channels
-%    If pairs_indexes is given, then size(separations) = size(pair_indexes, 1);
+%    If pair_ids is not given, then size(separations) = nb_channels
+%    If pair_ids is given, then size(separations) = size(pair_indexes, 1);
 
 if nargin < 2 % pair_indexes not given
         separations = zeros(length(channels), 1);

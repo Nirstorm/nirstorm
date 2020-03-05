@@ -25,7 +25,7 @@ function varargout = process_nst_glm_fit( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, Thomas Vincent 2018
+% Authors: Edouard Delaire, Thomas Vincent 2018-2019
 %
 % TODO: use different output types for channel-space and surface analyses
 %       -> more convenient for contrast computation afterwards, to be able to map
@@ -39,8 +39,8 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - 1st level design and fit';
-    sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.Category    = 'File2';
+    sProcess.SubGroup    = 'NIRS - wip';
     sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
@@ -51,8 +51,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.InputTypes  = {'data', 'raw', 'results'};
     sProcess.OutputTypes = {'data', 'data', 'results'};
     
-    sProcess.nInputs     = 1;
+    sProcess.nInputs     = 2;
+    sProcess.isPaired    = 0; % Should it be 1??
     sProcess.nMinFiles   = 1;
+    sProcess.nOutputs    = 1;
     
     sProcess.options.label0.Comment = '<U><B>Signal Information</B></U>:';
     sProcess.options.label0.Type    = 'label';
@@ -61,10 +63,24 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.hpf_low_cutoff.Type    = 'value';
     sProcess.options.hpf_low_cutoff.Value   = {0.01, 'Hz', 2};
     
-    
     sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
     sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
+
+    sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
+    sProcess.options.label3.Type    = 'label';
+    
+    sProcess.options.stim_events.Comment = 'Stimulation events: ';
+    sProcess.options.stim_events.Type    = 'text';
+    sProcess.options.stim_events.Value   = '';
+    
+    sProcess.options.hrf_model.Comment = 'HRF model: ';
+    sProcess.options.hrf_model.Type    = 'combobox';
+    sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
+    
+    sProcess.options.trend.Comment = 'Add constant regressor ';
+    sProcess.options.trend.Type    = 'checkbox';
+    sProcess.options.trend.Value   =  1;
     
     % Separator
     sProcess.options.separator00.Type = 'separator';
@@ -87,7 +103,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.output_cmt0.Comment = '<B>Pre-coloring Options</B>:';
     sProcess.options.output_cmt0.Type    = 'label';
     
-    
     sProcess.options.output_cmt1.Comment = '<B>Pre-whitenning Options</B>:';
     sProcess.options.output_cmt1.Type    = 'label';
     
@@ -97,22 +112,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.separator1.Type = 'separator';
     sProcess.options.separator1.Comment = ' ';
-    
-    sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
-    sProcess.options.label3.Type    = 'label';
-    
-    sProcess.options.stim_events.Comment = 'Stimulation events: ';
-    sProcess.options.stim_events.Type    = 'text';
-    sProcess.options.stim_events.Value   = '';
-    
-    sProcess.options.hrf_model.Comment = 'HRF model: ';
-    sProcess.options.hrf_model.Type    = 'combobox';
-    sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
-    
-    sProcess.options.trend.Comment = 'Add constant regressor ';
-    sProcess.options.trend.Type    = 'checkbox';
-    sProcess.options.trend.Value   =  1;
-    
 
     sProcess.options.output_cmt.Comment = '<U><B>Extra outputs</B></U>:';
     sProcess.options.output_cmt.Type    = 'label';
@@ -143,7 +142,7 @@ function Comment = FormatComment(sProcess)
 %     end    
 end
 
-function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
 
     OutputFiles = {};
 
@@ -155,7 +154,11 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     save_fit = sProcess.options.save_fit.Value;
 
     trim_start = sProcess.options.trim_start.Value{1};
-        
+    if trim_start > 0
+       warning(['trim_start option is deprecated. ' ...
+                'Use process_extract_time beforehand instead.']); 
+    end
+    
     %% Select events
     % TODO: utests with all events found, no event selected, no available
     %       event in data, one event missing
@@ -165,14 +168,15 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     
-    %% Load data and events                            
+    %% Load data and events
+    ChannelMat = in_bst_channel(sInput.ChannelFile);
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
-        parent_data = in_bst_data(DataMat.DataFile);
+        channel_data = in_bst_data(DataMat.DataFile);
         % Make sure time axis is consistent
-        assert(all(parent_data.Time == DataMat.Time));
-        if isempty(DataMat.Events) && isfield(parent_data, 'Events')
-            DataMat.Events = parent_data.Events;
+        assert(all(channel_data.Time == DataMat.Time));
+        if isempty(DataMat.Events) && isfield(channel_data, 'Events')
+            DataMat.Events = channel_data.Events;
         end
         if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
             Y = DataMat.ImageGridAmp';
@@ -188,7 +192,6 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     else
         surface_data = 0;
         % Get signals of NIRS channels only:
-        ChannelMat = in_bst_channel(sInput.ChannelFile);
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
         Y = DataMat.F(nirs_ichans,:)';
     end
@@ -235,7 +238,40 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
     %% Create the design matrix X
     hrf_duration = 32; % sec -- TODO: expose as process parameter?
     [X,reg_names, hrf] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
-                                            basis_choice, hrf_duration, sProcess.options.trend.Value);  
+                                            basis_choice, hrf_duration, sProcess.options.trend.Value);
+                                        
+                                        
+    if ~isempty(sInput_ext)
+        
+        DataMatExt = in_bst_data(sInput_ext.FileName);
+        ChannelExt = in_bst_channel(sInput_ext.ChannelFile);
+        dt = diff(DataMat.Time(1:2));
+        if length(DataMat.Time) ~= length(DataMatExt.Time) || ...
+                ~all(abs(DataMatExt.Time - DataMat.Time) <= dt/100)
+            error('Time of external measure is not consistent with data time.');
+        end
+        
+        hb_types = {'HbO', 'HbR', 'HbT'};
+        hb_type = [];
+        for ihb=1:length(hb_types)
+            if ~isempty(strfind(lower(sInput.FileName), lower(hb_types{ihb})))
+                hb_type = hb_types{ihb};
+                break;
+            end
+        end
+        if ~isempty(hb_type)
+            hb_chans = strcmp({ChannelExt.Channel.Group}, hb_type);
+            extra_regs = DataMatExt.F(hb_chans, :)';
+            extra_reg_names = {ChannelExt.Channel(hb_chans).Name};
+        else
+            extra_regs = DataMatExt.F';
+            extra_reg_names = {ChannelExt.Channel.Name};
+        end
+
+        X = [X extra_regs];
+        reg_names = [reg_names extra_reg_names];
+    end
+                                        
     nb_regressors = size(X, 2);
     
     iStudy = sInput.iStudy;
