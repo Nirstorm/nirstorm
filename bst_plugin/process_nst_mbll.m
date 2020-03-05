@@ -18,7 +18,7 @@ function varargout = process_nst_mbll( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2018)
+% Authors: Thomas Vincent (2015-2020)
 
 eval(macro_method);
 end
@@ -211,13 +211,13 @@ end
 
 function [nirs_hb, channel_hb_def] = ...
     Compute(nirs_sig, channel_def, age, dOD_params, do_plp_corr, pvf, dpf_method)
-%% Apply MBLL to compute [HbO] & [HbR] from given nirs OD data
+%% Apply MBLL to compute [HbO] & [HbR] from given nirs raw data
 % Args
 %    - nirs_sig: matrix of double, size: nb_samples x nb_channels
 %        Measured nirs signal (Optical density). Should not contain
 %        negative values
 %    - channel_def: struct
-%        Defintion of channels as given by brainstorm
+%        Definition of channels as given by brainstorm
 %        Used fields: Nirs.Wavelengths, Channel
 %        ASSUME: channel coordinates are in meters
 %    [- age ]: positive double, default is 25
@@ -330,13 +330,11 @@ function [nirs_hb, channel_hb_def] = pack_hb_channels(nirs, pair_names, pair_loc
 %           Channel(ichan1).Group = 'HbO'; 
 %           Channel(ichan2).Name = 'SXDXHbR'; % pair SXDX, HbO component
 %           Channel(ichan2).Loc = [C C C]; % pair localization (imported from
-%                                          % input channel_def, same as paired 
-%                                          % channel ichan1)
+%                                          % channel channel_def)
 %           Channel(ichan2).Group = 'HbR'; 
 %           Channel(ichan3).Name = 'SXDXHbT'; % pair SXDX, HbT component
 %           Channel(ichan3).Loc = [C C C]; % pair localization (imported from
-%                                          % input channel_def, same as paired 
-%                                          % channel ichan1)
+%                                          % channel channel_def)
 %           Channel(ichan3).Group = 'HbT'; 
 
 channel_hb_def = channel_def_orig;
