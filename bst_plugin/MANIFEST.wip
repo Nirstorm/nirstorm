@@ -1,3 +1,5 @@
+process_nst_mask_from_atlas.m
+process_nst_extract_ssc.m
 nst_misc_isfunction.m
 nst_misc_unmirror_sig_bounds.m
 nst_misc_mirror_sig_bounds.m

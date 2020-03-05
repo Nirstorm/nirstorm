@@ -11,6 +11,8 @@ function varargout = nst_ppl_surface_template_V1(action, options, arg1, arg2)
 % such as movement events and bad channels. This allows to safely flush all
 % brainstorm data while keeping markings.
 % 
+% 
+%
 %% Overview
 %
 % This function is intended to be called from batch scripts where the user
@@ -300,11 +302,11 @@ for igroup=1:nb_groups
         export_markings({file_raw}, {subject_name}, options);
         
         % Run preprocessings
-        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
+        [sFiles_preprocessed, hb_types, redone_preprocs, preproc_folder, sFile_ssc] = preprocs(file_raw, sFile_raw_fhm, options, force_redo|fhm_redone);
         
         % Run 1st level GLM
         [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles_preprocessed, options, ...
-                                                                                  redone_preprocs | force_redo);
+                                                                                  sFile_ssc, redone_preprocs | force_redo);
         
         if isubject==1
             nb_hb_types = size(sFiles_con, 1);
@@ -348,6 +350,7 @@ for igroup=1:nb_groups
         end
         group_condition_name = [group_condition_name 'GLM' get_ppl_tag()];
         group_condition_names{igroup} = group_condition_name;
+                
         for ihb=1:nb_hb_types
             for icon=1:nb_contrasts
                 item_comment = ['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label];
@@ -371,13 +374,26 @@ for igroup=1:nb_groups
                         sFile_gp_masks = cell(nb_groups, nb_hb_types, nb_contrasts);
                     end
                     
-                    [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
-                                                                redone | options.GLM_group.rois_summary.redo, ...
-                                                                'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
-                                                                'do_atlas_inter', 1, ...
-                                                                'min_atlas_roi_size', 3, ...
-                                                                'atlas', options.GLM_group.rois_summary.atlas);
-                     sFile_gp_masks{igroup, ihb, icon} = sFile_gp_mask;
+                    if isempty(options.GLM_group.rois_summary.use_only_rois)
+                        [sFile_gp_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/' hb_types{ihb} ' | con_t-+ ' contrasts(icon).label ' | mask'], ...
+                                                                    redone | options.GLM_group.rois_summary.redo, ...
+                                                                    'process_nst_glm_contrast_mask', sFile_GLM_gp_ttest, [], ...
+                                                                    'do_atlas_inter', 1, ...
+                                                                    'min_atlas_roi_size', 3, ...
+                                                                    'atlas', options.GLM_group.rois_summary.atlas);
+                         sFile_gp_masks{igroup, ihb, icon} = sFile_gp_mask;
+                    else
+                        % Could be done once before the loop with it won't
+                        % be recomputed if already done anyway...
+                        [sFile_roi_mask, redone] = nst_run_bst_proc(['Group analysis/' group_condition_name '/ROI mask'], ...
+                                                                    redone | options.GLM_group.rois_summary.redo, ...
+                                                                    'process_nst_mask_from_atlas', sFile_GLM_gp_ttest, [], ...
+                                                                    'atlas', options.GLM_group.rois_summary.atlas, ...
+                                                                    'surface_name', options.head_model.surface, ... 
+                                                                    'scout_names', options.GLM_group.rois_summary.use_only_rois);
+
+                        sFile_gp_masks{igroup, ihb, icon} = sFile_roi_mask;
+                    end
                 end   
             end % loop over contrasts
         end % loop over hb types
@@ -388,8 +404,8 @@ end % Loop over groups
 if options.GLM_group.do && options.GLM_group.rois_summary.do
     mask_combinations = get_mask_combinations();
     
-    all_sFiles_subj_zmat = cell(nb_hb_types, nb_contrasts);
-    all_sFiles_subj_zmat_con_concat = cell(1, nb_hb_types);
+    all_sFiles_subj_fxmat = cell(nb_hb_types, nb_contrasts);
+    all_sFiles_subj_fxmat_con_concat = cell(1, nb_hb_types);
     
     [varying, common_pref, common_suf] = str_remove_common(group_condition_names);
     if options.GLM_group.rois_summary.group_masks_combination ~= mask_combinations.none
@@ -439,27 +455,28 @@ if options.GLM_group.do && options.GLM_group.rois_summary.do
             for icon=1:nb_contrasts
                  % Extract subject- and region-specific zscores based on group mask
                  % TODO: switch between matrix output (atlas-based) or map output (full mask)                                       
-                 [sFile_subj_zmat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb} ' | con ' contrasts(icon).label ' |' group_comment_tags{igroup} ' masked z-scores'], ...
+                 [sFile_subj_fxmat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb} ' | con ' contrasts(icon).label ' |' group_comment_tags{igroup} ' masked z-scores'], ...
                                                                redone | options.GLM_group.rois_summary.redo, ...
                                                                'process_nst_glm_group_subjs_zmat', ...
                                                                all_sFiles_con{igroup}(ihb, icon, :), sFile_gp_masks{igroup, ihb, icon}, ...
-                                                              'keep_only_first_roi', options.GLM_group.rois_summary.keep_only_first_roi);
-                 all_sFiles_subj_zmat{ihb, icon} = sFile_subj_zmat;
+                                                               'normalize_with_std', options.GLM_group.rois_summary.normalize, ...
+                                                               'keep_only_first_roi', options.GLM_group.rois_summary.keep_only_first_roi);
+                 all_sFiles_subj_fxmat{ihb, icon} = sFile_subj_fxmat;
                  if redone
                     % Set contrast name as prefix for each ROI column                 
                     bst_process('CallProcess', 'process_nst_prefix_matrix', ...
-                                sFile_subj_zmat, [], 'col_prefixes', [protect_con_str(contrasts(icon).label) '_']);
+                                sFile_subj_fxmat, [], 'col_prefixes', [protect_con_str(contrasts(icon).label) '_']);
                  end
                 
             end
             
-            % Stack zscore tables along contrasts
+            % Stack effects tables along contrasts
             [sFile_concat, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/' hb_types{ihb}  ' | all cons |' group_comment_tags{igroup} ' masked z-scores'], ...
                                                      redone | options.GLM_group.rois_summary.redo, ...
                                                      'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat(ihb, :), [], ...
+                                                      all_sFiles_subj_fxmat(ihb, :), [], ...
                                                      'stacking_type', stacking_types.column);
-            all_sFiles_subj_zmat_con_concat{ihb} = sFile_concat;
+            all_sFiles_subj_fxmat_con_concat{ihb} = sFile_concat;
 
             if redone
                 % Set Hb type as prefix for all columns. Add user-defined col prefix
@@ -478,7 +495,7 @@ if options.GLM_group.do && options.GLM_group.rois_summary.do
         [sFile_table_zscores, redone] = nst_run_bst_proc(['Group analysis/' target_group_condition_names{igroup} '/all Hb cons |' group_comment_tags{igroup} ' masked z-scores'], ...
                                                      redone | options.GLM_group.rois_summary.redo, ...
                                                      'process_nst_concat_matrices', ...
-                                                      all_sFiles_subj_zmat_con_concat, [], ...
+                                                      all_sFiles_subj_fxmat_con_concat, [], ...
                                                      'stacking_type', stacking_types.column);
 
         all_sFile_table_zscores{igroup} = sFile_table_zscores;
@@ -556,7 +573,7 @@ end
 end
 
 
-function [sFilesHbProj, hb_types, redone, preproc_folder] = preprocs(sFile_raw, sFile_raw_full_head_model, options, force_redo)
+function [sFilesHbProj, hb_types, redone, preproc_folder, sFile_ssc_Hb_filtered] = preprocs(sFile_raw, sFile_raw_full_head_model, options, force_redo)
 
 if nargin < 4
     force_redo = 0;
@@ -567,15 +584,40 @@ preproc_folder = sprintf('preprocessing%s/', get_ppl_tag());
 % Compute Scalp coupling index
 nst_run_bst_proc([preproc_folder 'SCI'], force_redo | options.sci.redo, 'process_nst_sci', sFile_raw);
 
+% Crop
+if options.crop.do
+    redo_parent = force_redo | options.crop.redo;
+    
+    if options.crop.t_start >= 0
+        time_window = options.crop.t_start;
+    else
+        time_window = 0;
+    end
+    if options.crop.t_end >= 0
+        time_window = [time_window options.crop.t_end];
+    else
+        data_time = in_bst_data(sFile_raw, 'Time');
+        time_window = [time_window data_time.Time(end)];
+    end
+    
+    sFile_cropped = nst_run_bst_proc([preproc_folder 'Cropped'], redo_parent, ...
+                                     'process_extract_time', sFile_raw, [], ...
+                                     'timewindow', time_window, ...
+                                     'overwrite',  0);
+else
+    redo_parent = force_redo;
+    sFile_cropped = sFile_raw;
+end
+
 % Deglitching
 if options.deglitch.do
-    redo_parent = force_redo | options.deglitch.redo;
+    redo_parent = redo_parent | options.deglitch.redo;
     sFile_deglitched = nst_run_bst_proc([preproc_folder 'Deglitched'], redo_parent, ...
-                                        'process_nst_deglitch', sFile_raw, [], ...
+                                        'process_nst_deglitch', sFile_cropped, [], ...
                                         'factor_std_grad', options.deglitch.agrad_std_factor);
 else
     redo_parent = force_redo;
-    sFile_deglitched = sFile_raw;
+    sFile_deglitched = sFile_cropped;
 end
 
 % Motion correction
@@ -591,7 +633,7 @@ redo_parent = redo_parent | options.resample.redo;
                                                       'freq', options.resample.freq, ...
                                                       'read_all', 1);
 % Process: Detect bad channels
-% This one is done in-place -> not tracked to handle do/redo scenarios
+% This one is done in-place -> not tracked, so no redo scenario
 if redo_parent
     bst_process('CallProcess', 'process_nst_detect_bad', sFileMocoResampled, [], ...
                 'option_remove_negative', 1, ...
@@ -601,9 +643,45 @@ if redo_parent
                 'option_max_separation', options.tag_bad_channels.max_separation_cm, ...
                 'option_min_separation', options.tag_bad_channels.min_separation_cm);
 end
+
+if options.GLM_1st_level.short_separation_as_regressor
+    redo_parent = redo_parent | options.GLM_1st_level.split_short_separation.redo;
+    ssc_item_name = 'SSC | Moco Cropped';
+    preproc_ssc_folder = sprintf('preprocessing_SSC_%s/', get_ppl_tag());
+    [sFile_ssc, redo_parent] = nst_run_bst_proc([preproc_ssc_folder ssc_item_name], redo_parent, ...
+                                                'process_nst_extract_ssc', sFileMocoResampled, [], ...
+                                                'short_separation_threshold_cm', options.GLM_1st_level.short_separation_threshold_cm);    
+    
+    % SSC - Apply MBLL
+    preproc_ssc_hb_folder = sprintf('preprocessing_SSC_Hb_%s/', get_ppl_tag());
+    sFile_ssc_Hb = nst_run_bst_proc([preproc_ssc_hb_folder 'SSC Hb'], redo_parent, ...
+                                    'process_nst_mbll', sFile_ssc, [], ...
+                                    'age', 45, ...
+                                    'option_pvf', 10, ...
+                                    'option_do_plp_corr', 0, ...
+                                    'option_dpf_method', 1, ...
+                                    'option_baseline_method', options.dOD.baseline_def);
+    % SSC - Band pass filter
+    [sFile_ssc_Hb_filtered, redo_parent] = nst_run_bst_proc([preproc_ssc_hb_folder 'SSC Hb | filtered'],  redo_parent, 'process_bandpass', sFile_ssc_Hb, [], ...
+                                                              'highpass', {options.high_pass_filter.low_cutoff, ''}, ...
+                                                              'lowpass', {0, ''}, ...
+                                                              'attenuation', 'relax', ...
+                                                              'mirror', 0, ...
+                                                              'sensortypes', 'NIRS');
+%     hb_types = process_nst_cortical_projection('get_hb_types', options.projection.compute_hbt);
+%     for ihb=1:length(hb_types)
+%         sFile_ssc_Hb_filtered{ihb} = nst_run_bst_proc([preproc_ssc_folder hb_types{ihb} ' | filtered'],  redo_parent, ...
+%                                                       'process_nst_extract_by_group', sFile_ssc_Hb_filtered, [], ...
+%                                                       'group', hb_types{ihb});
+%     end
+else
+    sFile_ssc_Hb_filtered = [];
+end
+
 % Convert to delta OD
 redo_parent = redo_parent | options.dOD.redo;
-[sFile_dOD, redo_parent] = nst_run_bst_proc([preproc_folder 'dOD'], redo_parent, 'process_nst_dOD', sFileMocoResampled, [], ...
+[sFile_dOD, redo_parent] = nst_run_bst_proc([preproc_folder 'dOD'], redo_parent, ...
+                                            'process_nst_dOD', sFileMocoResampled, [], ...
                                             'option_baseline_method', options.dOD.baseline_def); 
               
 % Band pass filter
@@ -637,13 +715,12 @@ end
                                                 'min_separation_cm', options.projection.min_separation_cm, ...
                                                 'compute_hbt', options.projection.compute_hbt, ...
                                                 'sparse_storage', options.projection.sparse_storage);
-
 redone = redo_parent;
 end
 
-function [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles, options, force_redo)
+function [sFiles_GLM, sFiles_con, redone_any_contrast, glm_folder] = glm_1st_level(sFiles, options, sFileSSC, force_redo)
 
-if nargin < 3
+if nargin < 4
     force_redo = 0;
 end
 
@@ -672,15 +749,22 @@ for ifile=1:length(sFiles)
     data_cmt = load(file_fullpath(sFiles{ifile}), 'Comment');
     
     comment_glm_prefix{ifile} = [glm_folder 'GLM ' data_cmt.Comment];
+    
+    if options.GLM_1st_level.trim_start > 0
+        warning('GLM_1st_level.trim_start is deprecated. Instead use options.crop.do=1; options.crop.t_start=t_trim;');
+    end
+    
     % Process: GLM - design and fit
     [sFiles_GLM{ifile}, redone_fit] = nst_run_bst_proc([comment_glm_prefix{ifile} ' | fitted model'], redo_parent, ...
-                                                       'process_nst_glm_fit', sFiles{ifile}, [], ...
+                                                       'process_nst_glm_fit', sFiles{ifile}, sFileSSC, ...
                                                        'stim_events',    strjoin(stim_events, ', '), ...
                                                        'hrf_model',      1, ...  % CANONICAL
                                                        'trend',          1, ...
                                                        'fitting',        1, ...  % OLS - precoloring
                                                        'hpf_low_cutoff', options.high_pass_filter.low_cutoff, ...
                                                        'trim_start', options.GLM_1st_level.trim_start, ...
+                                                       'ssc_as_reg', options.GLM_1st_level.short_separation_as_regressor, ...
+                                                       'ssc_threshold_cm', options.GLM_1st_level.short_separation_threshold_cm, ...
                                                        'save_residuals', 0, ...
                                                        'save_betas',     0, ...
                                                        'save_fit',       0);
@@ -828,13 +912,13 @@ options.redo_all = 0;
 
 options.import.redo = 0;
 
-options.export_dir_events = ''; % Where to export all events (mirroring), 
+options.export_dir_events = ''; % options.head_model.surfaceWhere to export all events (mirroring), 
                                 % espcially those manually defined.
                                 % -> will be exported everytime the pipeline
                                 %    function is run, or called with the action 
                                 %    'export_markings'
                                 % -> will be reimported everytime reimportation
-                                %    is needed.
+                                % options.head_model.surface   is needed.
                               
 options.export_dir_channel_flags = ''; % Where to export channel tags (mirroring), 
                                        % espcially those manually tagged.
@@ -849,6 +933,11 @@ options.head_model.surface = 'cortex_lowres';
 options.sci.redo = 0;
 
 options.head_model.redo = 0;
+
+options.crop.do = 0;
+options.crop.redo = 0;
+options.crop.t_start = -1; % sec. -1: nothing discarded at begining
+options.crop.t_end = -1; % sec. -1: nothing discarded at end
 
 options.deglitch.do = 0;
 options.deglitch.redo = 0;
@@ -882,7 +971,11 @@ options.projection.sparse_storage = 0;
 options.clean_preprocessings = 0;
 
 options.GLM_1st_level.redo = 0;
-options.GLM_1st_level.trim_start = 0; % sec
+options.GLM_1st_level.trim_start = 0; % sec, deprecated -> see options.crop
+
+options.GLM_1st_level.split_short_separation.redo = 0;
+options.GLM_1st_level.short_separation_as_regressor = 0;
+options.GLM_1st_level.short_separation_threshold_cm = 1;
 
 options.GLM_1st_level.contrast_redo = 0;
 options.GLM_1st_level.stimulation_events = [];
@@ -911,6 +1004,8 @@ options.GLM_group.rois_summary.csv_export_output_dir = '';
 mask_combinations = get_mask_combinations();
 options.GLM_group.rois_summary.group_masks_combination = mask_combinations.none; % mask_combinations.intersection, mask_combinations.union
 options.GLM_group.rois_summary.group_masks_combine_contrasts = 0; 
+options.GLM_group.rois_summary.use_only_rois = ''; % use these regions instead of activating group mask. Comma-separated list of scout labels
+options.GLM_group.rois_summary.normalize = 1;
 
 options.make_figs = 1;
 options.save_fig_method = 'saveas'; % 'saveas', 'export_fig'
