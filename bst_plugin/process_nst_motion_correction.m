@@ -80,6 +80,7 @@ for iInput=1:length(sInputs)
     end
     
     event = [];
+    ievt_mvt = [];
     for ievt=1:length(events)
         if strcmp(events(ievt).label, event_name)
             event = events(ievt);
@@ -88,12 +89,10 @@ for iInput=1:length(sInputs)
         end
     end
     if isempty(event)
-        bst_error(['Event "' event_name '" does not exist in file.']);
-        OutputFiles = {};
-        return
+        warning(['Event "' event_name '" does not exist in file.']);
     end
 
-    if isempty(event.times) % no marked event
+    if isempty(event) || isempty(event.times) % no marked event
         data_corr = sDataIn.F';
     else
         % Process only NIRS channels
@@ -141,7 +140,11 @@ for iInput=1:length(sInputs)
     sDataOut.Time         = sDataIn.Time;
     sDataOut.DataType     = 'recordings';
     sDataOut.nAvg         = 1;
-    sDataOut.Events       = events([1:(ievt_mvt-1) (ievt_mvt+1):length(events)]);
+    if ~isempty(ievt_mvt)
+        sDataOut.Events       = events([1:(ievt_mvt-1) (ievt_mvt+1):length(events)]);
+    else
+        sDataOut.Events       = events;
+    end
     sDataOut.DisplayUnits = sDataIn.DisplayUnits;
     
     % Generate a new file name in the same folder
