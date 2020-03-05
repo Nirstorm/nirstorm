@@ -68,7 +68,7 @@ for iInput=1:length(sInputs)
     separations = Compute(ChannelMat.Channel(nirs_ichans)) * 100; %convert to cm
     
     if isempty(separations)
-        return;
+        continue;
     end
     
     % Save time-series data
