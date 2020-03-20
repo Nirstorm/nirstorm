@@ -88,10 +88,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
 
     sProcess.options.label1.Comment = '<U><B>Optimization Method</B></U>:';
     sProcess.options.label1.Type    = 'label';
+    sProcess.options.label1.Hidden   = 1;
     
     sProcess.options.fitting.Type    = 'radio_line';
     sProcess.options.fitting.Comment   = {'OLS', 'IRLS(not implemented)','' };
     sProcess.options.fitting.Value   = 1;
+    sProcess.options.fitting.Hidden   = 1;
     
     sProcess.options.label2.Comment = '<U><B>Serial Correlation Preprocessing</B></U>:';
     sProcess.options.label2.Type    = 'label';
@@ -102,6 +104,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.output_cmt0.Comment = '<B>Pre-coloring Options</B>:';
     sProcess.options.output_cmt0.Type    = 'label';
+    sProcess.options.output_cmt0.Hidden   = 1;
     
     sProcess.options.output_cmt1.Comment = '<B>Pre-whitenning Options</B>:';
     sProcess.options.output_cmt1.Type    = 'label';
@@ -241,7 +244,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
                                             basis_choice, hrf_duration, sProcess.options.trend.Value);
                                         
                                         
-    if ~isempty(sInput_ext)
+    if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
         
         DataMatExt = in_bst_data(sInput_ext.FileName);
         ChannelExt = in_bst_channel(sInput_ext.ChannelFile);
@@ -521,9 +524,13 @@ function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_l
     end
 
     % Band-pass filtering of the design matrix
-    X_filtered = lpf * process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
+    if hpf_low_cutoff > 0 
+        X_filtered = lpf * process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
                                               'highpass', hpf_low_cutoff, ...
                                                0, 2, 0);
+    else
+        X_filtered = lpf * X(:,1:(end-1));
+    end    
     X_filtered = [X_filtered X(:,end)];
     
     %% Solve y = X*B using SVD as in SPM
@@ -749,6 +756,7 @@ function [X, names, hrf] = make_design_matrix(time, events, hrf_type, hrf_durati
             bst_error('Unknown hrf_type');
             return;
     end
+    
     if size(hrf, 2) ~= 1
         hrf = hrf'; % ensure column vector
     end
