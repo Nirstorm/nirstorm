@@ -76,7 +76,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.preview.Comment =  {'process_nst_import_evt_events(''preview_importation'',iProcess,sfreq);' , '', 'Preview importation'} ;
     sProcess.options.preview.Type = 'button';
-    sProcess.options.display.Value   = [];
+    sProcess.options.preview.Value   = [];
 end
 
 
