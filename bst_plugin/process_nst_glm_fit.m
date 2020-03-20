@@ -591,9 +591,14 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
     mse_residuals_out=zeros(1,n_chan);
     
     % high-pass filtering of the design matrix
-    X_hpf = process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
+    if hpf_low_cutoff > 0 
+        X_hpf = process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
                                               'highpass', hpf_low_cutoff, ...
-                                               0, 2, 0);
+                                               0, 2, 0);    
+    else
+        X_hpf = X(:,1:(end-1));
+    end
+    
     X_hpf = [X_hpf X(:,end)];
     
     %X_hpf=X;
