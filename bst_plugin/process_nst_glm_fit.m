@@ -228,15 +228,15 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     
     % Check that all selected events are extended
     % TODO: also handle single events for event-related design
-    isExtended = false(1,length(ievents));
-    for ievt=1:length(ievents)
-        isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).times, 1) == 2);
-    end
-    if ~all(isExtended)
-         bst_error(sprintf('Simple events not supported: %s ', ...
-                           strjoin(selected_event_names(ievents(~isExtended)), ', ')));
-         return;
-    end
+    %isExtended = false(1,length(ievents));
+    %for ievt=1:length(ievents)
+    %    isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).times, 1) == 2);
+    %end
+    %if ~all(isExtended)
+    %     bst_error(sprintf('Simple events not supported: %s ', ...
+    %                       strjoin(selected_event_names(ievents(~isExtended)), ', ')));
+    %     return;
+    %end
     
     %% Create the design matrix X
     hrf_duration = 32; % sec -- TODO: expose as process parameter?
