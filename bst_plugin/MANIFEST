@@ -41,6 +41,7 @@ process_nst_extract_sensitivity_from_head_model.m
 process_nst_glm_group_subjs_zmat.m
 process_nst_glm_contrast_mask.m
 process_nst_glm_fit.m
+process_nst_glm_fit1.m
 process_nst_glm_contrast.m
 process_nst_glm_contrast_ttest.m
 process_nst_glm_group_ttest.m

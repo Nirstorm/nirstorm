@@ -40,7 +40,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - 1st level design and fit';
     sProcess.Category    = 'File2';
-    sProcess.SubGroup    = 'NIRS - wip';
+    sProcess.SubGroup    = 'NIRS';
     sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
