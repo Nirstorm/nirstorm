@@ -1,4 +1,4 @@
-function channel_label = nst_format_channel(isrc, idet, measure)
+function [channel_label, measure] = nst_format_channel(isrc, idet, measure)
 % NST_FORMAT_CHANNEL make channel label from source, dectector and measure information.
 %
 %   CHANNEL_LABEL = NST_FORMAT_CHANNEL(ISRC, IDET, MEAS)
