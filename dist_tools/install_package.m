@@ -186,7 +186,8 @@ for im=1:length(manifest_fns)
         if ~exist(source_fn, 'file')
             throw(MException('DistPackage:FileNotFound', [protect_path(source_fn) ' does not exist in source dir']));
         end
-        target_fn = fullfile(target_dir, source_rfns{ifn});
+        [~,target_rfns,ext] = fileparts(source_fn);
+        target_fn = fullfile(target_dir, [ target_rfns ext]);
         if exist(target_fn, 'file')
             backup_rfn = add_fn_prefix(source_rfns{ifn}, backup_prefix);
             warning('DistPackage:ExistingTarget', ...
@@ -208,7 +209,7 @@ for im=1:length(manifest_fns)
         install_operations(iop).file2 = target_fn;
         iop = iop + 1;
 
-        uninstall_operations(uop).file1 = source_rfns{ifn};
+        uninstall_operations(uop).file1 = [target_rfns ext];
         uninstall_operations(uop).action = 'remove';
         uninstall_operations(uop).file2 = '';
         uop = uop + 1;
