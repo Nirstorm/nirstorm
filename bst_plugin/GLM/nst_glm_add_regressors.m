@@ -117,7 +117,7 @@ end
 function model=nst_glm_add_linear_regressors(model)
     
     nTime=model.ntime;
-    model.X= [model.X (0:nTime-1)'];
+    model.X= [model.X (0:nTime-1)'./nTime(end)];
     model.reg_names{end+1}='Linear';
     
 end
@@ -197,7 +197,7 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
 end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)
         
-    [cmat,band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences);
+    [cmat,band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences,1);
     
     % Add the regressor at the end of the design matrix
     model.X= [model.X cmat]; 
