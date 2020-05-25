@@ -3,7 +3,8 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
 % model = add_regressors(Model, "event", Events, basis_choice, hrf_duration)
 % model = add_regressors(Model, "external_input", external_input)
 % model = add_regressors(Model, "channel",sFile,criteria,params)
-% model = add_regressors(Model, "constant") Add a regressor that just contains 1.
+% model = add_regressors(Model, "constant") Add a constant regressor
+% model = add_regressors(Model, "linear") Add a linear regressor
 % model = add_regressors(Model, "DCT", frequences, names)
 
 
@@ -49,7 +50,8 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
             
         case 'constant'
             model=nst_glm_add_constant_regressors(model);
-        
+        case 'linear'
+            model=nst_glm_add_linear_regressors(model);
         case 'DCT'
             frequences=varargin{1};
             names=varargin{2};
@@ -111,6 +113,15 @@ function model=nst_glm_add_constant_regressors(model)
     model.reg_names{end+1}='Constant';
 
 end
+
+function model=nst_glm_add_linear_regressors(model)
+    
+    nTime=model.ntime;
+    model.X= [model.X (0:nTime-1)'];
+    model.reg_names{end+1}='Linear';
+    
+end
+
 
 function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
     if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)

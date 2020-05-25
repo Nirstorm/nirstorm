@@ -1,4 +1,4 @@
-function varargout = process_nst_remove_ssc( varargin )
+function varargout = process_nst_detrend( varargin )
 
 % @=============================================================================
 % This software is part of the Brainstorm software:
@@ -27,11 +27,11 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Remove superficial noise';
-sProcess.Category    = 'Custom';
+sProcess.Comment     = 'Remove slow fluctuations';
+sProcess.Category    = 'File';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1308;
-sProcess.isSeparator = 0;
+sProcess.Index       = 1309;
+sProcess.isSeparator = 1;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 
 % Definition of the input accepted by this process
@@ -40,12 +40,7 @@ sProcess.OutputTypes = {'data','data'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
-sProcess.nOutputs    = 2;
-
-sProcess.options.separation_threshold_cm.Comment = 'Separation threshold';
-sProcess.options.separation_threshold_cm.Type    = 'value';
-sProcess.options.separation_threshold_cm.Value   = {1.5, 'cm', 2}; 
-
+sProcess.nOutputs    = 1;
 end
 
 %% ===== FORMAT COMMENT =====
@@ -53,12 +48,9 @@ function Comment = FormatComment(sProcess)
 Comment = sProcess.Comment;
 end
 
-function [OutputFiles_SSC] = Run(sProcess, sInput)
+function OutputFiles = Run(sProcess, sInput)
 
-OutputFiles_SSC = {};
-
-separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
-
+OutputFiles = {};
     
 % Load recordings
 if strcmp(sInput.FileType, 'data')     % Imported data structure
@@ -73,8 +65,8 @@ ChannelMat = in_bst_channel(sInput.ChannelFile);
 Y= sDataIn.F(nirs_ichans,:)';
 
 model= nst_glm_initialize_model(sDataIn.Time);
-model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
-
+model=nst_glm_add_regressors(model,"constant");
+model=nst_glm_add_regressors(model,"linear");  
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
 Y= Y - model.X*B;
 
@@ -82,7 +74,7 @@ Y= Y - model.X*B;
 sDataOut                    = db_template('data');
 sDataOut.F                  = sDataIn.F;
 sDataOut.F(nirs_ichans,:)   = Y';
-sDataOut.Comment            = [sInput.Comment ' SSC'];
+sDataOut.Comment            = [sInput.Comment ' detrend'];
 sDataOut.ChannelFlag        = sDataIn.ChannelFlag; 
 sDataOut.Time               = sDataIn.Time;
 sDataOut.DataType           = 'recordings'; 
@@ -98,11 +90,11 @@ sDataOut.DisplayUnits = sDataIn.DisplayUnits;
 
 % Generate a new file name in the same folder
 sStudy = bst_get('Study', sInput.iStudy);
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_lsc');
+OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_detrend');
 sDataOut.FileName = file_short(OutputFile);
 bst_save(OutputFile, sDataOut, 'v7');
 % Register in database
 db_add_data(sInput.iStudy, OutputFile, sDataOut);
-OutputFiles_SSC{1} = OutputFile;
+OutputFiles{1} = OutputFile;
 
 end    

@@ -39,6 +39,8 @@ preprocessing/process_nst_detect_bad.m
 preprocessing/process_nst_iir_filter.m
 preprocessing/process_nst_motion_correction.m
 preprocessing/process_nst_extract_ssc.m
+preprocessing/process_nst_remove_ssc.m
+preprocessing/process_nst_detrend.m
 mbll/process_nst_dOD.m
 mbll/process_nst_mbll.m
 ppl/nst_ppl_surface_V1.m
