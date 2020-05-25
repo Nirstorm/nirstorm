@@ -44,6 +44,9 @@ mbll/process_nst_mbll.m
 ppl/nst_ppl_surface_V1.m
 ppl/nst_ppl_surface_template_V1.m
 ppl/process_nst_get_data_perform_2018.m
+GLM/nst_glm_add_regressors.m
+GLM/nst_glm_fit_B.m
+GLM/nst_glm_initialize_model.m
 GLM/nst_make_basic_contrasts.m
 GLM/nst_make_event_toeplitz_mtx.m
 GLM/nst_make_event_regressors.m
@@ -68,6 +71,7 @@ math/dg_voronoi.c
 math/dg_voronoi.m
 math/dg_voronoi.mexa64
 math/dg_voronoi.mexglx
+math/nst_math_build_basis_dct.m
 math/nst_math_fit_AR.m
 OM/process_nst_OM_from_cortex.m
 OM/process_nst_OM_from_head.m
