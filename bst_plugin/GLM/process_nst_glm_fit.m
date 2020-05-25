@@ -66,6 +66,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
     sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
+    sProcess.options.trim_start.Hidden   = 1; % Hide, as it is deprecated
 
     sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
     sProcess.options.label3.Type    = 'label';
@@ -136,13 +137,7 @@ end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) 
-    Comment = sProcess.Comment;
-%     fitting_choice=cell2mat(sProcess.options.fitting.Value(1));
-%     if( fitting_choice == 1 )
-%         Comment=[ Comment ' OLS fit'];
-%     elseif( fitting_choice == 2)
-%         Comment=[ Comment ' AR-IRLS fit'];
-%     end    
+    Comment = sProcess.Comment; 
 end
 
 function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
@@ -199,23 +194,10 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         Y = DataMat.F(nirs_ichans,:)';
     end
     
-    if strcmp(DataMat.DisplayUnits, 'mol.l-1')
-        Y = Y * 1e6;
-        DataMat.DisplayUnits = 'mumol.l-1';
-    elseif strcmp(DataMat.DisplayUnits, 'mmol.l-1')
-        Y = Y * 1e3;
-        DataMat.DisplayUnits = 'mumol.l-1';
-    elseif strcmp(DataMat.DisplayUnits, 'mumol.l-1') || strcmp(DataMat.DisplayUnits, '\mumol.l-1')
-        Y = Y * 1;
-        DataMat.DisplayUnits = 'mumol.l-1';
-    else
-        if ~isempty(DataMat.DisplayUnits)
-            warning('Cannot interpret data unit: %s.', DataMat.DisplayUnits);
-        else
-            warning('Unspecified data unit.');
-        end
-    end
+    Y=nst_misc_convert_to_mumol(Y,DisplayUnits);
+    DataMat.DisplayUnits = 'mumol.l-1';
     
+
     all_event_names = {DataMat.Events.label};
     events_found = ismember(selected_event_names, all_event_names);
     if ~all(events_found)
@@ -225,19 +207,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         return;
     end
     ievents = cellfun(@(l) find(strcmp(l,all_event_names)), selected_event_names);
-    
-    % Check that all selected events are extended
-    % TODO: also handle single events for event-related design
-    %isExtended = false(1,length(ievents));
-    %for ievt=1:length(ievents)
-    %    isExtended(ievt) = (size(DataMat.Events(ievents(ievt)).times, 1) == 2);
-    %end
-    %if ~all(isExtended)
-    %     bst_error(sprintf('Simple events not supported: %s ', ...
-    %                       strjoin(selected_event_names(ievents(~isExtended)), ', ')));
-    %     return;
-    %end
-    
+
     %% Create the design matrix X
     hrf_duration = 32; % sec -- TODO: expose as process parameter?
     [X,reg_names, hrf] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
