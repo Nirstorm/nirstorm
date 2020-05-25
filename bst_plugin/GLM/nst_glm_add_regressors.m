@@ -2,7 +2,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
 % Call exemple 
 % model = add_regressors(Model, "event", Events, basis_choice, hrf_duration)
 % model = add_regressors(Model, "external_input", external_input)
-% model = add_regressors(Model, "channel", channel_names, [convolve_with_hrf=0, basis_choice, hrf_duration]) Note: if convolve_with_hrf=1, then convolute the regressor with HRF like for event based regressor. Typically if the channel is AUX that contain the paradigm of the experiment
+% model = add_regressors(Model, "channel",sFile,criteria,params)
 % model = add_regressors(Model, "constant") Add a regressor that just contains 1.
 % model = add_regressors(Model, "DCT", frequences, names)
 
@@ -24,6 +24,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
                 hrf_duration=varargin{3};
             end
             model=nst_glm_add_event_regressors(model,events,basis_choice,hrf_duration);
+            
         case 'external_input'
             sInput_ext=varargin{1};
             if nargin < 4
@@ -33,8 +34,18 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
             end    
             
             model=nst_glm_add_ext_input_regressors(model,sInput_ext,hb_types); 
-        case 'channel'
             
+        case 'channel'
+            sFile=varargin{1};
+            if nargin < 4
+                criteria='distance';
+                params=3; % 3 cm 
+            else
+                criteria=varargin{2};
+                params=varargin{3};
+            end    
+            
+            model=nst_glm_add_channel_regressors(model,sFile,criteria,params); 
             
         case 'constant'
             model=nst_glm_add_constant_regressors(model);
@@ -132,7 +143,47 @@ function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
     end
 end
 
+function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
+% Add regressor from data matrix based on the channel name or
+% Source-dectecor distance. 
+% Usage : 
+% model=nst_glm_add_channel_regressors(model,sFile,'distance',max_distance)
+% model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'})
 
+
+    % Load recordings
+    if strcmp(sFile.FileType, 'data')     % Imported data structure
+        sDataIn = in_bst_data(sFile.FileName);
+    elseif strcmp(sFile.FileType, 'raw')  % Continuous data file
+        sDataIn = in_bst(sFileFileName, [], 1, 1, 'no');
+    end
+    
+    ChannelMat = in_bst_channel(sFile.ChannelFile);
+    [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+
+    switch criteria
+        case 'distance'
+            separations = process_nst_separations('Compute', ChannelMat.Channel(nirs_ichans));
+            if isempty(separations)
+                warning(sprintf('Separations could not be computed for %s', sFile.FileName));
+            end
+    
+            lsc_chans = separations > params;
+            ssc_chans = ~lsc_chans & ~isnan(separations);
+            y=sDataIn.F(ssc_chans, :)';
+            
+            names={ChannelMat.Channel(ssc_chans).Name};
+        case 'name'
+            [~,idx_chann] = find(ismember(ChannelMat.Channel(nirs_ichans).Name ,params));
+
+            y=sDataIn.F(idx_chann, :)';
+            names=params;   
+    end
+ 
+
+    model.X        = [model.X y];
+    model.reg_names= [model.reg_names names];     
+end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)
         
     [cmat,band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences);
