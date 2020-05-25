@@ -38,6 +38,10 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 sProcess.InputTypes  = {'data','raw'};
 sProcess.OutputTypes = {'data','data'};
 
+sProcess.options.option_low_cutoff.Comment = 'Add DCT (0= only linear detrend):';
+sProcess.options.option_low_cutoff.Type    = 'value';
+sProcess.options.option_low_cutoff.Value   = {0.01, '', 4};
+    
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.nOutputs    = 1;
@@ -67,6 +71,19 @@ Y= sDataIn.F(nirs_ichans,:)';
 model= nst_glm_initialize_model(sDataIn.Time);
 model=nst_glm_add_regressors(model,"constant");
 model=nst_glm_add_regressors(model,"linear");  
+
+if sProcess.options.option_low_cutoff.Value{1} > 0
+   high_frequency=sProcess.options.option_low_cutoff.Value{1};
+   model=nst_glm_add_regressors(model,"DCT",[0 high_frequency],{'LFO'});  
+end
+
+figure(1); 
+for i=1:size(model.X,2)
+    subplot(size(model.X,2),1,i)
+    plot(model.time,model.X(:,i))
+    title(model.reg_names{i})
+end 
+       
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
 Y= Y - model.X*B;
 
