@@ -86,15 +86,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Separator
     sProcess.options.separator00.Type = 'separator';
     sProcess.options.separator00.Comment = ' ';
-
-    sProcess.options.label1.Comment = '<U><B>Optimization Method</B></U>:';
-    sProcess.options.label1.Type    = 'label';
-    sProcess.options.label1.Hidden   = 1;
-    
-    sProcess.options.fitting.Type    = 'radio_line';
-    sProcess.options.fitting.Comment   = {'OLS', 'IRLS(not implemented)','' };
-    sProcess.options.fitting.Value   = 1;
-    sProcess.options.fitting.Hidden   = 1;
     
     sProcess.options.label2.Comment = '<U><B>Serial Correlation Preprocessing</B></U>:';
     sProcess.options.label2.Type    = 'label';
@@ -102,17 +93,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.statistical_processing.Type    = 'radio_line';
     sProcess.options.statistical_processing.Comment   = {'Pre-coloring', 'Pre-whitenning','Method : '};
     sProcess.options.statistical_processing.Value   = 1;
-    
-    sProcess.options.output_cmt0.Comment = '<B>Pre-coloring Options</B>:';
-    sProcess.options.output_cmt0.Type    = 'label';
-    sProcess.options.output_cmt0.Hidden   = 1;
-    
-    sProcess.options.output_cmt1.Comment = '<B>Pre-whitenning Options</B>:';
-    sProcess.options.output_cmt1.Type    = 'label';
-    
-    sProcess.options.noise_model.Type    = 'radio_line';
-    sProcess.options.noise_model.Comment   = {'AR(1)', 'AR(p)','Model of the noise : '};
-    sProcess.options.noise_model.Value   = 1;
+        
     
     sProcess.options.separator1.Type = 'separator';
     sProcess.options.separator1.Comment = ' ';
@@ -194,7 +175,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         Y = DataMat.F(nirs_ichans,:)';
     end
     
-    Y=nst_misc_convert_to_mumol(Y,DisplayUnits);
+    Y=nst_misc_convert_to_mumol(Y,DataMat.DisplayUnits);
     DataMat.DisplayUnits = 'mumol.l-1';
     
 
@@ -253,82 +234,56 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     trim_start_sample = round(trim_start / dt);
     Y_trim = Y((trim_start_sample+1):end, :);
     X_trim = X((trim_start_sample+1):end, :);
-    
-    %% Solve Y = XB + e 
-    switch sProcess.options.fitting.Value
-        case 1 % OLS 
-            if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
-                method_name = 'OLS_precoloring';
-                hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
-                [B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
-                
-                if surface_data
-                   B=zeros(nb_regressors,n_voxel);
-                   B(:,mask)=B_out;
-                    
-                   residuals=zeros( size(residuals_out,1),n_voxel);
-                   residuals(:,mask)=residuals_out;
-                    
-                   mse_residuals=zeros(1,n_voxel);
-                   mse_residuals(:,mask)=mse_residuals_out;
-                    
-                else     
-                    B=B_out;
-                    residuals=residuals_out;
-                    mse_residuals=mse_residuals_out;
-                end
-            else % Pre-whitenning
-                if sProcess.options.noise_model.Value == 1
-                    method_name = 'AR1_OLS';
-                    hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
-                    [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
-                
-                     if surface_data
-                        B=zeros(nb_regressors,n_voxel);
-                        B(:,mask)=B_out;
-                        
-                        covB=zeros(nb_regressors,nb_regressors,n_voxel);
-                        covB(:,:,mask)=covB_out;
-                        
-                        dfe=zeros(1,n_voxel);
-                        dfe(mask)=dfe_out;
-                        
-                        residuals=zeros( size(residuals_out,1),n_voxel);
-                        residuals(:,mask)=residuals_out;
-                    
-                        mse_residuals=zeros(1,n_voxel);
-                        mse_residuals(:,mask)=mse_residuals_out;
-                    
-                     else     
-                        B=B_out;
-                        covB=covB_out;
-                        dfe=dfe_out;
-                        residuals=residuals_out;
-                        mse_residuals=mse_residuals_out;
-                     end
-                else 
-                    bst_error('This method is not implemented');
-                    return
-                end    
-            end    
+    hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
 
-        case 2 % IRLS
-            analyzIR_url = 'https://bitbucket.org/huppertt/nirs-toolbox/';
-            if ~exist('nirs.core.ChannelStats','class')
-                bst_error(['AnalyzIR toolbox required. See ' analyzIR_url]);
-                return
-            end
-            method_name = 'AR-IRLS_fit';
-            % TODO: adapt to return original covB and separated mse_residuals
-            % instead of mixing them already (done later during con t-stat computation)
-            [B, covB, dfe, residuals, mse_residuals] = ar_irls_fit( Y_trim, X_trim, round(4/(DataMat.Time(2)-DataMat.Time(1))) ); 
-        otherwise
-            bst_error('This method is not implemented');
-            return
-        
+    %% Solve Y = XB + e 
+    if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
+        method_name = 'OLS_precoloring';
+        [B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
+                
+        if surface_data
+           B=zeros(nb_regressors,n_voxel);
+           B(:,mask)=B_out;
+
+           residuals=zeros( size(residuals_out,1),n_voxel);
+           residuals(:,mask)=residuals_out;
+
+           mse_residuals=zeros(1,n_voxel);
+           mse_residuals(:,mask)=mse_residuals_out;         
+        else     
+            B=B_out;
+            residuals=residuals_out;
+            mse_residuals=mse_residuals_out;
+        end
+    else % Pre-whitenning
+        method_name = 'AR1_OLS';
+        [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
+        if surface_data
+            B=zeros(nb_regressors,n_voxel);
+            B(:,mask)=B_out;
+
+            covB=zeros(nb_regressors,nb_regressors,n_voxel);
+            covB(:,:,mask)=covB_out;
+
+            dfe=zeros(1,n_voxel);
+            dfe(mask)=dfe_out;
+
+            residuals=zeros( size(residuals_out,1),n_voxel);
+            residuals(:,mask)=residuals_out;
+
+            mse_residuals=zeros(1,n_voxel);
+            mse_residuals(:,mask)=mse_residuals_out;         
+         else     
+            B=B_out;
+            covB=covB_out;
+            dfe=dfe_out;
+            residuals=residuals_out;
+            mse_residuals=mse_residuals_out;
+        end            
     end    
     
     %% Save results
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Main output is beta maps stacked in temporal axis
     output_prefix = [sInput.Comment ' | GLM ' method_name ' '];
 
