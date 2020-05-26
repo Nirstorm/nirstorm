@@ -38,9 +38,13 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 sProcess.InputTypes  = {'data','raw'};
 sProcess.OutputTypes = {'data','data'};
 
-sProcess.options.option_low_cutoff.Comment = 'Add DCT (0= only linear detrend):';
-sProcess.options.option_low_cutoff.Type    = 'value';
-sProcess.options.option_low_cutoff.Value   = {0.01, '', 4};
+sProcess.options.option_period.Comment = 'Miminum Period (0= only linear detrend):';
+sProcess.options.option_period.Type    = 'value';
+sProcess.options.option_period.Value   = {200, 's', 0};
+
+sProcess.options.option_keep_mean.Comment = 'Keep the mean';
+sProcess.options.option_keep_mean.Type    = 'checkbox';
+sProcess.options.option_keep_mean.Value   = 0;
     
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
@@ -55,6 +59,7 @@ end
 function OutputFiles = Run(sProcess, sInput)
 
 OutputFiles = {};
+keep_mean = sProcess.options.option_keep_mean.Value;
     
 % Load recordings
 if strcmp(sInput.FileType, 'data')     % Imported data structure
@@ -64,7 +69,8 @@ elseif strcmp(sInput.FileType, 'raw')  % Continuous data file
 end
     
 ChannelMat = in_bst_channel(sInput.ChannelFile);
-[nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+nirs_ichans = sDataIn.ChannelFlag ~= -1 & strcmpi({ChannelMat.Channel.Type}, 'NIRS')';
+
 
 Y= sDataIn.F(nirs_ichans,:)';
 
@@ -72,10 +78,21 @@ model= nst_glm_initialize_model(sDataIn.Time);
 model=nst_glm_add_regressors(model,"constant");
 model=nst_glm_add_regressors(model,"linear");  
 
-if sProcess.options.option_low_cutoff.Value{1} > 0
-   high_frequency=sProcess.options.option_low_cutoff.Value{1};
-   model=nst_glm_add_regressors(model,"DCT",[0 high_frequency],{'LFO'});  
+
+if sProcess.options.option_period.Value{1} > 0
+   period=sProcess.options.option_period.Value{1};
+   model=nst_glm_add_regressors(model,"DCT",[1/sDataIn.Time(end) 1/period],{'LFO'});  
 end
+       
+[B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
+
+if keep_mean
+    Y= Y - model.X(:,2:end)*B(2:end,:);
+else    
+    Y= Y - model.X*B;
+end
+
+%disp(sprintf('Rank X: %d, dim X: %d',rank(model.X),size(model.X,2)))
 
 figure(1); 
 for i=1:size(model.X,2)
@@ -83,10 +100,6 @@ for i=1:size(model.X,2)
     plot(model.time,model.X(:,i))
     title(model.reg_names{i})
 end 
-       
-[B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
-Y= Y - model.X*B;
-
 
 sDataOut                    = db_template('data');
 sDataOut.F                  = sDataIn.F;
