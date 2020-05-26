@@ -81,3 +81,4 @@ OM/process_nst_OM_from_cortex.m
 OM/process_nst_OM_from_head.m
 OM/process_nst_OM_from_cap.m
 misc/nst_misc_convert_to_mumol.m
+misc/nst_misc_unpack_glm_result.m

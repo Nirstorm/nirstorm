@@ -173,6 +173,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         % Get signals of NIRS channels only:
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
         Y = DataMat.F(nirs_ichans,:)';
+        mask=[];
+        n_voxel=size(Y,2);
     end
     
     Y=nst_misc_convert_to_mumol(Y,DataMat.DisplayUnits);
@@ -225,50 +227,14 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     %% Solve Y = XB + e 
     if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
         method_name = 'OLS_precoloring';
-        [B_out, covB, dfe, residuals_out, mse_residuals_out] = nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
-        %[B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
-                
-        if surface_data
-           B=zeros(nb_regressors,n_voxel);
-           B(:,mask)=B_out;
-
-           residuals=zeros( size(residuals_out,1),n_voxel);
-           residuals(:,mask)=residuals_out;
-
-           mse_residuals=zeros(1,n_voxel);
-           mse_residuals(:,mask)=mse_residuals_out;         
-        else     
-            B=B_out;
-            residuals=residuals_out;
-            mse_residuals=mse_residuals_out;
-        end
-    else % Pre-whitenning
+    else
         method_name = 'OLS_prewhitening';
-        [B_out, covB, dfe, residuals_out, mse_residuals_out] = nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
-        %[B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
-        if surface_data
-            B=zeros(nb_regressors,n_voxel);
-            B(:,mask)=B_out;
+    end
+    
+    fitted_model= nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
+    [B,covB,dfe,residuals,mse_residuals] = nst_misc_unpack_glm_result(fitted_model,method_name,surface_data,nb_regressors,n_voxel,mask);
+    
 
-            covB=zeros(nb_regressors,nb_regressors,n_voxel);
-            covB(:,:,mask)=covB_out;
-
-            dfe=zeros(1,n_voxel);
-            dfe(mask)=dfe_out;
-
-            residuals=zeros( size(residuals_out,1),n_voxel);
-            residuals(:,mask)=residuals_out;
-
-            mse_residuals=zeros(1,n_voxel);
-            mse_residuals(:,mask)=mse_residuals_out;         
-         else     
-            B=B_out;
-            covB=covB_out;
-            dfe=dfe_out;
-            residuals=residuals_out;
-            mse_residuals=mse_residuals_out;
-        end            
-    end    
     
     %% Save results
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
