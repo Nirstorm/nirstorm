@@ -22,6 +22,6 @@ function fitted_model = nst_glm_fit(model, y, hpf_low_cutoff,method,varagin)
     fitted_model.covB=covB;
     fitted_model.dfe=dfe;
     fitted_model.residuals=residuals;
-    fitted_model.mse_residuals;
+    fitted_model.mse_residuals=mse_residuals;
 end
 
