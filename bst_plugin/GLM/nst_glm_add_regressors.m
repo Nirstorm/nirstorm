@@ -102,6 +102,8 @@ function model=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
     model.X         = [model.X X_event];
     model.hrf       = hrf;
     model.reg_names = [model.reg_names names];
+    % We apply low and high pass filter
+    model.accept_filter = [model.accept_filter 3*ones(1,length(names))];
 
 end
 
@@ -110,6 +112,9 @@ function model=nst_glm_add_constant_regressors(model)
     
     model.X= [model.X ones(model.ntime,1)];
     model.reg_names{end+1}='Constant';
+    
+    % We don't apply filter on the constant regressor
+    model.accept_filter = [model.accept_filter 0];
 
 end
 
@@ -121,6 +126,9 @@ function model=nst_glm_add_linear_regressors(model)
     
     model.X= [model.X regressor'];
     model.reg_names{end+1}='Linear';
+    
+    % We don't apply filter on the linear regressor
+    model.accept_filter = [model.accept_filter 0];
     
 end
 
@@ -154,6 +162,8 @@ function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
 
          model.X        = [model.X extra_regs];
          model.reg_names= [model.reg_names extra_reg_names];
+         % We apply low and high pass filter
+         model.accept_filter = [model.accept_filter 3*ones(1,length(extra_reg_names))];
     end
 end
 
@@ -196,7 +206,9 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
  
 
     model.X        = [model.X y];
-    model.reg_names= [model.reg_names names];     
+    model.reg_names= [model.reg_names names];
+    % We apply low and high pass filter
+    model.accept_filter = [model.accept_filter 3*ones(1,length(names))];
 end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)
         
@@ -204,9 +216,11 @@ function model=nst_glm_add_DCT_regressors(model,frequences,names)
     
     % Add the regressor at the end of the design matrix
     model.X= [model.X cmat]; 
+    % We apply don't apply filter on DCT
+    model.accept_filter = [model.accept_filter zeros(1,length(names))];
+    
     
     % Add names into the regressor list
-    
     for i_name=1:length(names)
         dct_index=band_indexes{i_name};
         for i_index=1:length(dct_index)
