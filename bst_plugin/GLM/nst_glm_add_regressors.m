@@ -98,9 +98,10 @@ function model=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
     names = {events.label};
     
     
-    model.n_roi=model.n_roi+length(names);
-    model.X= [model.X X_event];
-    model.reg_names= [model.reg_names names];
+    model.n_roi     = model.n_roi+length(names);
+    model.X         = [model.X X_event];
+    model.hrf       = hrf;
+    model.reg_names = [model.reg_names names];
 
 end
 
@@ -129,12 +130,13 @@ function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
         
         DataMatExt = in_bst_data(sInput_ext.FileName);
         ChannelExt = in_bst_channel(sInput_ext.ChannelFile);
-        dt = diff(DataMat.Time(1:2));
-        if length(DataMat.Time) ~= length(DataMatExt.Time) || ...
-                ~all(abs(DataMatExt.Time - DataMat.Time) <= dt/100)
+        dt = diff(model.time(1:2));
+        if length(DataMat.Time) ~= length(model.time) || ...
+                ~all(abs(DataMatExt.Time - model.time) <= dt/100)
             error('Time of external measure is not consistent with data time.');
         end
         
+        % Can clearly be merge with next condition
         if length(hb_types)==1
             hb_type=hb_types;
         else

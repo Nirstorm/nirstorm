@@ -189,22 +189,18 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     end
     ievents = cellfun(@(l) find(strcmp(l,all_event_names)), selected_event_names);
 
-    %% Create the design matrix X
+    %% Create model
     hrf_duration = 32; % sec -- TODO: expose as process parameter?
-    [X,reg_names, hrf] = make_design_matrix(DataMat.Time, DataMat.Events(ievents), ...
-                                            basis_choice, hrf_duration, sProcess.options.trend.Value);
-                                        
-                                        
+    
+    model=nst_glm_initialize_model(DataMat.Time);
+    model=nst_glm_add_regressors(model,'event', DataMat.Events(ievents), basis_choice,hrf_duration);
+    
+    if sProcess.options.trend.Value
+        model=nst_glm_add_regressors(model,'constant');
+    end
+                                                                   
     if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
-        
-        DataMatExt = in_bst_data(sInput_ext.FileName);
-        ChannelExt = in_bst_channel(sInput_ext.ChannelFile);
-        dt = diff(DataMat.Time(1:2));
-        if length(DataMat.Time) ~= length(DataMatExt.Time) || ...
-                ~all(abs(DataMatExt.Time - DataMat.Time) <= dt/100)
-            error('Time of external measure is not consistent with data time.');
-        end
-        
+                
         hb_types = {'HbO', 'HbR', 'HbT'};
         hb_type = [];
         for ihb=1:length(hb_types)
@@ -213,33 +209,24 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
                 break;
             end
         end
-        if ~isempty(hb_type)
-            hb_chans = strcmp({ChannelExt.Channel.Group}, hb_type);
-            extra_regs = DataMatExt.F(hb_chans, :)';
-            extra_reg_names = {ChannelExt.Channel(hb_chans).Name};
-        else
-            extra_regs = DataMatExt.F';
-            extra_reg_names = {ChannelExt.Channel.Name};
-        end
-
-        X = [X extra_regs];
-        reg_names = [reg_names extra_reg_names];
+        model=nst_glm_add_regressors(model,'external_input',hb_type);
     end
-                                        
-    nb_regressors = size(X, 2);
+    nst_glm_display_model(model,'timecourse');
     
+    nb_regressors = size(model.X, 2);
     iStudy = sInput.iStudy;
 
     dt = diff(DataMat.Time(1:2));
     trim_start_sample = round(trim_start / dt);
     Y_trim = Y((trim_start_sample+1):end, :);
-    X_trim = X((trim_start_sample+1):end, :);
+    model.X = model.X((trim_start_sample+1):end, :);
     hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
 
     %% Solve Y = XB + e 
     if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
         method_name = 'OLS_precoloring';
-        [B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
+        [B_out, covB, dfe, residuals_out, mse_residuals_out] = nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
+        %[B_out, covB, dfe, residuals_out, mse_residuals_out] = ols_fit(Y_trim, dt, X_trim, hrf, hpf_low_cutoff);
                 
         if surface_data
            B=zeros(nb_regressors,n_voxel);
@@ -256,8 +243,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
             mse_residuals=mse_residuals_out;
         end
     else % Pre-whitenning
-        method_name = 'AR1_OLS';
-        [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
+        method_name = 'OLS_prewhitening';
+        [B_out, covB, dfe, residuals_out, mse_residuals_out] = nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
+        %[B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y_trim, dt, X_trim, hpf_low_cutoff);
         if surface_data
             B=zeros(nb_regressors,n_voxel);
             B(:,mask)=B_out;
@@ -290,9 +278,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     sStudy = bst_get('Study', sInput.iStudy);
     
     % Extra fields to save GLM outputs for later internal use
-    extra_output.X = X; % nb_samples x nb_regressors
+    extra_output.X = model.X; % nb_samples x nb_regressors
     extra_output.X_time = DataMat.Time;
-    extra_output.reg_names = reg_names;
+    extra_output.reg_names = model.reg_names;
     extra_output.beta_cov = covB; % nb_regressors x nb_regressors x nb_positions
     extra_output.edf = dfe;
     extra_output.mse_residuals = mse_residuals;
@@ -330,11 +318,11 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     
     if save_betas
         % Saving B as maps
-        for i_reg_name=1:length(reg_names)
+        for i_reg_name=1:length(model.reg_names)
             data_out = zeros(size(DataMat.F, 1), 1);
 
             output_tag = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
-            output_comment = [output_prefix '- beta ' reg_names{i_reg_name}];
+            output_comment = [output_prefix '- beta ' model.reg_names{i_reg_name}];
 
             if surface_data
                 [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
@@ -350,7 +338,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
                 sDataOut.nAvg         = 1;
                 sDataOut.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
 
-                beta_fn = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' reg_names{i_reg_name}]);
+                beta_fn = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ['data_beta_' model.reg_names{i_reg_name}]);
                 sDataOut.FileName = file_short(beta_fn);
                 bst_save(beta_fn, sDataOut, 'v7');
                 % Register in database
@@ -392,7 +380,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     end
     
     if save_fit
-        fit = X*B;
+        fit = model.X*B;
         output_tag = sprintf('ir%d_glm_fit', sInput.iItem);
         output_comment = [output_prefix '- signal fit'];
         if surface_data
