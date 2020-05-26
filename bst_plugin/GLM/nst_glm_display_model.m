@@ -41,7 +41,7 @@ function nst_glm_display_model(model,mode)
             subplot(n_regressor,1,i_reg,'Parent',hFig)
             plot(model.time,model.X(:,i_reg))
             xlim([model.time(1) model.time(end)])
-            title(model.reg_names{i_reg})
+            title(model.reg_names{i_reg},'interpreter', 'none')
         end
     end  
 

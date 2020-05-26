@@ -100,9 +100,7 @@ function model=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
     
     model.n_roi=model.n_roi+length(names);
     model.X= [model.X X_event];
-    for i_name=1:length(names)
-        model.reg_names{end+1}=names{i_name};
-    end    
+    model.reg_names= [model.reg_names names];
 
 end
 
