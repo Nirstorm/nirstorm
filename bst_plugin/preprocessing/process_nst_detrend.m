@@ -93,13 +93,7 @@ else
 end
 
 %disp(sprintf('Rank X: %d, dim X: %d',rank(model.X),size(model.X,2)))
-
-figure(1); 
-for i=1:size(model.X,2)
-    subplot(size(model.X,2),1,i)
-    plot(model.time,model.X(:,i))
-    title(model.reg_names{i})
-end 
+%nst_glm_display_model(model,'timecourse')
 
 sDataOut                    = db_template('data');
 sDataOut.F                  = sDataIn.F;
