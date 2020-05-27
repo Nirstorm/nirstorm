@@ -377,7 +377,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
 end
 
 function [B,proj_X] = compute_B_svd(y,X)
-
+    warning('Deprecated process');
+    
     [X_u, X_s, X_v] = svd(X,0);
     X_diag_s = diag(X_s);
     X_rank_tol =  max(size(X)) * max(abs(X_diag_s)) * eps;
@@ -391,7 +392,7 @@ function [B,proj_X] = compute_B_svd(y,X)
 
 end
 function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low_cutoff)
-    
+    warning('Deprecated process');
     % Low pass filter, applied to input data
     lpf = full(lpf_hrf(hrf, size(y, 1)));
     % Convert to full mat since operation on sparse matrices are
@@ -457,6 +458,8 @@ function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_l
 end
 function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y, dt, X, hpf_low_cutoff)
     
+    warning('Deprecated process');
+
     n_chan=size(Y,2);
     n_cond=size(X,2);
     n_time=size(Y,1);
@@ -574,19 +577,7 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
 end
 
 
-function [B, covB, dfe, residuals, mse_residuals]=ar_irls_fit(y,X,pmax)
-	stat=nirs.math.ar_irls(y,X, pmax );
-    
-    B=stat.beta;
-    
-    covB=zeros( size(stat.covb,1), size(stat.covb,2),size(stat.covb,3));
-    for i=1:size(stat.covb,3)
-       covB(:,:,i)= stat.covb(:,:,i,i);
-    end    
-    dfe=stat.dfe;
-    
-    
-end
+
 
 function lpf = lpf_hrf(h, signal_length)
 % From NIRS_SPM / NIRS10
@@ -607,7 +598,7 @@ hrf_types.BOXCAR = 3;
 end
 
 function [X, names, hrf] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)
-	
+	 warning('Deprecated process');
     if nargin < 4
         hrf_duration = 25;
     end
@@ -670,7 +661,7 @@ function [X, names, hrf] = make_design_matrix(time, events, hrf_type, hrf_durati
 end
 
 function [C,names]=getTrend(time, trend_choice)
-   
+    warning('Deprecated process');
     switch trend_choice
         case 'Constant'
             trend_function=@Constant;
@@ -739,8 +730,7 @@ end
 
 function signal= Constant(t,value) 
 % Constant : return a constant function.
-    
-    %signal=zeros( size(t_vect) );  
+     warning('Deprecated process'); 
     if nargin <  2, value = 1; end
 
     assert( isvector(t)  )
