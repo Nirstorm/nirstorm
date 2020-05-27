@@ -29,7 +29,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
         case 'external_input'
             sInput_ext=varargin{1};
             if nargin < 4
-                hb_types = {'HbO', 'HbR', 'HbT'};
+                hb_types = {'HbO', 'HbR'};
             else
                 hb_types=varargin{2};
             end    
@@ -40,7 +40,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
             sFile=varargin{1};
             if nargin < 4
                 criteria='distance';
-                params=3; % 3 cm 
+                params=1.5/100; % 1.5 cm 
             else
                 criteria=varargin{2};
                 params=varargin{3};
@@ -184,30 +184,30 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
     
     ChannelMat = in_bst_channel(sFile.ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+    
+     idx=strcmp({ChannelMat.Channel(nirs_ichans).Group}, {'HbO'}) | ... 
+                           strcmp({ChannelMat.Channel(nirs_ichans).Group}, {'HbR'});
+                       
+    channels=ChannelMat.Channel(idx);
+    F=sDataIn.F(idx', :);
 
     switch criteria
         case 'distance'
-            separations = process_nst_separations('Compute', ChannelMat.Channel(nirs_ichans));
+            separations = process_nst_separations('Compute',channels);
             if isempty(separations)
                 warning(sprintf('Separations could not be computed for %s', sFile.FileName));
             end
-    
-            lsc_chans = separations > params;
-            ssc_chans = ~lsc_chans & ~isnan(separations);
-            y=sDataIn.F(ssc_chans, :)';
-            
-            names={ChannelMat.Channel(ssc_chans).Name};
+            idx_chann =   separations <= params & ~isnan(separations);
         case 'name'
-            [~,idx_chann] = find(ismember(ChannelMat.Channel(nirs_ichans).Name ,params));
-
-            y=sDataIn.F(idx_chann, :)';
-            names=params;   
+            [~,idx_chann] = find(contains( {channels.Name},params));
     end
- 
+    
+    y=F(idx_chann, :)';
+    names={channels(idx_chann).Name};
 
     model.X        = [model.X y];
     model.reg_names= [model.reg_names names];
-    % We apply low and high pass filter
+    % We apply low and high pass filter 
     model.accept_filter = [model.accept_filter 3*ones(1,length(names))];
 end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)

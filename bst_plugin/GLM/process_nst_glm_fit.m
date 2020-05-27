@@ -59,15 +59,23 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.label0.Comment = '<U><B>Signal Information</B></U>:';
     sProcess.options.label0.Type    = 'label';
     
-    sProcess.options.hpf_low_cutoff.Comment = 'Applied High-pass filter ( 0 if no high-pass filter have been applied): ';
+    sProcess.options.filter_model.Type    = 'radio_line';
+    sProcess.options.filter_model.Comment   = {'No filter','IIR filter','Detrending','Process used to remove slow fluctuations: '};
+    sProcess.options.filter_model.Value=1;
+    
+    sProcess.options.hpf_low_cutoff.Comment = 'High-pass filter frequency: ';
     sProcess.options.hpf_low_cutoff.Type    = 'value';
     sProcess.options.hpf_low_cutoff.Value   = {0.01, 'Hz', 2};
+    
+    sProcess.options.dct_cutoff.Comment = 'Detrend miminum Period (0= only linear detrend): ';
+    sProcess.options.dct_cutoff.Type    = 'value';
+    sProcess.options.dct_cutoff.Value   = {200, 's', 0};
     
     sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
     sProcess.options.trim_start.Type    = 'value';
     sProcess.options.trim_start.Value   = {0, 'sec', 2};
     sProcess.options.trim_start.Hidden   = 1; % Hide, as it is deprecated
-
+    
     sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
     sProcess.options.label3.Type    = 'label';
     
@@ -79,13 +87,38 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.hrf_model.Type    = 'combobox';
     sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
     
-    sProcess.options.trend.Comment = 'Add constant regressor ';
-    sProcess.options.trend.Type    = 'checkbox';
-    sProcess.options.trend.Value   =  1;
+    sProcess.options.label4.Comment = 'Nuisance Regressor:';
+    sProcess.options.label4.Type    = 'label';
     
-    % Separator
-    sProcess.options.separator00.Type = 'separator';
-    sProcess.options.separator00.Comment = ' ';
+    sProcess.options.lfO.Type    = 'radio_line';
+    sProcess.options.lfO.Comment   = {'constant','constant+Linear trend','constant+Linear trend+DCT','Slow fuctuations: '};
+    sProcess.options.lfO.Value=1;
+    
+    sProcess.options.lfo_cutoff.Comment = 'Detrend miminum Period: ';
+    sProcess.options.lfo_cutoff.Type    = 'value';
+    sProcess.options.lfo_cutoff.Value   = {200, 's', 0};
+
+    % === FREQ BANDS
+    %sProcess.options.use_DCT.Comment = 'Adittionals DCT';
+    %sProcess.options.use_DCT.Type    = 'checkbox';
+    %sProcess.options.use_DCT.Value   =  0;
+ 
+    %sProcess.options.freqbands.Comment = '';
+    %sProcess.options.freqbands.Type    = 'groupbands';
+    %sProcess.options.freqbands.Value   =  getDefaultFreqBands();
+    
+    sProcess.options.SS_chan.Type    = 'radio_line';
+    sProcess.options.SS_chan.Comment   = {'No','Based on Source-Detector distances','Based on Names','Short-separation channels: '};
+    sProcess.options.SS_chan.Value=0;
+    
+    sProcess.options.SS_chan_distance.Comment = 'Distance threeshold: ';
+    sProcess.options.SS_chan_distance.Type    = 'value';
+    sProcess.options.SS_chan_distance.Value   = {1.5, 'cm', 1};
+    
+    sProcess.options.SS_chan_name.Comment = 'Superfical Channel [coma-separated list]';
+    sProcess.options.SS_chan_name.Type    = 'text';
+    sProcess.options.SS_chan_name.Value   = '';     
+    
     
     sProcess.options.label2.Comment = '<U><B>Serial Correlation Preprocessing</B></U>:';
     sProcess.options.label2.Type    = 'label';
@@ -95,23 +128,27 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.statistical_processing.Value   = 1;
         
     
-    sProcess.options.separator1.Type = 'separator';
-    sProcess.options.separator1.Comment = ' ';
-
     sProcess.options.output_cmt.Comment = '<U><B>Extra outputs</B></U>:';
     sProcess.options.output_cmt.Type    = 'label';
-        
+    
+    sProcess.options.extra_output.Comment = 'Save extra outputs (B maps, residuals, and fit)';
+    sProcess.options.extra_output.Type    = 'checkbox';
+    sProcess.options.extra_output.Value   =  0;
+    
     sProcess.options.save_betas.Comment = 'Beta maps';
     sProcess.options.save_betas.Type    = 'checkbox';
     sProcess.options.save_betas.Value   =  0;
-
+    sProcess.options.save_betas.Hidden   = 1;
+    
     sProcess.options.save_residuals.Comment = 'Residuals';
     sProcess.options.save_residuals.Type    = 'checkbox';
     sProcess.options.save_residuals.Value   =  0;
-    
+    sProcess.options.save_residuals.Hidden   = 1;
+     
     sProcess.options.save_fit.Comment = 'Fit';
     sProcess.options.save_fit.Type    = 'checkbox';
     sProcess.options.save_fit.Value   =  0;
+    sProcess.options.save_fit.Hidden   = 1;
 end
 
 
@@ -128,9 +165,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     DataMat = in_bst_data(sInput.FileName);
     basis_choice = sProcess.options.hrf_model.Value{1};
 
-    save_residuals = sProcess.options.save_residuals.Value;
-    save_betas = sProcess.options.save_betas.Value;
-    save_fit = sProcess.options.save_fit.Value;
+    save_residuals = sProcess.options.extra_output.Value || sProcess.options.save_residuals.Value;
+    save_betas = sProcess.options.extra_output.Value ||  sProcess.options.save_betas.Value;
+    save_fit = sProcess.options.extra_output.Value || sProcess.options.save_fit.Value;
 
     trim_start = sProcess.options.trim_start.Value{1};
     if trim_start > 0
@@ -190,17 +227,58 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         return;
     end
     ievents = cellfun(@(l) find(strcmp(l,all_event_names)), selected_event_names);
-
+    
+    %% previus processing 
+    filter_type='none';
+    filter_param=0;
+    if sProcess.options.statistical_processing.Value == 2
+        filter_type='IIR_highpass';
+        filter_param=sProcess.options.hpf_low_cutoff.Value{1};
+    elseif sProcess.options.statistical_processing.Value == 3
+        filter_type='DCT_filter';
+        filter_param=sProcess.options.dct_cutoff.Value{1};  
+    end        
+    
+    
     %% Create model
     hrf_duration = 32; % sec -- TODO: expose as process parameter?
-    
+    % Initialize model 
     model=nst_glm_initialize_model(DataMat.Time);
-    model=nst_glm_add_regressors(model,'event', DataMat.Events(ievents), basis_choice,hrf_duration);
     
-    if sProcess.options.trend.Value
-        model=nst_glm_add_regressors(model,'constant');
+    % Add event-related regressors
+    model=nst_glm_add_regressors(model,'event', DataMat.Events(ievents), basis_choice,hrf_duration);
+    model=nst_glm_add_regressors(model,'constant');
+
+    if  sProcess.options.lfO.Value>=2
+        model=nst_glm_add_regressors(model,'linear');
     end
-                                                                   
+    
+    if  sProcess.options.lfO.Value>=3
+        lfo_cutoff=sProcess.options.lfo_cutoff.Value{1};
+        model=nst_glm_add_regressors(model,"DCT",[1/model.time(end) 1/lfo_cutoff],{'LFO'});  
+    end
+    
+    % Comment this section as DCT is adding too many regressor ( >1500 when
+    % using the defaults bands [.2 .6; .8 .15]
+    %if sProcess.options.use_DCT.Value 
+    %    bands_name=sProcess.options.freqbands.Value(:,1)';
+    %    freq_bands=process_tf_bands('GetBounds',sProcess.options.freqbands.Value);
+    %    model=nst_glm_add_regressors(model,"DCT",freq_bands,bands_name);  
+    %end
+    
+    
+    % Include short-seperation channel
+    if sProcess.options.SS_chan.Value==2 % based on distance
+        separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
+        model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
+    elseif sProcess.options.SS_chan.Value==3 % based on name  
+        if ~isempty(sProcess.options.SS_chan_name.Value)
+            SS_name=split(sProcess.options.SS_chan_name.Value,',');
+            model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name');
+        end    
+    end   
+    
+    % Add Regressor from file2
     if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
                 
         hb_types = {'HbO', 'HbR', 'HbT'};
@@ -213,6 +291,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         end
         model=nst_glm_add_regressors(model,'external_input',hb_type);
     end
+    
+    % Display Model
     nst_glm_display_model(model,'timecourse');
     
     nb_regressors = size(model.X, 2);
@@ -222,7 +302,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     trim_start_sample = round(trim_start / dt);
     Y_trim = Y((trim_start_sample+1):end, :);
     model.X = model.X((trim_start_sample+1):end, :);
-    hpf_low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
 
     %% Solve Y = XB + e 
     if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
@@ -231,7 +310,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         method_name = 'OLS_prewhitening';
     end
     
-    fitted_model= nst_glm_fit(model, Y_trim, hpf_low_cutoff,method_name);
+    fitted_model= nst_glm_fit(model, Y_trim, filter_type, filter_param, method_name);
     [B,covB,dfe,residuals,mse_residuals] = nst_misc_unpack_glm_result(fitted_model,method_name,surface_data,nb_regressors,n_voxel,mask);
     
 
@@ -576,7 +655,11 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_
 
 end
 
-
+function freqBands= getDefaultFreqBands() 
+    freqBands=[ {'heart'},{'.2, .6'},{'all'}; ...
+            {'respiration'},{'.8, 1.5'},{'all'} ];
+    
+end
 
 
 function lpf = lpf_hrf(h, signal_length)

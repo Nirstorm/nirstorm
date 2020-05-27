@@ -1,4 +1,4 @@
-function fitted_model = nst_glm_fit(model, y, hpf_low_cutoff,method,varagin)
+function fitted_model = nst_glm_fit(model, y, filter_type, filter_param,method,varagin)
 %NST_GLM_MODEL_FIT Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -8,10 +8,10 @@ function fitted_model = nst_glm_fit(model, y, hpf_low_cutoff,method,varagin)
 
     switch method
         case 'OLS_precoloring'
-            [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y, hpf_low_cutoff);
+            [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model, y, filter_type, filter_param);
         case 'OLS_prewhitening'
             %if one wants to extend to AR(p) then pass p as varagin{1}
-            [B, covB, dfe, residuals, mse_residuals] = OLS_AR1_fit(model,y, hpf_low_cutoff);
+            [B, covB, dfe, residuals, mse_residuals] = OLS_AR1_fit(model, y, filter_type, filter_param);
         otherwise
             bst_error('This method is not implemented');
             return
@@ -26,7 +26,7 @@ function fitted_model = nst_glm_fit(model, y, hpf_low_cutoff,method,varagin)
 end
 
 
-function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y, hpf_low_cutoff)
+function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y, filter_type, filter_param)
     
     % Low pass filter, applied to input data
     lpf = full(process_nst_glm_fit('lpf_hrf',model.hrf, size(y, 1)));
@@ -39,9 +39,7 @@ function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y,
     end
 
     % Band-pass filtering of the design matrix
-    if hpf_low_cutoff > 0 
-        model = nst_glm_apply_filter(model,'IIR_highpass', hpf_low_cutoff );
-    end
+    model = nst_glm_apply_filter(model,filter_type, filter_param );
     model = nst_glm_apply_filter(model,'lpf', lpf );
     X_filtered=model.X;
     
@@ -91,7 +89,7 @@ function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y,
 end
 
 
-function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = OLS_AR1_fit(model,y,hpf_low_cutoff)
+function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = OLS_AR1_fit(model,y,filter_type, filter_param)
     
     n_chan=size(y,2);
     n_cond=size(model.X,2);
@@ -105,10 +103,7 @@ function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = OLS_AR1_
     mse_residuals_out=zeros(1,n_chan);
     
     % high-pass filtering of the design matrix
-    if hpf_low_cutoff > 0 
-        model = nst_glm_apply_filter(model,'IIR_highpass', hpf_low_cutoff );
-    end
-    
+     model = nst_glm_apply_filter(model,filter_type, filter_param );
     [B_init,proj_X] = nst_glm_fit_B(model,y, 'SVD');
     bst_progress('start', 'GLM - Pre-whitenning ' , 'Fitting the GLM', 1, n_chan);
     
