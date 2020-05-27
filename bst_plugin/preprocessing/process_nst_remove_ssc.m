@@ -42,9 +42,19 @@ sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.nOutputs    = 2;
 
+sProcess.options.SS_chan.Type    = 'radio_line';
+sProcess.options.SS_chan.Comment   = {'Based on Source-Detector distances','Based on Names','Short-separation channels: '};
+sProcess.options.SS_chan.Value=1;
+
 sProcess.options.separation_threshold_cm.Comment = 'Separation threshold';
 sProcess.options.separation_threshold_cm.Type    = 'value';
 sProcess.options.separation_threshold_cm.Value   = {1.5, 'cm', 2}; 
+
+sProcess.options.SS_chan_name.Comment = 'Superfical Channel [coma-separated list]';
+sProcess.options.SS_chan_name.Type    = 'text';
+sProcess.options.SS_chan_name.Value   = '';     
+    
+
 
 end
 
@@ -57,7 +67,6 @@ function [OutputFiles_SSC] = Run(sProcess, sInput)
 
 OutputFiles_SSC = {};
 
-separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
 
     
 % Load recordings
@@ -73,7 +82,20 @@ ChannelMat = in_bst_channel(sInput.ChannelFile);
 Y= sDataIn.F(nirs_ichans,:)';
 
 model= nst_glm_initialize_model(sDataIn.Time);
-model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
+
+% Include short-seperation channel
+if sProcess.options.SS_chan.Value==1 % based on distance
+    
+    separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
+    model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
+    
+elseif sProcess.options.SS_chan.Value==2 % based on name 
+    
+    if ~isempty(sProcess.options.SS_chan_name.Value)
+        SS_name=split(sProcess.options.SS_chan_name.Value,',');
+        model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name');
+    end    
+end 
 
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
 Y= Y - model.X*B;
