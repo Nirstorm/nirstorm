@@ -149,7 +149,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     sDataOut.nAvg         = 1;
     sDataOut.Events       = events;
     sDataOut.DisplayUnits = 'delta OD';
-
+    sDataOut.History      = sDataIn.History;
+    sDataOut              = bst_history('add', sDataOut, 'process', sProcess.Comment);
+    
     % Generate a new file name in the same folder
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dod');
     sDataOut.FileName = file_short(OutputFile);

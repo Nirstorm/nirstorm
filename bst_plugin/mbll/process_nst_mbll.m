@@ -139,6 +139,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     sDataOut.DataType     = 'recordings'; 
     sDataOut.nAvg         = 1;
     sDataOut.Events       = events;
+    sDataOut.History      = sDataIn.History;
+    sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
     sDataOut.DisplayUnits = 'mol.l-1';
 
     % Generate a new file name in the same folder
