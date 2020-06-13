@@ -104,27 +104,16 @@ elseif sProcess.options.SS_chan.Value==2 % based on name
         model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name',type);
     end    
 end 
-
+disp(model.reg_names)
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
 Y= Y - model.X*B;
 
 
-sDataOut                    = db_template('data');
-sDataOut.F                  = sDataIn.F;
+sDataOut                    = sDataIn;
 sDataOut.F(nirs_ichans,:)   = Y';
-sDataOut.Comment            = [sInput.Comment ' SSC'];
-sDataOut.ChannelFlag        = sDataIn.ChannelFlag; 
-sDataOut.Time               = sDataIn.Time;
-sDataOut.DataType           = 'recordings'; 
-sDataOut.nAvg               = 1;
-if ~isempty(sDataIn.Std)
-    sDataOut.Std = sDataIn.Std;
-else
-    sDataOut.Std = [];
-end
-sDataOut.ColormapType = [];
-sDataOut.Events = sDataIn.Events;
-sDataOut.DisplayUnits = sDataIn.DisplayUnits;
+sDataOut.Comment            = [sInput.Comment '| SSC'];
+History                     = ['Remove superficial noise using :' sprintf('%s, ',model.reg_names{:})];
+sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc',History); 
 
 % Generate a new file name in the same folder
 sStudy = bst_get('Study', sInput.iStudy);

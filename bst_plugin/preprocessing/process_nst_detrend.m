@@ -95,22 +95,14 @@ end
 %disp(sprintf('Rank X: %d, dim X: %d',rank(model.X),size(model.X,2)))
 %nst_glm_display_model(model,'timecourse')
 
-sDataOut                    = db_template('data');
-sDataOut.F                  = sDataIn.F;
+sDataOut                    = sDataIn;
 sDataOut.F(nirs_ichans,:)   = Y';
-sDataOut.Comment            = [sInput.Comment ' detrend'];
-sDataOut.ChannelFlag        = sDataIn.ChannelFlag; 
-sDataOut.Time               = sDataIn.Time;
-sDataOut.DataType           = 'recordings'; 
-sDataOut.nAvg               = 1;
-if ~isempty(sDataIn.Std)
-    sDataOut.Std = sDataIn.Std;
-else
-    sDataOut.Std = [];
-end
-sDataOut.ColormapType = [];
-sDataOut.Events = sDataIn.Events;
-sDataOut.DisplayUnits = sDataIn.DisplayUnits;
+sDataOut.Comment            = [sInput.Comment '| detrend'];
+History                     = 'Remove Linear trend';
+if sProcess.options.option_period.Value{1}
+    History                 = [History sprintf(', uses DCT of period > %ds',period)];
+end    
+sDataOut                    = bst_history('add', sDataOut, 'process_nst_detrend',History);
 
 % Generate a new file name in the same folder
 sStudy = bst_get('Study', sInput.iStudy);
