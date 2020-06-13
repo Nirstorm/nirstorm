@@ -64,6 +64,10 @@ options.condition_name.Comment = 'Output condition name:';
 options.condition_name.Type = 'text';
 options.condition_name.Value = '';
 
+options.segmentation_label.Type    = 'radio_line';
+options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
+options.segmentation_label.Value   = 1;
+
 options.wavelengths.Comment = 'Wavelengths (nm) [coma-separated list]';
 options.wavelengths.Type    = 'text';
 options.wavelengths.Value = '';
@@ -223,6 +227,11 @@ for iroi=1:length(sScoutsFinal)
             bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
         end
         seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
+        if sProcess.options.segmentation_label.Value == 1
+            seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
+        elseif sProcess.options.segmentation_label.Value == 2
+            seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
+        end    
         %TODO: make sure segmentation has proper indexing from 0 to 5
         %      Sometimes goes between 0 and 255 because of encoding issues
         voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal{iroi}.Vertices);
