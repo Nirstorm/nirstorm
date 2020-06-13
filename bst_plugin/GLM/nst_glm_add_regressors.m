@@ -2,7 +2,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
 % Call exemple 
 % model = add_regressors(Model, "event", Events, basis_choice, hrf_duration)
 % model = add_regressors(Model, "external_input", external_input)
-% model = add_regressors(Model, "channel",sFile,criteria,params)
+% model = add_regressors(Model, "channel",sFile,criteria,params,types)
 % model = add_regressors(Model, "constant") Add a constant regressor
 % model = add_regressors(Model, "linear") Add a linear regressor
 % model = add_regressors(Model, "DCT", frequences, names)
@@ -44,9 +44,14 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
             else
                 criteria=varargin{2};
                 params=varargin{3};
-            end    
+            end
+            if nargin < 6
+               types = {'HbO', 'HbR'};
+            else 
+                types=varargin{4};
+            end
             
-            model=nst_glm_add_channel_regressors(model,sFile,criteria,params); 
+            model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types); 
             
         case 'constant'
             model=nst_glm_add_constant_regressors(model);
@@ -167,13 +172,14 @@ function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
     end
 end
 
-function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
+function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
 % Add regressor from data matrix based on the channel name or
 % Source-dectecor distance. 
 % Usage : 
 % model=nst_glm_add_channel_regressors(model,sFile,'distance',max_distance)
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'})
-
+% model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'HbO','HbR'})
+% model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'WL860'})
 
     % Load recordings
     if strcmp(sFile.FileType, 'data')     % Imported data structure
@@ -185,9 +191,11 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params)
     ChannelMat = in_bst_channel(sFile.ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
     
-     idx=strcmp({ChannelMat.Channel(nirs_ichans).Group}, {'HbO'}) | ... 
-                           strcmp({ChannelMat.Channel(nirs_ichans).Group}, {'HbR'});
-                       
+    idx=zeros(1,length(nirs_ichans));
+    for i_type=1:length(types)
+       idx=idx | strcmp({ChannelMat.Channel(nirs_ichans).Group},types{i_type});        
+    end    
+    
     channels=ChannelMat.Channel(idx);
     F=sDataIn.F(idx', :);
 

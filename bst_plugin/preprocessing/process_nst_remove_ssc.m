@@ -79,6 +79,14 @@ end
 ChannelMat = in_bst_channel(sInput.ChannelFile);
 [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
 
+% We might consider using only one Wavelengths, or only Hb0 or HbR as they
+% have strong anti-correlation.
+if ~isfield(ChannelMat.Nirs, 'Wavelengths')
+    type={'HbO','HbR'}; 
+else
+    type={ChannelMat.Channel(nirs_ichans).Group};
+end    
+    
 Y= sDataIn.F(nirs_ichans,:)';
 
 model= nst_glm_initialize_model(sDataIn.Time);
@@ -87,13 +95,13 @@ model= nst_glm_initialize_model(sDataIn.Time);
 if sProcess.options.SS_chan.Value==1 % based on distance
     
     separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
-    model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
+    model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m,type);
     
 elseif sProcess.options.SS_chan.Value==2 % based on name 
     
     if ~isempty(sProcess.options.SS_chan_name.Value)
         SS_name=split(sProcess.options.SS_chan_name.Value,',');
-        model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name');
+        model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name',type);
     end    
 end 
 
