@@ -139,6 +139,9 @@ for iInput=1:length(sInputs)
     sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
     sDataOut.Time         = sDataIn.Time;
     sDataOut.DataType     = 'recordings';
+    sDataOut.History      = sDataIn.History;
+    sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
+    
     sDataOut.nAvg         = 1;
     if ~isempty(ievt_mvt)
         sDataOut.Events       = events([1:(ievt_mvt-1) (ievt_mvt+1):length(events)]);
