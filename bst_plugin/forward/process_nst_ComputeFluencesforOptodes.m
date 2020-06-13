@@ -66,6 +66,11 @@ SelectOptions = {...
     sProcess.options.outputdir.Type    = 'filename';
     sProcess.options.outputdir.Value   = SelectOptions;
 
+sProcess.options.segmentation_label.Type    = 'radio_line';
+sProcess.options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
+sProcess.options.segmentation_label.Value   = 1;        
+
+
 sProcess.options.mcxlab_gpuid.Comment = pad('cfg.gpuid: ', ref_length);
 sProcess.options.mcxlab_gpuid.Type = 'value';
 sProcess.options.mcxlab_gpuid.Value={2,'',0};
@@ -178,7 +183,11 @@ if iseg == 0
     bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-
+if sProcess.options.segmentation_label.Value == 1
+    seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
+elseif sProcess.options.segmentation_label.Value == 2
+    seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
+end    
 % Retrieve optode coordinates
 % Load channel file
 [pair_names, tt, tt, pair_sd_idx, src_locs, src_ids, src_chans, det_locs, det_ids, det_chans] = ...

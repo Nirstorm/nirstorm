@@ -54,6 +54,10 @@ options.segmentation.Comment = 'Segmentation (Volume)';
 options.segmentation.Type    = 'text';
 options.segmentation.Value = 'segmentation';
 
+sProcess.options.segmentation_label.Type    = 'radio_line';
+sProcess.options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
+sProcess.options.segmentation_label.Value   = 1;   
+
 options.wavelengths.Comment = 'Wavelengths (nm) [coma-separated list]';
 options.wavelengths.Type    = 'text';
 options.wavelengths.Value = '';
@@ -142,8 +146,11 @@ if ~any(iseg)
     return
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-%TODO: check for expected integer labels
-
+if sProcess.options.segmentation_label.Value == 1
+    seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
+elseif sProcess.options.segmentation_label.Value == 2
+    seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
+end    
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;

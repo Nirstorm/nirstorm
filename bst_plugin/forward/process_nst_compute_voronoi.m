@@ -41,6 +41,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.subjectname.Comment = 'Subject name:';
     sProcess.options.subjectname.Type    = 'subjectname';
     sProcess.options.subjectname.Value   = '';
+    
+    sProcess.options.segmentation_label.Type    = 'radio_line';
+    sProcess.options.segmentation_label.Comment = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
+    sProcess.options.segmentation_label.Value   = 1;  
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -80,14 +85,16 @@ segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 if ~isempty(segmentation_id)               
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
-                      sSubject.Anatomy(segmentation_id).FileName);
+                      sSubject.Anatomy(segmentation_id).FileName, ...
+                      sProcess.options.segmentation_label.Value);
 else
     msg = ['MRI segmentation (' seg_label ') not found. ' ...
            'Interpolator cannot be constrained to grey matter, so expect PVE.'];
     disp(['BST Warning> ' msg]);
     bst_report('Warning', sProcess, sInputs, msg);
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
-                      sSubject.Anatomy(sSubject.iAnatomy).FileName);
+                      sSubject.Anatomy(sSubject.iAnatomy).FileName,...
+                      sProcess.options.segmentation_label.Value);
     if isempty(voronoi)
        return;
     end
@@ -99,7 +106,12 @@ add_vol_data(voronoi, voronoi_fn, ...
 OutputFiles = {'import'};
 end
 
-function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
+function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file,segmentation_label)
+
+if nargin < 4
+    segmentation_label=1;
+end    
+    
 
 % Obtain the cortical surface
 sCortex = in_tess_bst(cortex_file);
@@ -168,6 +180,12 @@ vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 % vol_voro = binary_volume_dilated; %HACK
 if nargin > 2
     sSegmentation = in_mri_bst(segmentation_file);
+    if segmentation_label == 1
+        sSegmentation.Cube = nst_prepare_segmentation(sSegmentation.Cube,{1,2,3,4,5});
+    elseif segmentation_label == 2
+        sSegmentation.Cube = nst_prepare_segmentation(sSegmentation.Cube,{5,4,3,2,1});
+    end    
+    
     if all(sSegmentation.Histogram.fncX == 0:5)
         vol_voro(sSegmentation.Cube ~= 4) = -1;
     elseif any(sSegmentation.Histogram.fncX == 204)
