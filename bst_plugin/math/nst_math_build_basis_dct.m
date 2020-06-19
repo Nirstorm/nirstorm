@@ -65,7 +65,8 @@ else
         cache_fn]);
     
     if ~exist(cache_fn, 'file')
-        cmat = dctmtx(nsamples)';
+        %cmat = dctmtx(nsamples)';
+        cmat  = nst_math_dctmtx(nsamples)';
         sub_idx = [];
         cur_idx = 1;
         for fr=1:size(freq_ranges,1) % loop over freq ranges

@@ -77,6 +77,7 @@ math/dg_voronoi.m
 math/dg_voronoi.mexa64
 math/dg_voronoi.mexglx
 math/nst_math_build_basis_dct.m
+math/nst_math_dctmtx.m
 math/nst_math_fit_AR.m
 OM/process_nst_OM_from_cortex.m
 OM/process_nst_OM_from_head.m
