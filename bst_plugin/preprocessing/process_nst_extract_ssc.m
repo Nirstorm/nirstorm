@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Split short separation channels';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1001;
+sProcess.Index       = 1307;
 sProcess.isSeparator = 0;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 

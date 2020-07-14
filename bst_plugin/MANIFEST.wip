@@ -1,7 +1,6 @@
 misc/nst_misc_isfunction.m
 misc/nst_misc_unmirror_sig_bounds.m
 misc/nst_misc_mirror_sig_bounds.m
-math/nst_math_build_basis_dct.m
 math/nst_algo_itmethod.m
 GLM/spree_set_estimation.m
 GLM/spree_splhblf_init_default.m

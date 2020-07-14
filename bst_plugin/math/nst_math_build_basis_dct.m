@@ -1,4 +1,4 @@
-function [cmat, band_indexes] = build_basis_dct(nsamples, sampling_rate, freq_ranges, ortho)
+function [cmat, band_indexes] = nst_math_build_basis_dct(nsamples, sampling_rate, freq_ranges, ortho)
 % build_basis_cosine - Build a Cosine basis within specific frequency
 % ranges (or bands)
 %
@@ -65,7 +65,8 @@ else
         cache_fn]);
     
     if ~exist(cache_fn, 'file')
-        cmat = dctmtx(nsamples)';
+        %cmat = dctmtx(nsamples)';
+        cmat  = nst_math_dctmtx(nsamples)';
         sub_idx = [];
         cur_idx = 1;
         for fr=1:size(freq_ranges,1) % loop over freq ranges
