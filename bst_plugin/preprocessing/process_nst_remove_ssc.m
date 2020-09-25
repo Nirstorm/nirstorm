@@ -95,13 +95,13 @@ model= nst_glm_initialize_model(sDataIn.Time);
 if sProcess.options.SS_chan.Value==1 % based on distance
     
     separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
-    model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m,type);
+    model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,type);
     
 elseif sProcess.options.SS_chan.Value==2 % based on name 
     
     if ~isempty(sProcess.options.SS_chan_name.Value)
         SS_name=split(sProcess.options.SS_chan_name.Value,',');
-        model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name',type);
+        model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',type);
     end    
 end 
 disp(model.reg_names)

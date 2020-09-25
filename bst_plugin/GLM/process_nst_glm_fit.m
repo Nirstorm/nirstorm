@@ -255,7 +255,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     
     if  sProcess.options.lfO.Value>=3
         lfo_cutoff=sProcess.options.lfo_cutoff.Value{1};
-        model=nst_glm_add_regressors(model,"DCT",[1/model.time(end) 1/lfo_cutoff],{'LFO'});  
+        model=nst_glm_add_regressors(model,'DCT',[1/model.time(end) 1/lfo_cutoff],{'LFO'});  
     end
     
     % Comment this section as DCT is adding too many regressor ( >1500 when
@@ -270,11 +270,11 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     % Include short-seperation channel
     if sProcess.options.SS_chan.Value==2 % based on distance
         separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
-        model=nst_glm_add_regressors(model,"channel",sInput,'distance', separation_threshold_m);
+        model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m);
     elseif sProcess.options.SS_chan.Value==3 % based on name  
         if ~isempty(sProcess.options.SS_chan_name.Value)
             SS_name=split(sProcess.options.SS_chan_name.Value,',');
-            model=nst_glm_add_regressors(model,"channel",sInput,'name',SS_name');
+            model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name');
         end    
     end   
     

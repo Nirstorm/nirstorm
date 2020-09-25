@@ -38,11 +38,11 @@ function model = nst_glm_apply_filter(model,filter_name, varargin )
             cutoff=varargin{1};
             
             model_dct= nst_glm_initialize_model(model.time);
-            model_dct=nst_glm_add_regressors(model_dct,"constant");
-            model_dct=nst_glm_add_regressors(model_dct,"linear");  
+            model_dct=nst_glm_add_regressors(model_dct,'constant');
+            model_dct=nst_glm_add_regressors(model_dct,'linear');  
 
             if cutoff > 0
-                model_dct=nst_glm_add_regressors(model_dct,"DCT",[1/model.time(end) 1/cutoff],{'LFO'});  
+                model_dct=nst_glm_add_regressors(model_dct,'DCT',[1/model.time(end) 1/cutoff],{'LFO'});  
             end
             
             ind=find(model.accept_filter == 1 | model.accept_filter == 3);
