@@ -75,13 +75,13 @@ nirs_ichans = sDataIn.ChannelFlag ~= -1 & strcmpi({ChannelMat.Channel.Type}, 'NI
 Y= sDataIn.F(nirs_ichans,:)';
 
 model= nst_glm_initialize_model(sDataIn.Time);
-model=nst_glm_add_regressors(model,"constant");
-model=nst_glm_add_regressors(model,"linear");  
+model=nst_glm_add_regressors(model,'constant');
+model=nst_glm_add_regressors(model,'linear');  
 
 
 if sProcess.options.option_period.Value{1} > 0
    period=sProcess.options.option_period.Value{1};
-   model=nst_glm_add_regressors(model,"DCT",[1/sDataIn.Time(end) 1/period],{'LFO'});  
+   model=nst_glm_add_regressors(model,'DCT',[1/sDataIn.Time(end) 1/period],{'LFO'});  
 end
        
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
