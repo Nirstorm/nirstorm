@@ -18,9 +18,8 @@ function varargout = process_nst_detect_bad( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent, 2015-2019
+% Authors: Edouard Delaire, 2020; Thomas Vincent, 2015-2019
 
-%TODO: output map of bad channels
 
 eval(macro_method);
 end
@@ -46,7 +45,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nMinFiles   = 1;
     
     % Definition of the options
-    sProcess.options.option_sci.Comment = 'Remove based on Scalp Coupling Index';
+    sProcess.options.text1.Comment   = '<b>Data based detection</b>'; 
+    sProcess.options.text1.Type    = 'label';
+    
+    sProcess.options.option_sci.Comment = 'Channel rejection by Scalp Coupling Index';
     sProcess.options.option_sci.Type    = 'checkbox';
     sProcess.options.option_sci.Value   = 0;
     sProcess.options.option_sci.Controller='sci';
@@ -55,6 +57,17 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.sci_threshold.Type    = 'value';
     sProcess.options.sci_threshold.Value   = {80, '%', 0};
     sProcess.options.sci_threshold.Class='sci';
+    
+    sProcess.options.option_coefficient_variation.Comment = 'Channel rejection by coefficient variation';
+    sProcess.options.option_coefficient_variation.Type    = 'checkbox';
+    sProcess.options.option_coefficient_variation.Value   = 0;
+    sProcess.options.option_coefficient_variation.Controller='variation';
+    
+    sProcess.options.coefficient_variation.Comment = 'Channel rejection by coefficient variation';
+    sProcess.options.coefficient_variation.Type    = 'value';
+    sProcess.options.coefficient_variation.Value   = {10, '%', 0};
+    sProcess.options.coefficient_variation.Class='variation';
+    
     
     sProcess.options.option_remove_saturating.Comment = 'Remove saturating channels';
     sProcess.options.option_remove_saturating.Type    = 'checkbox';
@@ -71,6 +84,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_min_sat_prop.Value   = {10, '%', 0};
     sProcess.options.option_min_sat_prop.Class   = 'saturation';
 
+    sProcess.options.text2.Comment   = '<b>Montage based detection</b>'; 
+    sProcess.options.text2.Type    = 'label';
+    
     sProcess.options.option_separation_filtering.Comment = 'Filter channels based on separation';
     sProcess.options.option_separation_filtering.Type    = 'checkbox';
     sProcess.options.option_separation_filtering.Value   = 0;
@@ -80,6 +96,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_separation.Type    = 'range';
     sProcess.options.option_separation.Value   = {[0, 5], 'cm', 2};
     sProcess.options.option_separation.Class   = 'separation';
+    
+    sProcess.options.text3.Comment   = '<b>Other</b>'; 
+    sProcess.options.text3.Type    = 'label';
+    
+    sProcess.options.auxilary_signal.Comment   = 'Auxilary measurment:';
+    sProcess.options.auxilary_signal.Type    = 'combobox';
+    sProcess.options.auxilary_signal.Value   = {1, {'Keep all','Remove flat','Remove all'}};
     
     sProcess.options.option_keep_unpaired.Comment = 'Keep unpaired channels';
     sProcess.options.option_keep_unpaired.Type    = 'checkbox';
@@ -105,12 +128,21 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
         sData = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
     end
-
+    nb_channel=sum(strcmpi({ChanneMat.Channel.Type}, 'NIRS'));
     [new_ChannelFlag, bad_chan_names,msg] = Compute(sData, ChanneMat, ...
                                                 sProcess.options);
     
     for i=1:size(msg,1)
-       disp(sprintf('Number of %s: %d', msg{i,1},msg{i,2}));
+        fraction= round(100*msg{i,2}/nb_channel);
+        if fraction > 80  % send an error if more than 80% of the channels are marked bad
+            bst_report('Error',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', msg{i,1},msg{i,2},fraction))
+        elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
+            bst_report('Warning',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', msg{i,1},msg{i,2},fraction))
+        elseif msg{i,2} > 0
+            bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', msg{i,1},msg{i,2}))
+        else 
+            bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
+        end
     end    
                                             
     % Add bad channels
@@ -161,10 +193,7 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
 % Output:
 %    - channel_flags: array of int, size: nb_channels
 %    - bad_channel_names: cell array of str, size: nb of bad channels
-%
-% TODO: test arg nirs_chan_flags. When there are neg values in AUX chan,
-%       it should not be filtered
-%  
+
     prev_channel_flags = sData.ChannelFlag;
     channel_flags   = sData.ChannelFlag;
     nirs_flags = strcmpi({channel_def.Channel.Type}, 'NIRS');
@@ -174,7 +203,6 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
     
     nb_chnnels=size(signal,2);
     nb_sample= size(signal,1);
-    nb_nirs = sum(nirs_flags);
 
     neg_channels = nirs_flags & any(signal < 0, 1);
     channel_flags(neg_channels) = -1;
@@ -182,6 +210,18 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
 
     if options.option_sci.Value 
         warning('SCI not available yet');
+    end
+    
+    if options.option_coefficient_variation.Value
+        CV_threshold = options.coefficient_variation.Value{1};
+        
+        CV = std(nirs_signal,1)./mean(nirs_signal,1).*100;
+        
+        CV_channels = false(1,nb_chnnels);
+        CV_channels(nirs_flags) = any(CV>CV_threshold);
+        
+        channel_flags(CV_channels) = -1;
+        msg(end+1,:)= {'high coeffience variation channels', sum(CV_channels)};
     end    
     
     if options.option_remove_saturating.Value
@@ -202,7 +242,7 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
             saturating(nirs_flags) = saturating(nirs_flags) | prop_sat_floor >= min_sat_prop;
         end
         channel_flags(saturating) = -1;
-        msg(end+1,:)= {'saturating', sum(saturating)};
+        msg(end+1,:)= {'saturating channels', sum(saturating)};
     end
 
     if options.option_separation_filtering.Value
@@ -211,6 +251,9 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
         max_separation_m = options.option_separation.Value{1}(2);
         
         separations_m_by_chans = process_nst_separations('Compute', channel_def.Channel(nirs_flags))';
+        if all(separations_m_by_chans < 1) % convert to cm if in meter 
+            separations_m_by_chans = separations_m_by_chans*100;
+        end    
         distances_flag=false(1,nb_chnnels);
         if min_separation_m > 0
             distances_flag(nirs_flags) = distances_flag(nirs_flags) | separations_m_by_chans <= min_separation_m;
@@ -221,16 +264,24 @@ function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def
         channel_flags(distances_flag) = -1;
         msg(end+1,:)= {'Extrem separation', sum(distances_flag)};
     end 
-    
-   channel_flags(~nirs_flags) = 0; %chans to ignore, can be unpaired
-   channel_flags = fix_chan_flags_wrt_pairs(channel_def.Channel, ...
-                                                 channel_def.Nirs.Wavelengths, ...
-                                                 channel_flags * -1) * -1;
-
-    
-    channel_flags(~nirs_flags) = 1;
-    removed =  (prev_channel_flags ~= -1 & channel_flags == -1);
-    removed_channel_names = {channel_def.Channel(removed).Name};
+   
+   if ~options.option_keep_unpaired.Value
+        channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
+                                                            channel_def.Nirs.Wavelengths, ...
+                                                            channel_flags(nirs_flags) * -1) * -1;
+   end
+   
+   if options.auxilary_signal.Value{1} == 2
+       flat_aux =  false(1,nb_chnnels);
+       flat_aux(~nirs_flags)= std(signal(:,~nirs_flags),1) < 1; % might need a better threshold 
+       
+       channel_flags(flat_aux) = -1;
+   elseif options.auxilary_signal.Value{1} == 3
+       channel_flags(~nirs_flags) = -1;
+   end 
+   removed =  (prev_channel_flags ~= -1 & channel_flags == -1);
+   removed_channel_names = {channel_def.Channel(removed).Name};
+   
 end
 
 function fixed_chan_flags = fix_chan_flags_wrt_pairs(channel_def, wls, chan_flags)
