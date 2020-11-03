@@ -34,40 +34,56 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1301; %0: not shown, >0: defines place in the list of processes
+    sProcess.Index       = 1301;  
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Bad_channel_tagging';
-    sProcess.isSeparator = 0; % add a horizontal bar after the process in
-    %                             the list
+    sProcess.isSeparator = 0; 
+    
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
     sProcess.OutputTypes = {'data', 'raw'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
+    
     % Definition of the options
-    sProcess.options.option_remove_negative.Comment = 'Remove negative channels';
-    sProcess.options.option_remove_negative.Type    = 'checkbox';
-    sProcess.options.option_remove_negative.Value   = 1;
-          
-    sProcess.options.option_invalidate_paired_channels.Comment = 'Also remove paired channels';
-    sProcess.options.option_invalidate_paired_channels.Type    = 'checkbox';
-    sProcess.options.option_invalidate_paired_channels.Value   = 1;
+    sProcess.options.option_sci.Comment = 'Remove based on Scalp Coupling Index';
+    sProcess.options.option_sci.Type    = 'checkbox';
+    sProcess.options.option_sci.Value   = 0;
+    sProcess.options.option_sci.Controller='sci';
+    
+    sProcess.options.sci_threshold.Comment = 'SCI threshold:';
+    sProcess.options.sci_threshold.Type    = 'value';
+    sProcess.options.sci_threshold.Value   = {80, '%', 0};
+    sProcess.options.sci_threshold.Class='sci';
+    
+    sProcess.options.option_remove_saturating.Comment = 'Remove saturating channels';
+    sProcess.options.option_remove_saturating.Type    = 'checkbox';
+    sProcess.options.option_remove_saturating.Value   = 0;
+    sProcess.options.option_remove_saturating.Controller='saturation';
     
     sProcess.options.option_max_sat_prop.Comment = 'Maximum proportion of saturating points';
     sProcess.options.option_max_sat_prop.Type    = 'value';
-    sProcess.options.option_max_sat_prop.Value   = {1, '', 2};
-    
+    sProcess.options.option_max_sat_prop.Value   = {10, '%', 0};
+    sProcess.options.option_max_sat_prop.Class   = 'saturation';
+
     sProcess.options.option_min_sat_prop.Comment = 'Maximum proportion of flooring points';
     sProcess.options.option_min_sat_prop.Type    = 'value';
-    sProcess.options.option_min_sat_prop.Value   = {1, '', 2};
+    sProcess.options.option_min_sat_prop.Value   = {10, '%', 0};
+    sProcess.options.option_min_sat_prop.Class   = 'saturation';
+
+    sProcess.options.option_separation_filtering.Comment = 'Filter channels based on separation';
+    sProcess.options.option_separation_filtering.Type    = 'checkbox';
+    sProcess.options.option_separation_filtering.Value   = 0;
+    sProcess.options.option_separation_filtering.Controller   = 'separation';
     
-    sProcess.options.option_min_separation.Comment = 'Minimum separation';
-    sProcess.options.option_min_separation.Type    = 'value';
-    sProcess.options.option_min_separation.Value   = {-1, 'cm', 2};
+    sProcess.options.option_separation.Comment = 'Acceptable separation: ';
+    sProcess.options.option_separation.Type    = 'range';
+    sProcess.options.option_separation.Value   = {[0, 5], 'cm', 2};
+    sProcess.options.option_separation.Class   = 'separation';
     
-    sProcess.options.option_max_separation.Comment = 'Maximum separation';
-    sProcess.options.option_max_separation.Type    = 'value';
-    sProcess.options.option_max_separation.Value   = {-1, 'cm', 2};
+    sProcess.options.option_keep_unpaired.Comment = 'Keep unpaired channels';
+    sProcess.options.option_keep_unpaired.Type    = 'checkbox';
+    sProcess.options.option_keep_unpaired.Value   = 0;
     
     %TODO: scalp contact index and outlier detection mentioned by Zhengchen.
 end
@@ -79,27 +95,24 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+        
+    % Load channel file
+    ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
     
-    % Get option values   
-    do_remove_neg_channels = sProcess.options.option_remove_negative.Value;
-    invalidate_paired_channels = sProcess.options.option_invalidate_paired_channels.Value;
-    max_sat_prop = sProcess.options.option_max_sat_prop.Value{1};
-    min_sat_prop = sProcess.options.option_min_sat_prop.Value{1};
-    max_separation_cm = sProcess.options.option_max_separation.Value{1};
-    min_separation_cm = sProcess.options.option_min_separation.Value{1};
+    % Load recordings
+    if strcmp(sInputs.FileType, 'data')     % Imported data structure
+        sData = in_bst_data(sInputs(1).FileName);
+    elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
+        sData = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    end
 
-    nirs_data_full = in_bst(sInputs.FileName, [], 1, 0, 'no');
-    channels = in_bst_channel(sInputs.ChannelFile);
-    [nirs_ichans, tmp] = channel_find(channels.Channel, 'NIRS');
-    nirs_chan_flags = zeros(size(nirs_data_full.ChannelFlag));
-    nirs_chan_flags(nirs_ichans) = 1;
-    [new_ChannelFlag, bad_chan_names] = Compute(nirs_data_full.F', channels, ...
-                                                nirs_data_full.ChannelFlag, ...
-                                                do_remove_neg_channels, max_sat_prop, ...
-                                                min_sat_prop, max_separation_cm, min_separation_cm, ...
-                                                invalidate_paired_channels, ...
-                                                nirs_chan_flags);
+    [new_ChannelFlag, bad_chan_names,msg] = Compute(sData, ChanneMat, ...
+                                                sProcess.options);
     
+    for i=1:size(msg,1)
+       disp(sprintf('Number of %s: %d', msg{i,1},msg{i,2}));
+    end    
+                                            
     % Add bad channels
     tree_set_channelflag({sInputs.FileName}, 'AddBad', bad_chan_names);
     OutputFiles = {sInputs.FileName};
@@ -107,10 +120,7 @@ end
 
 
 %% ===== Compute =====
-function [channel_flags, removed_channel_names] = ...
-    Compute(nirs_sig, channel_def, channel_flags, do_remove_neg_channels, ...
-            max_sat_prop, min_sat_prop, max_separation_cm, min_separation_cm, ...
-            invalidate_paired_channels, nirs_chan_flags)
+function [channel_flags, removed_channel_names,msg] = Compute(sData, channel_def, options)
 %% Update the given channel flags to indicate which pairs are to be removed:
 %% - negative values
 %% - saturating
@@ -155,75 +165,70 @@ function [channel_flags, removed_channel_names] = ...
 % TODO: test arg nirs_chan_flags. When there are neg values in AUX chan,
 %       it should not be filtered
 %  
+    prev_channel_flags = sData.ChannelFlag;
+    channel_flags   = sData.ChannelFlag;
+    nirs_flags = strcmpi({channel_def.Channel.Type}, 'NIRS');
+    
+    signal=sData.F';
+    nirs_signal=signal(:,nirs_flags);
+    
+    nb_chnnels=size(signal,2);
+    nb_sample= size(signal,1);
+    nb_nirs = sum(nirs_flags);
 
-    prev_channel_flags = channel_flags;
-    if nargin < 4
-        do_remove_neg_channels = 1;
-    end
-    if nargin < 5
-        max_sat_prop = 1;
-    end
+    neg_channels = nirs_flags & any(signal < 0, 1);
+    channel_flags(neg_channels) = -1;
+    msg(1,:)= {'negative channels', sum(neg_channels)};
+
+    if options.option_sci.Value 
+        warning('SCI not available yet');
+    end    
     
-    if nargin < 6
-        min_sat_prop = 1;
+    if options.option_remove_saturating.Value
+        max_sat_prop = options.option_max_sat_prop.Value{1};
+        min_sat_prop = options.option_min_sat_prop.Value{1};
+        
+        saturating=false(1,nb_chnnels);
+        if max_sat_prop < 100
+            max_nirs= repmat(max(nirs_signal , [], 1),nb_sample, 1);
+            prop_sat_ceil = 100*sum(nirs_signal == max_nirs, 1) / nb_sample;
+            saturating(nirs_flags) = saturating(nirs_flags) | prop_sat_ceil >= max_sat_prop;
+        end
+
+        if min_sat_prop < 100
+            min_nirs= repmat(min(nirs_signal, [], 1), nb_sample , 1);
+            prop_sat_floor = 100*sum(nirs_signal == min_nirs, 1) / nb_sample;
+            
+            saturating(nirs_flags) = saturating(nirs_flags) | prop_sat_floor >= min_sat_prop;
+        end
+        channel_flags(saturating) = -1;
+        msg(end+1,:)= {'saturating', sum(saturating)};
     end
-    
-    if nargin < 7
-        max_separation_cm = -1;
-    end
-    
-    if nargin < 8
-        min_separation_cm = -1;
-    end
-    
-    if nargin < 9
-        invalidate_paired_channels = 1;
-    end
-    
-    if nargin < 10
-        nirs_chan_flags = ones(size(channel_flags));
+
+    if options.option_separation_filtering.Value
+        
+        min_separation_m = options.option_separation.Value{1}(1);
+        max_separation_m = options.option_separation.Value{1}(2);
+        
+        separations_m_by_chans = process_nst_separations('Compute', channel_def.Channel(nirs_flags))';
+        distances_flag=false(1,nb_chnnels);
+        if min_separation_m > 0
+            distances_flag(nirs_flags) = distances_flag(nirs_flags) | separations_m_by_chans <= min_separation_m;
+        end
+        if max_separation_m > 0
+             distances_flag(nirs_flags) = distances_flag(nirs_flags) | separations_m_by_chans >= max_separation_m;
+        end
+        channel_flags(distances_flag) = -1;
+        msg(end+1,:)= {'Extrem separation', sum(distances_flag)};
     end 
     
-    max_separation_m = max_separation_cm / 100;
-    min_separation_m = min_separation_cm / 100;
-    
-    if do_remove_neg_channels
-        neg_channels = any(nirs_sig < 0, 1);
-        channel_flags(neg_channels) = -1;
-    end
-    
-    if max_sat_prop < 1
-        ceiling = nirs_sig == repmat(max(nirs_sig, [], 1), ...
-                                        size(nirs_sig, 1), 1);
-        prop_sat_ceil = sum(ceiling, 1) / size(nirs_sig, 1);
-        channel_flags(prop_sat_ceil >= max_sat_prop) = -1;
-    end
-    
-    if min_sat_prop < 1
-        flooring = nirs_sig == repmat(min(nirs_sig, [], 1), ...
-                                        size(nirs_sig, 1), 1);
-        prop_sat_floor = sum(flooring, 1) / size(nirs_sig, 1);
-        channel_flags(prop_sat_floor >= min_sat_prop) = -1;
-    end
-
-    separations_m_by_chans = process_nst_separations('Compute', channel_def.Channel);
-
-    if min_separation_m > 0
-        channel_flags(separations_m_by_chans <= min_separation_m) = -1;
-    end
-
-    if max_separation_m > 0
-        channel_flags(separations_m_by_chans >= max_separation_m) = -1;
-    end
-    
-    if invalidate_paired_channels
-        channel_flags(~nirs_chan_flags) = 0; %chans to ignore, can be unpaired
-        channel_flags = fix_chan_flags_wrt_pairs(channel_def.Channel, ...
+   channel_flags(~nirs_flags) = 0; %chans to ignore, can be unpaired
+   channel_flags = fix_chan_flags_wrt_pairs(channel_def.Channel, ...
                                                  channel_def.Nirs.Wavelengths, ...
                                                  channel_flags * -1) * -1;
-    end
+
     
-    channel_flags(~nirs_chan_flags) = -1;
+    channel_flags(~nirs_flags) = 1;
     removed =  (prev_channel_flags ~= -1 & channel_flags == -1);
     removed_channel_names = {channel_def.Channel(removed).Name};
 end
