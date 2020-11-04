@@ -177,8 +177,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             bst_report('Error',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
         elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
             bst_report('Warning',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
-        elseif msg{i,2} > 0
-            bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', text{i},n_removed))
+        elseif confusion(i,i)> 0
+            bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', text{i},confusion(i,i)))
         else 
             bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
         end
@@ -242,7 +242,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     
     nb_chnnels=size(signal,2);
     nb_sample= size(signal,1);
-
+    nb_nirs  = sum(nirs_flags);
     neg_channels = nirs_flags & any(signal < 0, 1);
     channel_flags(neg_channels) = -1;
     criteria(1,:)= {'negative channels', neg_channels,{} };
@@ -358,6 +358,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         channel_flags(distances_flag) = -1;
         
         %create figure
+
         fig1= figure('visible','off');
         h1_axes=subplot(1,1,1);
         h=histogram(separations_m_by_chans');
@@ -372,7 +373,36 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         
         criteria(end+1,:)= {'Extrem separation', distances_flag,{h1_axes,leg} };
     end 
-   
+    
+    % plot SCI and power according to distance
+    if 0
+    figure; 
+    h1_axes= subplot(2,1,1); hold on;
+    plot(separations_m_by_chans,SCI,'+')
+    line(h1_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h1_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h1_axes,xlim(gca), [SCI_threshold, SCI_threshold], 'LineWidth', 2, 'Color', 'r');
+    plot(separations_m_by_chans(SCI_channels & power_channels),SCI(SCI_channels & power_channels),'o')
+    xlabel('Source-Detecteur separation (cm)');ylabel('SCI(%)');
+    title('Rejection based on SCI and power')
+    h2_axes=subplot(2,1,2); hold on;
+    plot(separations_m_by_chans,power,'+')
+    line(h2_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h2_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h2_axes,xlim(gca), [power_threshold, power_threshold], 'LineWidth', 2, 'Color', 'r');   
+    plot(separations_m_by_chans(SCI_channels & power_channels),power(SCI_channels & power_channels),'o')
+    xlabel('Source-Detecteur separation (cm)');ylabel('power(%)');
+    
+    figure; % relation CV/Distance
+    h1_axes= subplot(1,1,1); hold on;
+    plot(separations_m_by_chans,CV,'+')
+    line(h1_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h1_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
+    line(h1_axes,xlim(gca), [CV_threshold, CV_threshold], 'LineWidth', 2, 'Color', 'r');
+    plot(separations_m_by_chans(CV > CV_threshold),CV(CV > CV_threshold),'o')
+    xlabel('Source-Detecteur separation (cm)');ylabel('CV(%)');
+    end
+
    if ~options.option_keep_unpaired.Value
         channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
                                                             channel_def.Nirs.Wavelengths, ...
@@ -485,6 +515,11 @@ tot_rejection = sum( diag( confmat(selection,selection)));
 confpercent = 100*confmat ./tot_rejection;
 
 selection = any( confmat > 0, 1) & ~contains(labels,'Cardiac');
+if all(confmat(contains(labels,'power'),:) == 0)  &&  any(confmat(contains(labels,'SCI'),:)) > 0
+    selection( find(contains(labels,'power'))) = 1;
+elseif all(confmat(contains(labels,'SCI'),:) == 0)  &&  any(confmat(contains(labels,'power'),:)) > 0
+    selection( find(contains(labels,'SCI'))) = 1;
+end    
 confpercent=confpercent(selection,selection);
 confmat = confmat(selection,selection);
 labels = labels(selection);
@@ -492,7 +527,7 @@ numlabels= length(labels);
 
 % plotting the colors
 imagesc(confpercent);
-%title(sprintf(': %.2f%%', 100*trace(confmat)/sum(confmat(:))));
+title(sprintf('Total rejected channel: %d', tot_rejection));
 ylabel('Rejection criteria'); xlabel('Rejection criteria');
 % set the colormap
 colormap(flipud(gray));
