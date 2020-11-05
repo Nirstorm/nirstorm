@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Head model from precomputed one';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File2';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1409;
 sProcess.Description = '';
 % Definition of the input accepted by this process

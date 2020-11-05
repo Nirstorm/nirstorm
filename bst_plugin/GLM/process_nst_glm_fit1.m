@@ -41,10 +41,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
 
     sProcess = process_nst_glm_fit('GetDescription');
     
-    11+1;
     sProcess.Category    = 'File';
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
+    
 end
 
 

@@ -32,9 +32,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - MFX group t-test';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1605;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
     % todo add a new tutorial
     
