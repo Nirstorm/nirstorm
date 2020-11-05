@@ -1,10 +1,10 @@
-# nirstorm
-Brainstorm plugin for fNIRS data analysis. 
+# NIRSTORM
 
-![splash illustration](https://raw.githubusercontent.com/wiki/Nirstorm/nirstorm/images/splash_illustration.png)
+![NIRSTORM - a Brainstorm plugin for fNIRS data analysis.](https://user-images.githubusercontent.com/24530402/98286213-a4b4a600-1f71-11eb-8a76-8eff3f820e3a.png)
 
 Current features include:
 - classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
+- statistical analysis using GLM
 - optimal montages that optimize the sensitivity to a given cortical
 region of interest
 - source reconstruction (cMEM, MNE)
@@ -12,14 +12,18 @@ region of interest
 
 ## Authors
 
- * ''Thomas Vincent, EPIC center, Montreal Heart Institute, Montreal, Canada''
- * ''Zhengchen Cai, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
- * ''Alexis Machado, Multimodal Functional Imaging Lab., Biomedical Engineering Dpt, McGill University, Montreal, Canada''
- * ''Edouard Delaire, Laboratoire d'Imagerie Biomédicale et CENIR-ICM, Paris, France''
- * ''Robert Stojan, Sportpsychology, Chemnitz University of Technology, Germany''
- * ''Louis Bherer, Centre de recherche EPIC, Institut de Cardiologie de Montréal, Montréal, Canada''
- * ''Jean-Marc Lina, Electrical Engineering Dpt, Ecole de Technologie Supérieure, Montréal, Canada''
- * ''Christophe Grova, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
+ * Thomas Vincent, EPIC center, Montreal Heart Institute, Montreal, Canada
+ * Zhengchen Cai, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada
+ * Alexis Machado, Multimodal Functional Imaging Lab., Biomedical Engineering Dpt, McGill University, Montreal, Canada
+ * Edouard Delaire, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada
+ * Robert Stojan, Sportpsychology, Chemnitz University of Technology, Germany
+ * Louis Bherer, Centre de recherche EPIC, Institut de Cardiologie de Montréal, Montréal, Canada
+ * Jean-Marc Lina, Electrical Engineering Dpt, Ecole de Technologie Supérieure, Montréal, Canada
+ * Christophe Grova, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada
+
+## Usage
+
+The main documentation is in the form tutorials available on the [nirstorm github project wiki](https://github.com/Nirstorm/nirstorm/wiki#tutorials).
 
 ## Installation
 
@@ -49,6 +53,4 @@ To create symbolic links of all processes and functions into the brainstorm user
 ```
 When updates are downloaded, this installation command has to be run again only if there are new files.
 
-## Usage
 
-The main documentation is in the form tutorials available on the [nirstorm github project wiki](https://github.com/Nirstorm/nirstorm/wiki#tutorials).
