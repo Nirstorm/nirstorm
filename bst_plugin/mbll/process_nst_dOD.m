@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Raw to delta OD';
     sProcess.FileTag     = ' | dOD';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = {'NIRS', 'dOD and MBLL'};
     sProcess.Index       = 1303; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = '';
     % Definition of the input accepted by this process

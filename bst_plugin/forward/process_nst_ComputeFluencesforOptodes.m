@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute fluences for optodes by MCXlab';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1402;
 sProcess.Description = 'http://mcx.sourceforge.net/cgi-bin/index.cgi';
 % Definition of the input accepted by this process
