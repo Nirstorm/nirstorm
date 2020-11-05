@@ -87,7 +87,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.hrf_model.Type    = 'combobox';
     sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
     
-    sProcess.options.label4.Comment = 'Nuisance Regressor:';
+    sProcess.options.label4.Comment = '<U><B>Nuisance Regressor</B></U>:';
     sProcess.options.label4.Type    = 'label';
     
     sProcess.options.lfO.Type    = 'radio_line';

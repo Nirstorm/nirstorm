@@ -45,33 +45,43 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.thresh_dis2cortex.Type    = 'value';
     sProcess.options.thresh_dis2cortex.Value   = {3, 'cm',2};
     
-    sProcess.options.depth_weightingMNE.Comment = 'Depth weighting factor for MNE';
+    sProcess.options.depth_weightingMNE.Comment = str_pad('Depth weighting factor for MNE',35);
     sProcess.options.depth_weightingMNE.Type    = 'value';
     sProcess.options.depth_weightingMNE.Value   = {0.5, '', 1};
     
-    sProcess.options.TimeSegment_tstart.Comment = '<B>Start time of the reconsturction</B>';
+    sProcess.options.TimeSegment_tstart.Comment = str_pad('Start time of the reconsturction',35);
     sProcess.options.TimeSegment_tstart.Type    = 'value';
     sProcess.options.TimeSegment_tstart.Value   = {-10, 's', 1};
     
-    sProcess.options.TimeSegment_tend.Comment = '<B>End time of the econsturction</B>';
+    sProcess.options.TimeSegment_tend.Comment = str_pad('End time of the econsturction',35);
     sProcess.options.TimeSegment_tend.Type    = 'value';
     sProcess.options.TimeSegment_tend.Value   = {60, 's', 1};
         
     sProcess.options.NoiseCov_recompute.Comment = 'Compute noise covariance of the baseline MNE';
     sProcess.options.NoiseCov_recompute.Type    = 'checkbox';
+    sProcess.options.NoiseCov_recompute.Controller = 'noise_cov';
     sProcess.options.NoiseCov_recompute.Value   = 1;
     
-    sProcess.options.NoiseCov_tstart.Comment = '<B>Start time of the baseline</B>';
+    sProcess.options.NoiseCov_tstart.Comment = str_pad('Start time of the baseline',30);
     sProcess.options.NoiseCov_tstart.Type    = 'value';
+    sProcess.options.NoiseCov_tstart.Class = 'noise_cov';
     sProcess.options.NoiseCov_tstart.Value   = {-10, 's', 1};
     
-    sProcess.options.NoiseCov_tend.Comment = '<B>End time of the baseline</B>';
+    sProcess.options.NoiseCov_tend.Comment = str_pad('End time of the baseline',30);
     sProcess.options.NoiseCov_tend.Type    = 'value';
+    sProcess.options.NoiseCov_tend.Class = 'noise_cov';
     sProcess.options.NoiseCov_tend.Value   = {0, 's', 1};
     
     sProcess.options.store_sparse_results.Comment = 'Store sparse results';
     sProcess.options.store_sparse_results.Type    = 'checkbox';
     sProcess.options.store_sparse_results.Value   = 0;
+end
+
+function s = str_pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====

@@ -42,20 +42,28 @@ sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 sProcess.nOutputs    = 2;
 
-sProcess.options.SS_chan.Type    = 'radio_line';
-sProcess.options.SS_chan.Comment   = {'Based on Source-Detector distances','Based on Names','Short-separation channels: '};
-sProcess.options.SS_chan.Value=1;
+sProcess.options.SS_chan.Type       = 'radio_linelabel';
+sProcess.options.SS_chan.Comment    = {'Based on Names', 'Based on Source-Detector distances','Short-separation channels: '; 'name', 'distance',''};
+sProcess.options.SS_chan.Controller = struct('name','name','distance','distance');
+sProcess.options.SS_chan.Value      = 'name';
 
-sProcess.options.separation_threshold_cm.Comment = 'Separation threshold';
-sProcess.options.separation_threshold_cm.Type    = 'value';
-sProcess.options.separation_threshold_cm.Value   = {1.5, 'cm', 2}; 
-
-sProcess.options.SS_chan_name.Comment = 'Superfical Channel [coma-separated list]';
+sProcess.options.SS_chan_name.Comment = str_pad('Superfical Channel [coma-separated list]',44);
 sProcess.options.SS_chan_name.Type    = 'text';
 sProcess.options.SS_chan_name.Value   = '';     
-    
+sProcess.options.SS_chan_name.Class   = 'name';
 
+sProcess.options.separation_threshold_cm.Comment = str_pad('Separation threshold',44);
+sProcess.options.separation_threshold_cm.Type    = 'value';
+sProcess.options.separation_threshold_cm.Value   = {1.5, 'cm', 2}; 
+sProcess.options.separation_threshold_cm.Class   = 'distance';
 
+end
+
+function s = str_pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====
@@ -92,12 +100,12 @@ Y= sDataIn.F(nirs_ichans,:)';
 model= nst_glm_initialize_model(sDataIn.Time);
 
 % Include short-seperation channel
-if sProcess.options.SS_chan.Value==1 % based on distance
+if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
     
     separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
     model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,type);
     
-elseif sProcess.options.SS_chan.Value==2 % based on name 
+elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
     
     if ~isempty(sProcess.options.SS_chan_name.Value)
         SS_name=split(sProcess.options.SS_chan_name.Value,',');

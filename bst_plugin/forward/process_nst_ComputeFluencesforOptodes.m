@@ -48,7 +48,7 @@ sProcess.options.help.Comment = ['<B>This process uses native MEX version of Mon
                                      '<B>For technical details please refer to mcx homepage (http://mcx.sourceforge.net/cgi-bin/index.cgi)</B><BR><BR>'];
 sProcess.options.help.Type    = 'label';
 
-ref_length = 10;
+ref_length = 20;
 
 SelectOptions = {...
         '', ...                            % Filename
@@ -134,8 +134,11 @@ sProcess.options.mcxlab_thresh_value.Value = {1,'1e-6(1/mm2/s)',3};
 
 end
 
-function s = pad(s, len)
-s = ['<PRE>' s strjoin(repmat({'&nbsp;'}, 1, len-length(s)), '') '</PRE>'];
+function s = pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====
