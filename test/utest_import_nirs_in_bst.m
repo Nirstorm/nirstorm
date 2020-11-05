@@ -1,33 +1,66 @@
-function sFile = utest_import_nirs_in_bst(nirs_fn)
-%% Ensure that nst_utest protocol exists
-ProtocolName = 'nst_utest';
-% Delete existing protocol
-gui_brainstorm('DeleteProtocol', ProtocolName);
+function sFile = utest_import_nirs_in_bst(nirs_fn, clean, raw_importation)
 
-db_dir = bst_get('BrainstormDbDir');
-nst_protocol_dir = fullfile(db_dir, ProtocolName);
-if exist(nst_protocol_dir, 'dir')
-    rmdir(nst_protocol_dir, 's');
+% RAW=1 -> import as link to raw file
+% RAW=0 -> import data into brainstorm DB.
+
+if nargin < 2
+    clean = 1; % always clean by default
 end
 
-% Create new protocol
-gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
+if nargin < 3
+    raw_importation = 1;
+end
 
-%% Import data as raw file
+ProtocolName = 'nst_utest';
+
+%% Clean nst_utest protocol if needed
+if clean && ~isempty(bst_get('Protocol', ProtocolName))
+    % Delete existing protocol
+    gui_brainstorm('DeleteProtocol', ProtocolName);
+    
+    db_dir = bst_get('BrainstormDbDir');
+    nst_protocol_dir = fullfile(db_dir, ProtocolName);
+    if exist(nst_protocol_dir, 'dir')
+        rmdir(nst_protocol_dir, 's');
+    end
+end
+
+%% Ensure that nst_utest protocol exists
+if isempty(bst_get('Protocol', ProtocolName))
+    % Create new protocol
+    gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
+end
+
+%% Resolve file format
 [rr, bfn, ext] = fileparts(nirs_fn);
 switch(ext)
     case '.nirs' %Homer
-        sFile = bst_process('CallProcess', 'process_import_data_raw', [], [], ...
-                            'subjectname',  'test_subject', ...
-                            'datafile',       {nirs_fn, 'NIRS-BRS'}, ...
-                            'channelreplace', 1, ...
-                            'channelalign',   0);
+        format = 'NIRS-BRS';
     case '.txt' %Artinis TODO: enable importation in Brainstorm
-        sFile = bst_process('CallProcess', 'process_import_data_raw', [], [], ...
-                            'subjectname',  'test_subject', ...
-                            'datafile',       {nirs_fn, 'NIRS-ARTINIS'}, ...
-                            'channelreplace', 1, ...
-                            'channelalign',   0);   
+        format = 'NIRS-ARTINIS';   
 end
-        % [sSubject, iSubject] = bst_get('Subject',  sFile.SubjectName);
+
+%% Import data as raw or data file
+subject_name = 'test_subject';
+if raw_importation
+    sFile = bst_process('CallProcess', 'process_import_data_raw', [], [], ...
+                        'subjectname',  subject_name, ...
+                        'datafile',       {nirs_fn, format}, ...
+                        'channelreplace', 1, ...
+                        'channelalign',   0);    
+else
+    sFile = bst_process('CallProcess', 'process_import_data_time', [], [], ...
+                        'subjectname',  subject_name, ...
+                        'condition',    'test', ...
+                        'datafile',     {nirs_fn, format}, ...
+                        'timewindow',   [], ...
+                        'split',        0, ...
+                        'ignoreshort',  1, ...
+                        'channelalign', 0, ...
+                        'usectfcomp',   0, ...
+                        'usessp',       0, ...
+                        'freq',         [], ...
+                        'baseline',     []);
+end
+
 end

@@ -1,12 +1,22 @@
 # nirstorm
 Brainstorm plugin for fNIRS data analysis. 
 
-Current features include classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
+![splash illustration](https://raw.githubusercontent.com/wiki/Nirstorm/nirstorm/images/splash_illustration.png)
+
+Current features include:
+- classical within-subject analysis comprising motion-correction, MBLL and window-averaging.
+- optimal montages that optimize the sensitivity to a given cortical
+region of interest
+- source reconstruction (cMEM, MNE)
+- precomputed fluence template based on Colin27
+
 ## Authors
 
- * ''Thomas Vincent, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
+ * ''Thomas Vincent, EPIC center, Montreal Heart Institute, Montreal, Canada''
  * ''Zhengchen Cai, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''
  * ''Alexis Machado, Multimodal Functional Imaging Lab., Biomedical Engineering Dpt, McGill University, Montreal, Canada''
+ * ''Edouard Delaire, Laboratoire d'Imagerie Biomédicale et CENIR-ICM, Paris, France''
+ * ''Robert Stojan, Sportpsychology, Chemnitz University of Technology, Germany''
  * ''Louis Bherer, Centre de recherche EPIC, Institut de Cardiologie de Montréal, Montréal, Canada''
  * ''Jean-Marc Lina, Electrical Engineering Dpt, Ecole de Technologie Supérieure, Montréal, Canada''
  * ''Christophe Grova, PERFORM Centre and physics dpt., Concordia University, Montreal, Canada''

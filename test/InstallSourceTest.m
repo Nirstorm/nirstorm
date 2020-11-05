@@ -443,7 +443,7 @@ if ~exist(folder, 'dir')
     mkdir(folder);
 end
 fout = fopen(fn, 'w');
-fprintf(fout, strjoin(lines, '\n'));
+fprintf(fout, strjoin(lines, char(10))); %#ok<CHARTEN>
 fclose(fout);
 end
 
