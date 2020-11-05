@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Cortical mask from atlas scouts';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 998;
+sProcess.Index       = 1901;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw', 'results'};

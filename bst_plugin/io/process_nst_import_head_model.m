@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Compute head model from fluence';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = {'NIRS', 'Sources'};
     sProcess.Index       = 1406;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Compute-head-model-from-fluence';
     % Definition of the input accepted by this process

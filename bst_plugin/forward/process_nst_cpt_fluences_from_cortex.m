@@ -27,7 +27,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Compute fluences from cortical scout';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1403;
 sProcess.Description = '';
 % Definition of the input accepted by this process
@@ -37,14 +37,20 @@ sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
-sProcess.options.cortex_to_scalp_extent.Comment = 'Extent of cortical ROI to scalp projection:';
+sProcess.options.cortex_to_scalp_extent.Comment = str_pad('Extent of cortical ROI to scalp projection:',45);
 sProcess.options.cortex_to_scalp_extent.Type = 'value';
 sProcess.options.cortex_to_scalp_extent.Value = {4.0, 'cm', 1};
 
-sProcess.options = nst_add_scout_sel_options(sProcess.options, 'roi', 'Cortical scout (target ROI):', ...
+sProcess.options = nst_add_scout_sel_options(sProcess.options, 'roi', str_pad('Cortical scout (target ROI):',45), ...
                                              'cortex', {'User scouts'}, 0);
 sProcess.options = process_nst_cpt_fluences_from_head('append_mcxlab_options', sProcess.options);
 
+end
+function s = str_pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====

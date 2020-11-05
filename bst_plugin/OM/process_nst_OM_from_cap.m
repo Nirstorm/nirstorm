@@ -38,7 +38,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Compute optimal montage from cap';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1409;
 sProcess.Description = '';
 sProcess.isSeparator = 1;

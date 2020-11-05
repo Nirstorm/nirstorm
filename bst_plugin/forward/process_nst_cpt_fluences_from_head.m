@@ -32,7 +32,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Compute fluences from head scout';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1404;
 sProcess.Description = '';
 % Definition of the input accepted by this process
@@ -42,7 +42,7 @@ sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
-sProcess.options = nst_add_scout_sel_options(struct(), 'head', 'Head scout (search space):', ...
+sProcess.options = nst_add_scout_sel_options(struct(), 'head', str_pad('Head scout (search space):',40), ...
                                              'scalp', {'User scouts'}, 1); 
 
 sProcess.options = append_mcxlab_options(sProcess.options);
@@ -50,7 +50,7 @@ end
 
 function options = append_mcxlab_options(options)
 
-options.segmentation.Comment = 'Segmentation (Volume)';
+options.segmentation.Comment = str_pad('Segmentation (Volume)',40);
 options.segmentation.Type    = 'text';
 options.segmentation.Value = 'segmentation';
 
@@ -58,7 +58,7 @@ sProcess.options.segmentation_label.Type    = 'radio_line';
 sProcess.options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
 sProcess.options.segmentation_label.Value   = 1;   
 
-options.wavelengths.Comment = 'Wavelengths (nm) [coma-separated list]';
+options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
 options.wavelengths.Type    = 'text';
 options.wavelengths.Value = '';
 
@@ -87,29 +87,36 @@ options.outputdir.Comment = 'Output folder for fluence:';
 options.outputdir.Type    = 'filename';
 options.outputdir.Value   = SelectOptions;
 
-options.mcxlab_gpuid.Comment = 'cfg.gpuid: ';
+options.mcxlab_gpuid.Comment = str_pad('cfg.gpuid: ',20);
 options.mcxlab_gpuid.Type = 'value';
 options.mcxlab_gpuid.Value={1,'',0};
 
-options.mcxlab_nphoton.Comment = 'cfg.nphoton: ';
+options.mcxlab_nphoton.Comment = str_pad('cfg.nphoton: ',20);
 options.mcxlab_nphoton.Type = 'value';
 options.mcxlab_nphoton.Value={1,'million photons', 0};
 
-options.mcxlab_flag_autoOP.Comment = 'Use default OpticalProperties';
+options.mcxlab_flag_autoOP.Comment = str_pad('Use default OpticalProperties',20);
 options.mcxlab_flag_autoOP.Type = 'checkbox';
 options.mcxlab_flag_autoOP.Value = 1;
 
-options.mcxlab_flag_thresh.Comment = 'Set threshold for fluences (reduce file size)';
+options.mcxlab_flag_thresh.Comment = str_pad('Set threshold for fluences (reduce file size)',20);
 options.mcxlab_flag_thresh.Type = 'checkbox';
 options.mcxlab_flag_thresh.Value = 0;
 
-options.mcxlab_thresh_value.Comment = 'Threshold for fluences';
+options.mcxlab_thresh_value.Comment = str_pad('Threshold for fluences',20);
 options.mcxlab_thresh_value.Type = 'value';
 options.mcxlab_thresh_value.Value = {1,'1e-6(1/mm2/s)',0};
 
-options.mcxlab_overwrite_fluences.Comment = 'Overwirte existing fluences';
+options.mcxlab_overwrite_fluences.Comment = str_pad('Overwirte existing fluences',20);
 options.mcxlab_overwrite_fluences.Type = 'checkbox';
 options.mcxlab_overwrite_fluences.Value = 0;
+end
+
+function s = str_pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====

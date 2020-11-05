@@ -29,9 +29,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Remove slow fluctuations';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1309;
-sProcess.isSeparator = 1;
+sProcess.isSeparator = 0;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 
 % Definition of the input accepted by this process
