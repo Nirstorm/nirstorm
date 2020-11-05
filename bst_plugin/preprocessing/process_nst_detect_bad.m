@@ -113,7 +113,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.option_keep_unpaired.Type    = 'checkbox';
     sProcess.options.option_keep_unpaired.Value   = 0;
     
-    %TODO: scalp contact index and outlier detection mentioned by Zhengchen.
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -154,17 +154,19 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end    
     end    
     
-    n_figure=length(figure_list);
-    fnew=figure;
-    for i=1:n_figure
-        ax_copy = copyobj(figure_list{i},fnew);
-        subplot(n_figure,1,i,ax_copy )
-        legend(figure_legend{i}.String{:})
-    end
+%     n_figure=length(figure_list);
+%     fnew=figure;
+%     for i=1:n_figure
+%         ax_copy = copyobj(figure_list{i},fnew);
+%         subplot(n_figure,1,i,ax_copy )
+%         legend(figure_legend{i}.String{:})
+%     end
 
-    figure;
+
     confusion=computeConfusion(critera);
-    plotConfMat(confusion,text);
+    
+    %figure;
+    %plotConfMat(confusion,text);
                                             
     % Warning if too many channels are removed                                         
     for i=1:size(msg,1)
