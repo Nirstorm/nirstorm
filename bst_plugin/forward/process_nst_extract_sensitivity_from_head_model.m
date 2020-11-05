@@ -28,7 +28,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Extract sensitivity surfaces from head model';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = {'NIRS', 'Sources'};
     sProcess.Index       = 1405;
     sProcess.Description = '';
     % Definition of the input accepted by this process

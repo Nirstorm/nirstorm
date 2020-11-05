@@ -40,7 +40,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'GLM - 1st level design and fit';
     sProcess.Category    = 'File2';
-    sProcess.SubGroup    = 'NIRS';
+    sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
@@ -87,7 +87,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.hrf_model.Type    = 'combobox';
     sProcess.options.hrf_model.Value   = {1, fieldnames(get_hrf_types())};
     
-    sProcess.options.label4.Comment = 'Nuisance Regressor:';
+    sProcess.options.label4.Comment = '<U><B>Nuisance Regressor</B></U>:';
     sProcess.options.label4.Type    = 'label';
     
     sProcess.options.lfO.Type    = 'radio_line';

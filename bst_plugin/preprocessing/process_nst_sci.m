@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Scalp Coupling Index';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1201;
 sProcess.isSeparator = 0;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Scalp-coupling-index';

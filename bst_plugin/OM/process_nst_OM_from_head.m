@@ -38,7 +38,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Compute optimal montage from head scout';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
+sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1408;
 sProcess.Description = '';
 sProcess.isSeparator = 0;
@@ -68,36 +68,37 @@ options.segmentation_label.Type    = 'radio_line';
 options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
 options.segmentation_label.Value   = 1;
 
-options.wavelengths.Comment = 'Wavelengths (nm) [coma-separated list]';
+options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
 options.wavelengths.Type    = 'text';
 options.wavelengths.Value = '';
 
-options.data_source.Comment = 'Fluence Data Source (URL or path)';
+options.data_source.Comment = str_pad('Fluence Data Source (URL or path)',40);
 options.data_source.Type    = 'text';
 options.data_source.Value = [nst_get_repository_url() '/fluence/'];
 
-options.nb_sources.Comment = 'Number of sources:';
+options.nb_sources.Comment = str_pad('Number of sources:',40);
 options.nb_sources.Type = 'value';
 options.nb_sources.Value = {4,'',0};
 
-options.nb_detectors.Comment = 'Number of detectors:';
+options.nb_detectors.Comment = str_pad('Number of detectors:',40);
 options.nb_detectors.Type = 'value';
 options.nb_detectors.Value =  {8,'',0};
 
-options.nAdjacentDet.Comment = 'Number of Adjacent:';
+options.nAdjacentDet.Comment = str_pad('Number of Adjacent:',40);
 options.nAdjacentDet.Type = 'value';
 options.nAdjacentDet.Value = {2,'',0};
 
-options.sep_optode.Comment = 'Range of optodes distance:';
+options.sep_optode.Comment = str_pad('Range of optodes distance:',40);
 options.sep_optode.Type = 'range';
 options.sep_optode.Value = {[15 55],'mm',0};
 
-options.sepmin_SD.Comment = 'Minimum source detector distance:';
+options.sepmin_SD.Comment = str_pad('Minimum source detector distance:',40);
 options.sepmin_SD.Type = 'value';
 options.sepmin_SD.Value = {15,'mm',0};
 
-options.exist_weight.Comment = 'Use existing weight tables (speed up)';
+options.exist_weight.Comment = str_pad('Use existing weight tables (speed up)',40);
 options.exist_weight.Type = 'checkbox';
+options.exist_weight.Controller= 'weight';
 options.exist_weight.Value = 0;
 
 SelectOptions = {...
@@ -114,7 +115,15 @@ SelectOptions = {...
 % TODO: add flag to enable ouput
 options.outputdir.Comment = 'Folder for weight table:';
 options.outputdir.Type    = 'filename';
+options.outputdir.Class   = 'weight';
 options.outputdir.Value   = SelectOptions;
+end
+
+function s = str_pad(s,padsize)
+    if (length(s) < padsize)
+        s = [repmat('&nbsp;', 1, padsize - length(s)), s];
+    end
+    s = ['<FONT FACE="monospace">' s '</FONT>'];
 end
 
 %% ===== FORMAT COMMENT =====

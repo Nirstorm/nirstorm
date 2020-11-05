@@ -32,8 +32,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Detect bad channels';
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'NIRS';
-    sProcess.Index       = 1301;  
+    sProcess.SubGroup    = {'NIRS', 'Pre-process'};
+    sProcess.Index       = 1301; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Bad_channel_tagging';
     sProcess.isSeparator = 0; 
     

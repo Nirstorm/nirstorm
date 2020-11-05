@@ -30,9 +30,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Compute sources: BEst';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS';
-    sProcess.isSeparator = 1;
-    sProcess.Index       = 1502; %0: not shown, >0: defines place in the list of processes
+    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.isSeparator = 0;
+    sProcess.Index       = 1502;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'raw', 'data'};
