@@ -73,31 +73,19 @@ for iInput=1:length(sInputs)
 
     ChannelMat = in_bst_channel(sInputs(iInput).ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
-
+    
     signals = sDataIn.F(nirs_ichans,:);
     
-    % Bandpass filter
     low_cutoff = sProcess.options.option_low_cutoff.Value{1};
     high_cutoff = sProcess.options.option_high_cutoff.Value{1};
-    order = 3;
+    
     fs = 1 / diff(sDataIn.Time(1:2));
-    [b,a] = butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
-    signals = filtfilt(b, a, signals')';
-    
-    signals = normalize(signals);
-    
-    % Compute 0-lag cross-correlation
-    pair_indexes = nst_get_pair_indexes_from_names({ChannelMat.Channel(nirs_ichans).Name});
-    sci = zeros(size(signals,1),1);
-    for ipair=1:size(pair_indexes, 1)
-        chan_indexes = pair_indexes(ipair, 1:2); %Consider only 2 first wavelengths
-        sci(chan_indexes) = abs(xcorr(signals(chan_indexes(1), :), ... 
-                                      signals(chan_indexes(2), :), 0, 'coeff'));
-    end
-    
+
+    [sci,xpower] = compute(signals,ChannelMat.Channel(nirs_ichans), fs,low_cutoff,high_cutoff );
+
     % Save time-series data
     data_out = zeros(size(sDataIn.F, 1), 1);
-    data_out(nirs_ichans,:) = sci;
+    data_out(nirs_ichans,:) = 100*sci;
     sDataOut = db_template('data');
     sDataOut.F            = data_out;
     sDataOut.Comment      = 'SCI';
@@ -105,7 +93,28 @@ for iInput=1:length(sInputs)
     sDataOut.Time         = [1];
     sDataOut.DataType     = 'recordings';
     sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = 'index';
+    sDataOut.DisplayUnits = '%';
+    
+    % Generate a new file name in the same folder
+    sStudy = bst_get('Study', sInputs(iInput).iStudy);
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+    sDataOut.FileName = file_short(OutputFile);
+    bst_save(OutputFile, sDataOut, 'v7');
+    % Register in database
+    db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    
+    
+        % Save time-series data
+    data_out = zeros(size(sDataIn.F, 1), 1);
+    data_out(nirs_ichans,:) = 100*xpower;
+    sDataOut = db_template('data');
+    sDataOut.F            = data_out;
+    sDataOut.Comment      = 'xpower';
+    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+    sDataOut.Time         = [1];
+    sDataOut.DataType     = 'recordings';
+    sDataOut.nAvg         = 1;
+    sDataOut.DisplayUnits = '%';
     
     % Generate a new file name in the same folder
     sStudy = bst_get('Study', sInputs(iInput).iStudy);
@@ -124,6 +133,76 @@ for iInput=1:length(sInputs)
     OutputFiles{iInput} = OutputFile;
 end
 end
+function [sci,xpower] = compute(signals,Channel, fs,low_cutoff,high_cutoff,wlen )
+%By: Guilherme A. Zimeo Morais 
+% https://github.com/GuilhermeZimeo/fNIRS-analysis
+%Contact: gazmorais@gmail.com
+
+        % Bandpass filter
+     if nargin < 4
+         low_cutoff = 0.5;
+     end
+     if nargin < 5
+         high_cutoff = 2.5;
+     end
+     if nargin < 6
+        wlen  = 10; %10s sliding windows 
+     end    
+     
+    order = 3;
+    wlen= round(wlen*fs); % convert s to sample
+    
+    [b,a] = butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
+    signals = filtfilt(b, a, signals'); % ntime x nchan
+    
+    n_sample = size(signals,1);
+    n_channel=size(signals,2);
+    
+    % Compute 0-lag cross-correlation
+    pair_indexes = nst_get_pair_indexes_from_names({Channel(:).Name});
+    sci         = zeros(n_channel,1);
+    xpower    = zeros(n_channel,1);
+    
+    for ipair=1:size(pair_indexes, 1)
+        chan_indexes = pair_indexes(ipair, 1:2); %Consider only 2 first wavelengths
+
+        %run sliding window with length wlen
+        SCI_w = zeros(1,length(1:wlen:(n_sample-wlen)));
+        xpower_w = zeros(1,length(1:wlen:(n_sample-wlen)));
+        
+        %initialize counter for sliding window iteration
+        i=1;
+        for w=1:wlen:(n_sample-wlen)
+            
+            %normalize data of each wavelength to its standard deviation
+            wl1_norm = signals(w:w+wlen,chan_indexes(1))./std(signals(w:w+wlen,chan_indexes(1)),1);
+            wl2_norm = signals(w:w+wlen,chan_indexes(2))./std(signals(w:w+wlen,chan_indexes(2)),1);
+
+            
+            %calculate scalp coupling index
+            SCI_w(i) = xcorr(wl1_norm,wl2_norm,0,'coeff');
+
+            
+            xcorr_wl = xcorr(wl1_norm,wl2_norm,'coeff');
+            
+            %Compute Power Spectrum of normalized cross correlation
+            X = xcorr_wl;
+            t = 1/fs:1/fs:length(X)/fs;
+            y = fft(X);
+            P2 = abs(y/length(t));
+            P1 = P2(1:round(length(t)/2));
+            
+            %calculate xpower
+            xpower_w(i) = max(P1);  
+            
+            i= i+1;
+        end
+         %final SCI and xpower values (median from sliding window)
+        sci(chan_indexes) = median(SCI_w);
+        xpower(chan_indexes) = median(xpower_w);
+    end
+end
+
 
 function sig = normalize(sig)
 nb_samples = size(sig, 2);
@@ -133,3 +212,4 @@ nb_samples = size(sig, 2);
 %sig = sig - repmat(mean(sig,2), 1, nb_samples);
 sig = sig ./ repmat(std(sig, 0, 2), 1, nb_samples);
 end
+
