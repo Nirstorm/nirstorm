@@ -1,4 +1,4 @@
-function nst_install(mode, extra)
+function nst_install(mode, extra,source_dir,target_dir)
 %NST_INSTALL Installation of NIRSTORM plugin for Brainstorm (linux and windows).
 %   NST_INSTALL(MODE) install NIRSTORM processes to brainstorm user folder:
 %     - linux: $HOME/.brainstorm/process
@@ -47,25 +47,22 @@ elseif ~iscellstr(extra)
     extra = {extra};
 end
 
+if nargin < 3
+   source_dir=pwd; 
+end
+
 if nargin < 4
-    dry = 0;
-end
-
-%% Check Brainstorm installation
-try
-    bst_folder = bst_get('BrainstormUserDir');
-catch
-    msg = ['Could not find Brainstorm installation. '...
+    try
+        target_dir=bst_get('UserProcessDir'); 
+    catch
+        msg = ['Could not find Brainstorm installation. '...
            'Check that matlab path contains Brainstorm folders'];
-    throw(MException('Nirstorm:Installation', msg));
+        throw(MException('Nirstorm:Installation', msg));
+    end      
 end
 
-bst_process_folder = fullfile(bst_folder, 'process');
-if ~exist(bst_process_folder, 'dir')
-    display(['Could not find Brainstorm process folder "' ...
-             bst_process_folder '". Check brainstorm installation']);
-    return;
+dry = 0;
+
+addpath(fullfile(source_dir, 'dist_tools'));
+install_package('nirstorm', fullfile(source_dir, 'bst_plugin'), target_dir, mode, extra, dry);
 end
-addpath(fullfile(pwd, 'dist_tools'));
-%install_package('brainentropy', 'best_fork', bst_folder, mode, {}, dry);
-install_package('nirstorm', 'bst_plugin', bst_process_folder, mode, extra, dry);
