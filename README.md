@@ -29,6 +29,11 @@ The main documentation is in the form tutorials available on the [nirstorm githu
 
 [Brainstorm](http://neuroimage.usc.edu/brainstorm/) must be installed prior to installing nirstorm. 
 
+### From Brainstorm (since Bainstorm v. 3.201110 (10-Nov-2020)) ** Recommended **
+In Brainstorm, go to the update menu at the top of the brainstorm windows, then 'Update NIRSTORM' and finally 'Download NIRSTORM'. The latest version of NIRSTORM will then be downloaded and installed.  Updates of NIRSTORM can then be downloaded using the same menu. 
+
+### From Github 
+
 The script `nst_install.m` takes care of copying or linking processes and functions into the brainstorm user folder.
 
 Parts of the nirstorm plugin may already be shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu (modified bear lambert law and bad channel tagging).
