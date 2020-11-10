@@ -123,47 +123,61 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
     parameters = parse_options(sProcess, sDataIn);
     
-    % Remove bad channels: they won't enter dOD computation so no need to keep them     
-    % Separate NIRS channels from others (NIRS_AUX etc.)
-    to_keep = sDataIn.ChannelFlag ~= -1 & strcmpi({ChanneMat.Channel.Type}, 'NIRS')';
+    % Remove bad channels: they won't enter MBLL computation so no need to keep them 
+    [good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels',sDataIn.F', ChanneMat, sDataIn.ChannelFlag);
     
-   if any(any(sDataIn.F(to_keep, :) < 0))
+    % Separate NIRS channels from others (NIRS_AUX etc.)                                                
+    [fnirs, fchannel_def, nirs_other, channel_def_other] = process_nst_mbll('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
+    
+    
+    if any(any(fnirs < 0))
         msg = 'Good channels contains negative values. Consider running NISTORM -> Set bad channels';
-        bst_error(msg, '[dOD] quantification', 0);
+        bst_error(msg, 'dOD quantification', 0);
     return;
     end
     
     % Apply dOD computation
-    nirs_dOD = Compute(sDataIn.F(to_keep, :), parameters);
+    nirs_dOD = Compute(fnirs', parameters);
+    
+    % Re-add other channels that were not changed during MBLL
+    [final_dOD, ChannelMat] = process_nst_mbll('concatenate_data',nirs_dOD', fchannel_def, nirs_other, channel_def_other);
 
+    
     sStudy = bst_get('Study', sInputs.iStudy);
+    % Create new condition because channel definition is different from original one
+     cond_name = sInputs.Condition;
+     if strcmp(cond_name(1:4), '@raw')
+        cond_name = cond_name(5:end);
+     end
+     iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_dOD']);
+     sStudy = bst_get('Study', iStudy);
+%     
+%     % Save channel definition
+     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+     db_set_channel(iChannelStudy, ChannelMat, 0, 0);
         
     % Save time-series data
-    final_nirs = nan(size(sDataIn.F)); % safe-guard to tag bad channels
-                                       % if a subsequent process ignores
-                                       % the ChannelFlag field
-                                       % Not 100% safe though because the
-                                       % process can use nan-ignoring
-                                       % functions
-    final_nirs(to_keep, :) = nirs_dOD;
+%     final_nirs = sDataIn.F;
+%     final_nirs(to_keep, :) = final_nirs';
     sDataOut = db_template('data');
-    sDataOut.F            = final_nirs;
+    sDataOut.F            = final_dOD';
     sDataOut.Comment      = 'NIRS dOD';
-    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+    %sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+    sDataOut.ChannelFlag  = ones(size(final_dOD, 2), 1);
     sDataOut.Time         = sDataIn.Time;
     sDataOut.DataType     = 'recordings'; 
     sDataOut.nAvg         = 1;
     sDataOut.Events       = events;
-    sDataOut.DisplayUnits = 'delta OD';
     sDataOut.History      = sDataIn.History;
     sDataOut              = bst_history('add', sDataOut, 'process', sProcess.Comment);
-    
+    sDataOut.DisplayUnits = 'delta OD';
+
     % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_dod');
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_OD');
     sDataOut.FileName = file_short(OutputFile);
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
-    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+    db_add_data(iStudy, OutputFile, sDataOut);
 end
 
 

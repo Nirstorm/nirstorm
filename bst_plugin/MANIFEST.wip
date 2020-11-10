@@ -10,6 +10,7 @@ GLM/process_nst_spree.m
 GLM/process_nst_combine_masks.m
 GLM/process_nst_extract_fov_mask_cortical.m
 io/process_nst_save_matrix_csv.m
+io/process_nst_prefix_matrix.m
 io/process_nst_concat_matrices.m
 io/process_nst_import_nirs_as_tstat.m
 io/nst_save_figure.m
