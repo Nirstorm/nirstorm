@@ -44,10 +44,35 @@ sProcess.nMinFiles   = 1;
 % Definition of the options
 
 
+sProcess.options.method.Type       = 'radio_linelabel';
+sProcess.options.method.Comment    = {'Spline correction', ' Temporal Derivative Distribution Repair','Motion correction algorithm'; 'spline', 'tddr',''};
+sProcess.options.method.Controller = struct('spline','spline','tddr','tddr');
+sProcess.options.method.Value      = 'spline';
+
 
 sProcess.options.option_event_name.Comment = 'Movement event name: ';
 sProcess.options.option_event_name.Type    = 'text';
 sProcess.options.option_event_name.Value   = '';
+sProcess.options.option_event_name.Class   = 'spline';
+
+sProcess.options.citation.Comment = '<b>Source:</b>';
+sProcess.options.citation.Type    = 'label';
+
+sProcess.options.citation_spline.Comment   = ['<p>Scholkmann, F., Spichtig, S., Muehlemann, T., & Wolf, M. (2010). <br />' ...
+                                              'How to detect and reduce movement artifacts in near-infrared imaging <br />' ...
+                                              'using moving standard deviation and spline interpolation. <br />' ...
+                                              'Physiological measurement, 31(5), 649–662. <br />' ...
+                                              'https://doi.org/10.1088/0967-3334/31/5/004<p>'];
+
+sProcess.options.citation_spline.Type    = 'label';
+sProcess.options.citation_spline.Class   = 'spline';
+
+sProcess.options.citation_tddr.Comment   = ['<p>Fishburn F.A., Ludlum R.S., Vaidya C.J., & Medvedev A.V. (2019). <br />' ...
+                                            'Temporal Derivative Distribution Repair (TDDR): A motion correction <br />' ...
+                                             'method for fNIRS. NeuroImage, 184, 171-179. <br />' ...
+                                             'https://doi.org/10.1016/j.neuroimage.2018.09.025</p>']; 
+sProcess.options.citation_tddr.Type    = 'label';
+sProcess.options.citation_tddr.Class    = 'tddr';
 end
 
 %% ===== FORMAT COMMENT =====
@@ -59,18 +84,19 @@ end
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFile = {};
 
-if ~license('test', 'Curve_Fitting_Toolbox')
-    bst_error('Curve Fitting Toolbox not available');
-    return 
-elseif isempty(which('csaps'))
-    bst_error(['Curve Fitting Toolbox OK but function csaps not found.<BR>' ...
-               'Try refreshing matlab cache using command: rehash toolboxcache']);
-    return
+if strcmp(sProcess.options.method.Value,'spline')
+    if ~license('test', 'Curve_Fitting_Toolbox')
+        bst_error('Curve Fitting Toolbox not available');
+        return 
+    elseif isempty(which('csaps'))
+        bst_error(['Curve Fitting Toolbox OK but function csaps not found.<BR>' ...
+                   'Try refreshing matlab cache using command: rehash toolboxcache']);
+        return
+    end
 end
 
 % Get selected events
 event_name =  strtrim(sProcess.options.option_event_name.Value);
-
 
 % Load recordings
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
@@ -83,18 +109,19 @@ elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
 end
     
 event = [];
-ievt_mvt = [];
-for ievt=1:length(events)
-    if strcmp(events(ievt).label, event_name)
-        event = events(ievt);
-        ievt_mvt = ievt;
-        break;
+if strcmp(sProcess.options.method.Value,'spline')
+    ievt_mvt = [];
+    for ievt=1:length(events)
+        if strcmp(events(ievt).label, event_name)
+            event = events(ievt);
+            ievt_mvt = ievt;
+            break;
+        end
+    end
+    if isempty(event)
+        warning(['Event "' event_name '" does not exist in file.']);
     end
 end
-if isempty(event)
-    warning(['Event "' event_name '" does not exist in file.']);
-end
-
 
 % Process only NIRS channels
 channels = in_bst_channel(sInputs.ChannelFile);
@@ -103,15 +130,15 @@ data_nirs = sDataIn.F(nirs_ichans, :)';
 
 prev_negs = any(data_nirs <= 0, 1);
 
-data_corr = Compute(data_nirs, sDataIn.Time', event);
+data_corr = Compute(data_nirs, sDataIn.Time', event,sProcess.options.method.Value);
 
 new_negs = any(data_corr <= 0, 1) & ~prev_negs;
 negative_chan=find(new_negs);
 pair_indexes = nst_get_pair_indexes_from_names({channels.Channel(nirs_ichans).Name});
 
-bst_report('Warning', sProcess, sInputs, 'Motion correction introduced negative values. Will be fixed by local offset');
 if any(new_negs)
-    
+    bst_report('Warning', sProcess, sInputs, 'Motion correction introduced negative values. Will be fixed by local offset');
+
     for ineg=1:length(negative_chan)
         ipair=find(any(pair_indexes(:, :) == negative_chan(ineg),2));
         offset = 2*abs(min(min(data_corr(:, pair_indexes(ipair, :)))));
@@ -132,7 +159,7 @@ data_corr = data_corr_full;
 % Save time-series data
 sDataOut = db_template('data');
 sDataOut.F            = data_corr';
-sDataOut.Comment      = 'Motion-corrected';
+sDataOut.Comment      = [sInputs.Comment '| Motion-corrected'];
 sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
 sDataOut.Time         = sDataIn.Time;
 sDataOut.DataType     = 'recordings';
@@ -140,11 +167,12 @@ sDataOut.History      = sDataIn.History;
 sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
 
 sDataOut.nAvg         = 1;
-if ~isempty(ievt_mvt)
+if strcmp(sProcess.options.method.Value,'spline') && ~isempty(ievt_mvt) 
     sDataOut.Events       = events([1:(ievt_mvt-1) (ievt_mvt+1):length(events)]);
 else
     sDataOut.Events       = events;
 end
+    
 sDataOut.DisplayUnits = sDataIn.DisplayUnits;
     
 % Generate a new file name in the same folder
@@ -166,6 +194,9 @@ data_corr = nirs_sig;
 if strcmp(method,'spline') && ~isempty(event)  && ~isempty(event.times)
     samples = time_to_sample_idx(event.times, t);
     data_corr = nst_spline_correction(nirs_sig, t, samples);
+elseif strcmp(method,'tddr')
+    fs = 1/(t(2)-t(1));
+    data_corr = nst_tddr_correction( nirs_sig , fs );
 end
 end
 
