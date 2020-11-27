@@ -209,10 +209,12 @@ for im=1:length(manifest_fns)
         install_operations(iop).file2 = target_fn;
         iop = iop + 1;
 
-        uninstall_operations(uop).file1 = [target_rfns ext];
-        uninstall_operations(uop).action = 'remove';
-        uninstall_operations(uop).file2 = '';
-        uop = uop + 1;
+        if ~strcmp(target_rfns(1:4),'nst_') && ~contains(ext,'mex')
+            uninstall_operations(uop).file1 = [target_rfns ext];
+            uninstall_operations(uop).action = 'remove';
+            uninstall_operations(uop).file2 = '';
+            uop = uop + 1;
+        end
         
         if exist(target_fn, 'file')
             uninstall_operations(uop).file1 = backup_rfn;

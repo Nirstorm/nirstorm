@@ -14,5 +14,11 @@ if ~exist(bst_process_folder, 'dir')
              bst_process_folder '". Check brainstorm installation']);
     return;
 end
+
+nistorm_folder      = fileparts(which('nst_install'));
+
+addpath(fullfile(nistorm_folder, 'dist_tools'));
 uninstall_package('nirstorm', bst_process_folder);
+rmpath(fullfile(nistorm_folder, 'dist_tools'));
+
 end

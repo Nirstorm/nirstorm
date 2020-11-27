@@ -1,4 +1,4 @@
-function nst_install(mode, extra,source_dir,target_dir)
+function nst_install(mode, extra)
 %NST_INSTALL Installation of NIRSTORM plugin for Brainstorm (linux and windows).
 %   NST_INSTALL(MODE) install NIRSTORM processes to brainstorm user folder:
 %     - linux: $HOME/.brainstorm/process
@@ -47,22 +47,37 @@ elseif ~iscellstr(extra)
     extra = {extra};
 end
 
-if nargin < 3
-   source_dir=pwd; 
-end
-
 if nargin < 4
-    try
-        target_dir=bst_get('UserProcessDir'); 
-    catch
-        msg = ['Could not find Brainstorm installation. '...
+    dry = 0;
+end
+
+%% Check Brainstorm installation
+try
+    bst_folder = bst_get('BrainstormUserDir');
+catch
+    msg = ['Could not find Brainstorm installation. '...
            'Check that matlab path contains Brainstorm folders'];
-        throw(MException('Nirstorm:Installation', msg));
-    end      
+    throw(MException('Nirstorm:Installation', msg));
 end
 
-dry = 0;
+nistorm_folder      = fileparts(which('nst_install'));
+bst_process_folder  = fullfile(bst_folder, 'process');
+bst_external_folder = bst_fullfile( bst_get('BrainstormHomeDir'), 'external', 'nirstorm' ); 
 
-addpath(fullfile(source_dir, 'dist_tools'));
-install_package('nirstorm', fullfile(source_dir, 'bst_plugin'), target_dir, mode, extra, dry);
+if ~exist(bst_process_folder, 'dir')
+    display(['Could not find Brainstorm process folder "' ...
+             bst_process_folder '". Check brainstorm installation']);
+    return;
 end
+addpath(fullfile(nistorm_folder, 'dist_tools'));
+install_package('nirstorm', 'bst_plugin', bst_process_folder, mode, extra, dry);
+
+% Move the functions to the external folder of brainstorm
+file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_external_folder);
+addpath(bst_external_folder);
+
+% Move the Mex file to the Mex folder
+file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
+
+
+rmpath(fullfile(nistorm_folder, 'dist_tools'));
