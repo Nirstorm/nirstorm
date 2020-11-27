@@ -70,7 +70,7 @@ if ~exist(bst_process_folder, 'dir')
     return;
 end
 addpath(fullfile(nistorm_folder, 'dist_tools'));
-install_package('nirstorm', 'bst_plugin', bst_process_folder, mode, extra, dry);
+install_package('nirstorm', fullfile(nistorm_folder,'bst_plugin'), bst_process_folder, mode, extra, dry);
 
 % Move the functions to the external folder of brainstorm
 file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_external_folder);
