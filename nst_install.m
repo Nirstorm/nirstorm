@@ -62,7 +62,7 @@ end
 
 nistorm_folder      = fileparts(which('nst_install'));
 bst_process_folder  = fullfile(bst_folder, 'process');
-bst_external_folder = bst_fullfile( bst_get('BrainstormHomeDir'), 'external', 'nirstorm' ); 
+bst_functions_folder =  bst_fullfile( bst_get('BrainstormUserDir'), 'nirstorm' );
 
 if ~exist(bst_process_folder, 'dir')
     display(['Could not find Brainstorm process folder "' ...
@@ -73,8 +73,8 @@ addpath(fullfile(nistorm_folder, 'dist_tools'));
 install_package('nirstorm', fullfile(nistorm_folder,'bst_plugin'), bst_process_folder, mode, extra, dry);
 
 % Move the functions to the external folder of brainstorm
-file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_external_folder);
-addpath(bst_external_folder);
+file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_functions_folder);
+addpath(bst_functions_folder);
 
 % Move the Mex file to the Mex folder
 file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
