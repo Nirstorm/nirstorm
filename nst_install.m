@@ -47,9 +47,6 @@ elseif ~iscellstr(extra)
     extra = {extra};
 end
 
-if nargin < 4
-    dry = 0;
-end
 
 %% Check Brainstorm installation
 try
@@ -64,13 +61,9 @@ nistorm_folder      = fileparts(which('nst_install'));
 bst_process_folder  = fullfile(bst_folder, 'process');
 bst_functions_folder =  bst_fullfile( bst_get('BrainstormUserDir'), 'nirstorm' );
 
-if ~exist(bst_process_folder, 'dir')
-    display(['Could not find Brainstorm process folder "' ...
-             bst_process_folder '". Check brainstorm installation']);
-    return;
-end
+
 addpath(fullfile(nistorm_folder, 'dist_tools'));
-install_package('nirstorm', fullfile(nistorm_folder,'bst_plugin'), bst_process_folder, mode, extra, dry);
+install_package('nirstorm', fullfile(nistorm_folder,'bst_plugin'), bst_process_folder, mode, extra, 0);
 
 % Move the functions to the external folder of brainstorm
 file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_functions_folder);
@@ -81,3 +74,5 @@ file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
 
 
 rmpath(fullfile(nistorm_folder, 'dist_tools'));
+
+end
