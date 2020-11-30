@@ -28,8 +28,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'GLM - extract within subject effects matrix';
 sProcess.Category    = 'Custom2';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1606;
+sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+sProcess.Index       = 1814;
 sProcess.isSeparator = 1;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
 % todo add a new tutorial

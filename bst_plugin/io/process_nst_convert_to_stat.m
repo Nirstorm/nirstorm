@@ -27,8 +27,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Convert to stat map';
     sProcess.Category    = 'Stat1';
-    sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1902;
+    sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+    sProcess.Index       = 1805;
     sProcess.isSeparator = 0;
     sProcess.Description = '';
     

@@ -28,8 +28,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Cortical projection';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1501;
+sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+sProcess.Index       = 1802;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};

@@ -34,10 +34,10 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    sProcess.Comment     = 'Import from .evt table file';
+    sProcess.Comment     = 'Import events from .evt table file';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'Events';
-    sProcess.Index       = 40;
+    sProcess.SubGroup    = {'NIRS', 'Import'};
+    sProcess.Index       = 1199;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/EventMarkers#Other_menus';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'raw', 'data'};
