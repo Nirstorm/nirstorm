@@ -81,6 +81,7 @@ math/nst_math_build_basis_dct.m
 math/nst_math_dctmtx.m
 math/nst_math_fit_AR.m
 math/nst_spline_correction.m
+math/nst_tddr_correction.m
 OM/process_nst_OM_from_cortex.m
 OM/process_nst_OM_from_head.m
 OM/process_nst_OM_from_cap.m
