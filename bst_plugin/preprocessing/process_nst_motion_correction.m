@@ -55,13 +55,18 @@ sProcess.options.option_event_name.Type    = 'text';
 sProcess.options.option_event_name.Value   = '';
 sProcess.options.option_event_name.Class   = 'spline';
 
+sProcess.options.option_smoothing.Comment = 'Smoothing Parameters';
+sProcess.options.option_smoothing.Type    = 'value';
+sProcess.options.option_smoothing.Value   = {0.99,'',3};
+sProcess.options.option_smoothing.Class   = 'spline';
+
 sProcess.options.citation.Comment = '<b>Source:</b>';
 sProcess.options.citation.Type    = 'label';
 
 sProcess.options.citation_spline.Comment   = ['<p>Scholkmann, F., Spichtig, S., Muehlemann, T., & Wolf, M. (2010). <br />' ...
                                               'How to detect and reduce movement artifacts in near-infrared imaging <br />' ...
                                               'using moving standard deviation and spline interpolation. <br />' ...
-                                              'Physiological measurement, 31(5), 649–662. <br />' ...
+                                              'Physiological measurement, 31(5) <br />' ...
                                               'https://doi.org/10.1088/0967-3334/31/5/004<p>'];
 
 sProcess.options.citation_spline.Type    = 'label';
@@ -130,7 +135,7 @@ data_nirs = sDataIn.F(nirs_ichans, :)';
 
 prev_negs = any(data_nirs <= 0, 1);
 
-data_corr = Compute(data_nirs, sDataIn.Time', event,sProcess.options.method.Value);
+data_corr = Compute(data_nirs, sDataIn.Time', event,sProcess.options.method.Value,sProcess.options.option_smoothing.Value{1});
 
 new_negs = any(data_corr <= 0, 1) & ~prev_negs;
 negative_chan=find(new_negs);
@@ -167,11 +172,8 @@ sDataOut.History      = sDataIn.History;
 sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
 
 sDataOut.nAvg         = 1;
-if strcmp(sProcess.options.method.Value,'spline') && ~isempty(ievt_mvt) 
-    sDataOut.Events       = events([1:(ievt_mvt-1) (ievt_mvt+1):length(events)]);
-else
-    sDataOut.Events       = events;
-end
+sDataOut.Events       = events;
+
     
 sDataOut.DisplayUnits = sDataIn.DisplayUnits;
     
@@ -186,14 +188,19 @@ end
 
 
 %% ===== Compute =====
-function [data_corr] = Compute(nirs_sig, t, event, method) %#ok<DEFNU>
+function [data_corr] = Compute(nirs_sig, t, event, method,exta_parameters) %#ok<DEFNU>
 if nargin < 4
     method = 'spline';
 end
+
+if nargin < 5
+    exta_parameters=0.99;
+end    
+
 data_corr = nirs_sig; 
 if strcmp(method,'spline') && ~isempty(event)  && ~isempty(event.times)
     samples = time_to_sample_idx(event.times, t);
-    data_corr = nst_spline_correction(nirs_sig, t, samples);
+    data_corr = nst_spline_correction(nirs_sig, t, samples',exta_parameters);
 elseif strcmp(method,'tddr')
     fs = 1/(t(2)-t(1));
     data_corr = nst_tddr_correction( nirs_sig , fs );

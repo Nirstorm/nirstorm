@@ -1,4 +1,4 @@
-function nirs_sig_corr = nst_spline_correction(nirs_sig, t, mvtWin_samples)
+function nirs_sig_corr = nst_spline_correction(nirs_sig, t, mvtWin_samples,smooth )
 %% Motion correction algorithm based on spline interpolation 
 %  Scholkmann, F., Spichtig, S., Muehlemann, T., & Wolf, M. (2010). 
 %  How to detect and reduce movement artifacts in near-infrared imaging 
@@ -18,7 +18,8 @@ function nirs_sig_corr = nst_spline_correction(nirs_sig, t, mvtWin_samples)
 %    - nirs_sig_corr: matrix of double, size: time x nb_channels
 %        Motion-corrected nirs signals
 %
-param.spline.smooth=0.99;
+
+param.spline.smooth=smooth;
 
 nSamples = size(nirs_sig, 1);
 nChan = size(nirs_sig, 2);
