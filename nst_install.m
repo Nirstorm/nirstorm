@@ -67,11 +67,12 @@ install_package('nirstorm', fullfile(nistorm_folder,'bst_plugin'), bst_process_f
 
 % Move the functions to the external folder of brainstorm
 file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_functions_folder);
+file_move(fullfile(bst_functions_folder,'nst_uninstall_*'), bst_get('UserProcessDir'));
+
 addpath(bst_functions_folder);
 
 % Move the Mex file to the Mex folder
 file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
-
 
 rmpath(fullfile(nistorm_folder, 'dist_tools'));
 
