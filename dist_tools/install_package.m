@@ -75,8 +75,7 @@ version_tag = get_version_tag(source_dir);
 [install_operations, uninstall_operations] = resolve_file_operations(package_name, source_dir, target_dir, mode, extras, target_matlab_ver);
 disp(['Installing ' package_name '--' version_tag ' to ' target_dir '...']);
 execute_file_operations(install_operations, dry);
-
-uninstall_script = fullfile(target_dir, ['nst_uninstall_' package_name '.m']);
+uninstall_script = fullfile(target_dir, ['uninstall_' package_name '.m']);
 uninstall_header = sprintf('disp(''Uninstalling %s--%s from %s...'');', ...
                            package_name, version_tag, protect_path(target_dir));
 make_file_operations_script(uninstall_operations, uninstall_script, uninstall_header, dry);
