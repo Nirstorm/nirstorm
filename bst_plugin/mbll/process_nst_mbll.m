@@ -885,9 +885,6 @@ extinction_hbo_hbr_ref = [
 1000	1024	206.784;
 ];
 
-extinction_hbo_hbr_ref(:,2) = extinction_hbo_hbr_ref(:,2) * 2.303;
-extinction_hbo_hbr_ref(:,3) = extinction_hbo_hbr_ref(:,3) * 2.303;
-
 if any(wavelengths > extinction_hbo_hbr_ref(end,1)) || ...
     any(wavelengths < extinction_hbo_hbr_ref(1,1))
     raise(MException('NSTValueError', ['Hb exctinction not available for '...
