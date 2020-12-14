@@ -27,8 +27,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'Save matrix to CSV';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1901;
+    sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+    sProcess.Index       = 1804;
     sProcess.Description = '';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'matrix'};

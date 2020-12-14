@@ -30,8 +30,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Comment     = 'MBLL - raw to delta [HbO], [HbR] & [HbT]';
     sProcess.FileTag     = '_Hb';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1304; %0: not shown, >0: defines place in the list of processes
+    sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+    sProcess.Index       = 1810; %0: not shown, >0: defines place in the list of processes
     sProcess.isSeparator = 1;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Compute_.5BHb.5D_variations_-_Modified_Beer-Lambert_Law';
     % Definition of the input accepted by this process

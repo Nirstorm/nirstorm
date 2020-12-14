@@ -28,8 +28,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Concatenate matrices';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1903;
+sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+sProcess.Index       = 1807;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'matrix'};

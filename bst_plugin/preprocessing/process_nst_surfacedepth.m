@@ -29,8 +29,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Compute distances from cortex surface to head surface';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS - wip';
-sProcess.Index       = 1401;
+sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+sProcess.Index       = 1812;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};

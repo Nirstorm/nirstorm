@@ -27,8 +27,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
     sProcess.Comment     = 'Combine masks';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = 'NIRS - wip';
-    sProcess.Index       = 1905;
+    sProcess.SubGroup    = {'NIRS', 'Work in progress'};
+    sProcess.Index       = 1813;
     sProcess.isSeparator = 0;
     sProcess.Description = '';
     % todo add a new tutorial
