@@ -70,7 +70,7 @@ file_move(fullfile(bst_get('UserProcessDir'),'nst_*'), bst_functions_folder);
 addpath(bst_functions_folder);
 
 % Move the Mex file to the Mex folder
-file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
+% file_move(fullfile(bst_get('UserProcessDir'),'*.mex*'), bst_get('UserMexDir'));
 
 
 rmpath(fullfile(nistorm_folder, 'dist_tools'));
