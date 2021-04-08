@@ -1,3 +1,7 @@
 ---------------------------------------------------------------
+April 2021
+Brainstorm - Integration of NIRSTORM in the Brainstorm plugin system
+
+---------------------------------------------------------------
 December 2020
 MBLL - Bug fix: correct a bug that was scaling the concentrations by a factor of 0.43 (1/log(10))
