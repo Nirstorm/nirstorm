@@ -1,6 +1,7 @@
 ---------------------------------------------------------------
 April 2021
 Brainstorm - Integration of NIRSTORM in the Brainstorm plugin system
+Short Separation channel regression - Uses the mean of the short separation channels as regressors
 
 ---------------------------------------------------------------
 December 2020

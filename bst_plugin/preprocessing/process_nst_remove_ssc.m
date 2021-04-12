@@ -87,41 +87,41 @@ end
 ChannelMat = in_bst_channel(sInput.ChannelFile);
 [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
 
-% We might consider using only one Wavelengths, or only Hb0 or HbR as they
-% have strong anti-correlation.
-if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    type={'HbO','HbR'}; 
-else
-    type={ChannelMat.Channel(nirs_ichans).Group};
+
+types=unique({ChannelMat.Channel(nirs_ichans).Group});
+
+F= sDataIn.F;
+for itype = 1 :length(types)
+    
+    model= nst_glm_initialize_model(sDataIn.Time);
+    
+    % Include short-seperation channel
+    if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
+
+        separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
+        model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype));
+
+    elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
+
+        if ~isempty(sProcess.options.SS_chan_name.Value)
+            SS_name=split(sProcess.options.SS_chan_name.Value,',');
+            model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype));
+        end    
+    end 
+
+    nirs_ichans = strcmp( {ChannelMat.Channel.Type},'NIRS') & strcmp( {ChannelMat.Channel.Group},types{itype});
+    Y= sDataIn.F(nirs_ichans,:)';
+
+    disp(model.reg_names)
+    [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
+    Y= Y - model.X*B;
+    F(nirs_ichans,:) = Y';
 end    
-    
-Y= sDataIn.F(nirs_ichans,:)';
-
-model= nst_glm_initialize_model(sDataIn.Time);
-
-% Include short-seperation channel
-if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
-    
-    separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100;
-    model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,type);
-    
-elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
-    
-    if ~isempty(sProcess.options.SS_chan_name.Value)
-        SS_name=split(sProcess.options.SS_chan_name.Value,',');
-        model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',type);
-    end    
-end 
-disp(model.reg_names)
-[B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
-Y= Y - model.X*B;
-
 
 sDataOut                    = sDataIn;
-sDataOut.F(nirs_ichans,:)   = Y';
+sDataOut.F                  = F;
 sDataOut.Comment            = [sInput.Comment '| SSC'];
-History                     = ['Remove superficial noise using :' sprintf('%s, ',model.reg_names{:})];
-sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc',History); 
+sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
 
 % Generate a new file name in the same folder
 sStudy = bst_get('Study', sInput.iStudy);

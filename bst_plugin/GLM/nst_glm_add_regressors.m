@@ -46,7 +46,7 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
                 params=varargin{3};
             end
             if nargin < 6
-               types = {'HbO', 'HbR'};
+               types = {'HbO'};
             else 
                 types=varargin{4};
             end
@@ -178,7 +178,7 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
 % Usage : 
 % model=nst_glm_add_channel_regressors(model,sFile,'distance',max_distance)
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'})
-% model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'HbO','HbR'})
+% model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'HbO'})
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'WL860'})
 
     % Load recordings
@@ -210,8 +210,8 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
             [~,idx_chann] = find(contains( {channels.Name},params));
     end
     
-    y=F(idx_chann, :)';
-    names={channels(idx_chann).Name};
+    y=mean(F(idx_chann, :),1)';
+    names={ sprintf('Short-Separation - %s',types{1})};
 
     model.X        = [model.X y];
     model.reg_names= [model.reg_names names];
