@@ -121,8 +121,7 @@ end
 sDataOut                    = sDataIn;
 sDataOut.F                  = F;
 sDataOut.Comment            = [sInput.Comment '| SSC'];
-History                     = ['Remove superficial noise using :' sprintf('%s, ',model.reg_names{:})];
-sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc',History); 
+sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
 
 % Generate a new file name in the same folder
 sStudy = bst_get('Study', sInput.iStudy);
