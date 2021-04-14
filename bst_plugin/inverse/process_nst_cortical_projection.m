@@ -105,7 +105,10 @@ end
 % Select valid NIRS channels
 
 montage_info = nst_montage_info_from_bst_channels(ChanneMat.Channel, sDataIn.ChannelFlag);
-separations_by_pairs = process_nst_separations('Compute', ChanneMat.Channel, montage_info.pair_sd_indexes);
+src_ids = montage_info.src_ids;
+det_ids = montage_info.det_ids;
+pair_sd_idx =  montage_info.pair_sd_indexes;
+separations_by_pairs = process_nst_separations('Compute', ChanneMat.Channel,[ src_ids(pair_sd_idx(:, 1))' , det_ids(pair_sd_idx(:, 2))'] );
 if min_separation_m > 0
     selected_pairs = separations_by_pairs >= min_separation_m;
 else
