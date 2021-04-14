@@ -27,35 +27,14 @@ The main documentation is in the form tutorials available on the [nirstorm githu
 
 ## Installation
 
-[Brainstorm](http://neuroimage.usc.edu/brainstorm/) must be installed prior to installing nirstorm. 
+Nirstorm is available in two forms: an open-source Matlab plugin for Brainstorm (Matlab license required) and is included in the Brainstorm standalone version (Java executable)
 
-### From Brainstorm (since Bainstorm v. 3.201110 (10-Nov-2020)) ** Recommended **
-In Brainstorm, go to the update menu at the top of the brainstorm windows, then 'Update NIRSTORM' and finally 'Download NIRSTORM'. The latest version of NIRSTORM will then be downloaded and installed.  Updates of NIRSTORM can then be downloaded using the same menu. 
+Matlab version can be installed using the Brainstorm plugin system : 
+![Nirs_installation](https://neuroimage.usc.edu/brainstorm/Tutorials/Plugins?action=AttachFile&do=get&target=example1.gif)
 
-### From Github 
+This required the Brainstorm version 3.210414 (14 April 2021) or higher. To use nirstorm with a previous version of Brainstorm, refers to this tutorial https://github.com/Nirstorm/nirstorm/wiki/Installation (Note: We recomand you to always use the latest version of Brainstorm) 
 
-The script `nst_install.m` takes care of copying or linking processes and functions into the brainstorm user folder.
-
-Parts of the nirstorm plugin may already be shipped with the lastest brainstorm version and are available in the process selection menu in the "NIRS" submenu (modified bear lambert law and bad channel tagging).
-The current installation will override them.
-
-Run brainstorm before installing nirstorm.
-All commands indicated below must be run in the nirstorm folder where the archive was uncrompressed.
-
-### Copy installation (windows, linux)
-
-To copy all processes and functions into the brainstorm user folder, run under matlab:
-```matlab
->> nst_install('copy');
-```
-When updates are downloaded, this installation command must be run again for changes to take effect.
-
-### Linked installation (linux only)
-
-To create symbolic links of all processes and functions into the brainstorm user folder, run under matlab:
-```matlab
->> nst_install('link');
-```
-When updates are downloaded, this installation command has to be run again only if there are new files.
+Standalone version is directly included in Brainstorm standalone version. Follow Brainstorm tutorial for more information: 
+https://neuroimage.usc.edu/brainstorm/Installation
 
 
