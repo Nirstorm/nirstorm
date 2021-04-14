@@ -160,6 +160,12 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
+% Install/load iso2mesh plugin
+[isInstalled, errMsg] = bst_plugin('Install', 'iso2mesh');
+if ~isInstalled
+    error(errMsg);
+end
+
 %addpath(genpath(sProcess.options.mcxpath.Value));
 
 
@@ -246,6 +252,9 @@ src_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(src_hvidx,:)+1,head_no
 det_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(det_hvidx,:)+1,head_normals(det_hvidx,:),options,'Display',0,'Text',0);
 %TODO: set thresh flag in BST for fluences
 
+
+bst_progress('start', 'Computing fluences using mcxlab' , 'Computing fluences using mcxlab', 1, nb_sources + nb_dets);
+
 for isrc = 1:nb_sources
     cfg.issrcfrom0=0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
     cfg.srcpos=src_pos(isrc,:);    
@@ -278,6 +287,7 @@ for isrc = 1:nb_sources
         output_dir = sProcess.options.outputdir.Value{1};
         save([output_dir,'/',fluence_fn],'fluence_flat_sparse_vol','reference_voxel_index');        
     end
+    bst_progress('inc', 1);
 end
 
 for idet = 1:nb_dets
@@ -312,7 +322,10 @@ for idet = 1:nb_dets
         output_dir = sProcess.options.outputdir.Value{1};
         save([output_dir,'/',fluence_fn],'fluence_flat_sparse_vol','reference_voxel_index');
     end
+    bst_progress('inc', 1);
 end
+
+bst_progress('stop');
 end
 
 function [normalV] = computeVertNorm(Vertices,Faces)

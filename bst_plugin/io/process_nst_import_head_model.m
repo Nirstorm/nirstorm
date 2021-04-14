@@ -309,7 +309,7 @@ end
 
 
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_sd_idx);
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,[ src_ids(pair_sd_idx(:, 1))' , det_ids(pair_sd_idx(:, 2))'] );
 
 
 for ipair=1:nb_pairs

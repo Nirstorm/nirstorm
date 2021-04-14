@@ -198,21 +198,29 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
     
     channels=ChannelMat.Channel(idx);
     F=sDataIn.F(idx', :);
-
+    separations = process_nst_separations('Compute',channels);
     switch criteria
         case 'distance'
-            separations = process_nst_separations('Compute',channels);
             if isempty(separations)
                 warning(sprintf('Separations could not be computed for %s', sFile.FileName));
             end
             idx_chann =   separations <= params & ~isnan(separations);
+
         case 'name'
             [~,idx_chann] = find(contains( {channels.Name},params));
     end
     
+   if isempty(idx_chann)
+      bst_error('No supperficial channel found');
+      return;
+   else
+       for i_chan = 1 :length(idx_chann)
+           disp(sprintf( 'Superficial channel: %s - %1.2f cm', channels(idx_chann(i_chan)).Name, 100*separations(idx_chann(i_chan))));
+       end      
+   end    
+            
     y=mean(F(idx_chann, :),1)';
     names={ sprintf('Short-Separation - %s',types{1})};
-
     model.X        = [model.X y];
     model.reg_names= [model.reg_names names];
     % We apply low and high pass filter 

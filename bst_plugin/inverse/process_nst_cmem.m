@@ -246,7 +246,7 @@ for iwl=1:nb_wavelengths
     [rH, lH] = tess_hemisplit(cortex);
     rH = intersect(rH,valid_nodes);
     lH = intersect(lH,valid_nodes);
-    if ~isempty(rH) || ~isempty(lH)
+    if ~isempty(rH) && ~isempty(lH)
         isConnected = 0;
     else
         isConnected = 1;

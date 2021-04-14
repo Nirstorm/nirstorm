@@ -348,13 +348,13 @@ end
 
 pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
 
-figure()
-plot(Prior, Fit,'b.');
-hold on;plot(Prior(Index), Fit(Index),'ro');
-hold off
-xlabel('Norm |WJ|');
-ylabel('Residual |M-GJ|');
-title('L-curve');
+% figure()
+% plot(Prior, Fit,'b.');
+% hold on;plot(Prior(Index), Fit(Index),'ro');
+% hold off
+% xlabel('Norm |WJ|');
+% ylabel('Residual |M-GJ|');
+% title('L-curve');
 
 end
 
