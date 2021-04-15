@@ -36,7 +36,7 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
-sProcess.OutputTypes = {'data','data'};
+sProcess.OutputTypes = {'data'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
