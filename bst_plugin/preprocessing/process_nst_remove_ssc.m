@@ -40,7 +40,7 @@ sProcess.OutputTypes = {'data','data'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
-sProcess.nOutputs    = 2;
+sProcess.nOutputs    = 1;
 
 sProcess.options.SS_chan.Type       = 'radio_linelabel';
 sProcess.options.SS_chan.Comment    = {'Based on Names', 'Based on Source-Detector distances','Short-separation channels: '; 'name', 'distance',''};

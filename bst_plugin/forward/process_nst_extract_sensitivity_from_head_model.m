@@ -96,7 +96,7 @@ for iwl=1:size(sensitivity_surf, 2)
 end
 
 if nb_dets < 100
-    time = 1:(nb_sources*100 + nb_dets);
+    time = 1:(nb_sources*100 + nb_dets + 1);
     for iwl=1:size(sensitivity_surf, 2)
         %sens_tmp = zeros(nb_nodes, length(time)) - 1;
         sens_tmp = zeros(nb_nodes, length(time));
