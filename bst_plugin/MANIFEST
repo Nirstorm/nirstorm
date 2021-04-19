@@ -63,6 +63,7 @@ GLM/process_nst_glm_contrast.m
 GLM/process_nst_glm_contrast_ttest.m
 GLM/process_nst_glm_group_ttest.m
 GLM/process_nst_mask_from_atlas.m
+forward/nst_get_hb_extinctions
 forward/nst_prepare_segmentation.m
 forward/process_nst_cpt_fluences_from_cortex.m
 forward/process_nst_cpt_fluences_from_head.m

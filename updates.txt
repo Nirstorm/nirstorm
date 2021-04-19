@@ -1,5 +1,6 @@
 ---------------------------------------------------------------
-April 2021
+April 2021s
+MBLL- Expose the function get_hb_extintion: make sure we use the same absorption coefficient for every process 
 Brainstorm - Integration of NIRSTORM in the Brainstorm plugin system
 Short Separation channel regression - Uses the mean of the short separation channels as regressors
 
