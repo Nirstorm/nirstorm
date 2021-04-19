@@ -38,6 +38,17 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
+    sProcess.options.normalize.Type     = 'checkbox';
+    sProcess.options.normalize.Comment  = 'Normalize sensitivity map';
+    sProcess.options.normalize.Controller = 'normalise';
+    sProcess.options.normalize.Value    = 0;
+    
+
+        
+    sProcess.options.normalize_type.Type     = 'radio';
+    sProcess.options.normalize_type.Comment  = {'Channel-wise normalisation','Global normalisation'};
+    sProcess.options.normalize_type.Class = 'normalise';
+    sProcess.options.normalize_type.Value    = 1;
 end
 
 %% ===== FORMAT COMMENT =====
@@ -86,6 +97,11 @@ nb_nodes = size(sensitivity_surf, 3);
 % Save sensitivities
 for iwl=1:size(sensitivity_surf, 2)
     sensitivity_surf_sum = sum(sensitivity_surf(:, iwl, :),  1) ;
+    
+    if sProcess.options.normalize.Value
+        sensitivity_surf_sum = log10(sensitivity_surf_sum ./ max(sensitivity_surf_sum));
+        sensitivity_surf_sum(sensitivity_surf_sum < -2) = 0;
+    end    
     [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum), [1,2]), [0 1], ...
                                          head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
                                          sInputs.iStudy, sStudy,  ...
@@ -96,14 +112,28 @@ for iwl=1:size(sensitivity_surf, 2)
 end
 
 if nb_dets < 100
-    time = 1:(nb_sources*100 + nb_dets);
+    time = 1:(nb_sources*100 + nb_dets + 1);
     for iwl=1:size(sensitivity_surf, 2)
         %sens_tmp = zeros(nb_nodes, length(time)) - 1;
         sens_tmp = zeros(nb_nodes, length(time));
         for ipair=1:size(sensitivity_surf, 1)
             [src_id, det_id] = nst_unformat_channel([pair_names{ipair} 'WL0']);
-            sens_tmp(:, det_id + src_id*100) = squeeze(sensitivity_surf(ipair, iwl, :)); %source id will be minutes, det_it will be seconds
-        end
+            if sProcess.options.normalize.Value
+                if sProcess.options.normalize_type.Value == 1 % channel wise 
+                    k = max(sensitivity_surf(ipair, iwl, :));
+                    
+                else % Global normalisation 
+                    k = max(max(sensitivity_surf(:, iwl, :)));  
+                end    
+                tmp = log10( sensitivity_surf(ipair, iwl, :) / k);
+                tmp(tmp < -2) = 0;
+                
+                sens_tmp(:, det_id + src_id*100) = squeeze(tmp);
+             else
+                sens_tmp(:, det_id + src_id*100) = squeeze(sensitivity_surf(ipair, iwl, :)); %source id will be minutes, det_it will be seconds
+             end
+        end       
+        
         [sStudy, ResultFile] = add_surf_data(sens_tmp, time, ...
             head_model, ['Sensitivities - WL' num2str(iwl)], ...
             sInputs.iStudy, sStudy, 'Sensitivity import from template'); %TODO better denomitation

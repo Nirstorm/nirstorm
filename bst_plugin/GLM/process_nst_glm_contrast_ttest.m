@@ -68,20 +68,39 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
     con_data = in_bst_data(sInputs(1).FileName);
     if isfield(con_data, 'SurfaceFile')
         surface_data = 1;
-        con_mat = con_data.ImageGridAmp';
+        
+        
+        mask = con_data.edf > 0 ;
+        con_mat = con_data.ImageGridAmp(mask)';
+        edf = con_data.edf(mask);
+        con_std = real(con_data.Std(mask))';
+
     else
         surface_data = 0;
+        
         con_mat = con_data.F';
-    end
-    edf = con_data.edf;
+        con_std = real(con_data.Std)';
+        edf = con_data.edf;
 
-    con_std = real(con_data.Std)';
+    end
+
 
     t_stat = con_mat ./ con_std ;
     t_stat(con_std==0) = 0;
     p = process_test_parametric2('ComputePvalues', t_stat, edf, 't', ...
                                  sProcess.options.tail.Value );
                              
+                             
+    if isfield(con_data, 'SurfaceFile')
+        tmp = zeros(size(con_data.edf));
+        tmp(mask)= p;
+        p=tmp;
+        
+        tmp = zeros(size(con_data.edf));
+        tmp(mask)= t_stat;
+        t_stat=tmp;
+    end 
+    
     comment = 't-stat';
     switch sProcess.options.tail.Value 
         case {'one-'}

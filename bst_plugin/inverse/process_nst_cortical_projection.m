@@ -123,7 +123,7 @@ sensitivity_surf = process_nst_import_head_model('get_sensitivity_from_chans', h
     
 % nb_wavelengths x [HbO, HbR]
 % cm^-1.l.mol^-1
-ext_coeffs = process_nst_mbll('get_hb_extinctions', ChanneMat.Nirs.Wavelengths);
+ext_coeffs = nst_get_hb_extinctions(ChanneMat.Nirs.Wavelengths);
 
 param.sensors.cov.flag_cov = 1;
 param.sensors.cov.window = [sDataIn.Time(1) sDataIn.Time(1)+5];

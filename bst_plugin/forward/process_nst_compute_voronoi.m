@@ -93,8 +93,7 @@ else
     disp(['BST Warning> ' msg]);
     bst_report('Warning', sProcess, sInputs, msg);
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
-                      sSubject.Anatomy(sSubject.iAnatomy).FileName,...
-                      sProcess.options.segmentation_label.Value);
+                      sSubject.Anatomy(sSubject.iAnatomy).FileName);
     if isempty(voronoi)
        return;
     end

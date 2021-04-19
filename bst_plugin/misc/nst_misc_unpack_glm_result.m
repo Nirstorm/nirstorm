@@ -3,11 +3,16 @@ function [B,covB,dfe,residuals,mse_residuals] = nst_misc_unpack_glm_result(model
         B=zeros(nb_regressors,n_voxel);
         B(:,mask)=model.B;
         
-        residuals=zeros( size(residuals_out,1),n_voxel);
-        residuals(:,mask)=residuals;
+        residuals=zeros( size(model.residuals,1),n_voxel);
+        residuals(:,mask)=model.residuals;
 
         mse_residuals=zeros(1,n_voxel);
-        mse_residuals(:,mask)=mse_residuals;
+        mse_residuals(:,mask)=model.mse_residuals;
+        
+        dfe=zeros(1,n_voxel);
+        dfe(:,mask)=model.dfe;
+        
+        covB=model.covB;
     else 
         B=model.B;
         residuals=model.residuals;

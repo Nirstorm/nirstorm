@@ -36,11 +36,11 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
-sProcess.OutputTypes = {'data','data'};
+sProcess.OutputTypes = {'data'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
-sProcess.nOutputs    = 2;
+sProcess.nOutputs    = 1;
 
 sProcess.options.SS_chan.Type       = 'radio_linelabel';
 sProcess.options.SS_chan.Comment    = {'Based on Names', 'Based on Source-Detector distances','Short-separation channels: '; 'name', 'distance',''};
