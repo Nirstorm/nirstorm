@@ -474,7 +474,7 @@ function d = euc_dist(p1, p2)
 end
 
 
-end
+
 
 function [paired_nirs, pair_names, pair_loc, pair_indexes] = ...
     group_paired_channels(nirs, channel_def)
