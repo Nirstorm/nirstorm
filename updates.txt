@@ -1,5 +1,6 @@
 ---------------------------------------------------------------
-April 2021s
+April 2021
+Forward model. Improve error message when fluences are missing
 Sensitivity map. Add the possibilitiy to normalise the sensitivity map
 MBLL- Expose the function get_hb_extintion: make sure we use the same absorption coefficient for every process 
 Brainstorm - Integration of NIRSTORM in the Brainstorm plugin system

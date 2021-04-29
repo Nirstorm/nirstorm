@@ -170,7 +170,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
                                             
     % Warning if too many channels are removed                                         
     for i=1:size(msg,1)
-        if contains(text{i},'SCI') || contains(text{i},'power')
+        if any(strfind(text{i},'SCI')) || any(strfind(text{i},'power'))
             continue
         end
         
@@ -185,7 +185,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
         end
     end    
-                                            
+    bst_report('Open', 'current');                                      
     % Add bad channels
     tree_set_channelflag({sInputs.FileName}, 'AddBad', bad_chan_names);
     OutputFiles = {sInputs.FileName};

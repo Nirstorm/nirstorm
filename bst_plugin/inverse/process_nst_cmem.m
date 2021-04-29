@@ -80,7 +80,13 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
-be_install(); %ensure brainentropy is installed.
+
+% Install/load brainentropy plugin
+[isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
+if ~isInstalled
+    return;
+end
+            
 
 sStudy = bst_get('Study', sInputs.iStudy);
 

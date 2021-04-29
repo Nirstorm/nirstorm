@@ -738,20 +738,41 @@ if ~isempty(strfind(data_source, 'http'))
         bst_progress('stop');
     end
 else
+    misssing_fluences = {}; 
+    scout_missing = db_template('Scout'); 
+    scout_missing.Label='Missing';
+    
     for ivertex=1:length(head_vertices)
         vertex_id = head_vertices(ivertex);
         for iwl=1:length(wavelengths)
             wl = wavelengths(iwl);
             fluence_bfn =  get_fluence_fn(vertex_id, wl);
             fluence_fn = fullfile(data_source, fluence_bfn);
+            
             if ~exist(fluence_fn, 'file')
-                bst_error(['Fluence file not found for v' num2str(vertex_id) ...
-                           ', ' num2str(wl) 'nm (' fluence_fn ')']);
-                return;
+                misssing_fluences{end+1}= [vertex_id wl];
+                scout_missing.Vertices(end+1)= vertex_id;
             end
             fluence_fns{ivertex}{iwl} = fluence_fn;
         end
     end
+    
+    if ~isempty(misssing_fluences)
+        scout_missing.Seed = scout_missing.Vertices(1);
+        for k = 1:length(misssing_fluences)
+            
+            tmp = misssing_fluences{k};
+            vertex_id = tmp(1); 
+            wl = tmp(2);
+            fluence_bfn =  get_fluence_fn(vertex_id, wl);
+            fluence_fn = fullfile(data_source, fluence_bfn);
+            disp(['Fluence file not found for v' num2str(vertex_id) ...
+                           ', ' num2str(wl) 'nm (' fluence_fn ')']);
+                
+        end 
+        bst_error('Missing fluences, see comand windows');
+        return;
+    end           
 end
 
 fluences = cell(length(head_vertices), 1);
