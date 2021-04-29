@@ -54,9 +54,9 @@ options.segmentation.Comment = str_pad('Segmentation (Volume)',40);
 options.segmentation.Type    = 'text';
 options.segmentation.Value = 'segmentation';
 
-sProcess.options.segmentation_label.Type    = 'radio_line';
-sProcess.options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-sProcess.options.segmentation_label.Value   = 1;   
+options.segmentation_label.Type    = 'radio_line';
+options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
+options.segmentation_label.Value   = 1;   
 
 options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
 options.wavelengths.Type    = 'text';

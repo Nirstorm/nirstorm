@@ -98,7 +98,6 @@ options.sepmin_SD.Value = {15,'mm',0};
 
 options.exist_weight.Comment = str_pad('Use existing weight tables (speed up)',40);
 options.exist_weight.Type = 'checkbox';
-options.exist_weight.Controller= 'weight';
 options.exist_weight.Value = 0;
 
 SelectOptions = {...
@@ -115,7 +114,6 @@ SelectOptions = {...
 % TODO: add flag to enable ouput
 options.outputdir.Comment = 'Folder for weight table:';
 options.outputdir.Type    = 'filename';
-options.outputdir.Class   = 'weight';
 options.outputdir.Value   = SelectOptions;
 end
 
