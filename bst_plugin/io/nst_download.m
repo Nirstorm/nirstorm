@@ -26,7 +26,7 @@ if ~isempty(strfind(source_fn, 'https:')) || ~isempty(strfind(source_fn, 'ftp:')
         close(hftp);
     else 
         try
-            tmp_download = websave(tmp_download, source_fn);
+            tmp_download = bst_websave(tmp_download, source_fn);
         catch ME
             errMsg = ['Download data failed from:' 10 source_fn];
             bst_error(errMsg);
