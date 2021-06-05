@@ -104,7 +104,7 @@ for itype = 1 :length(types)
     elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
 
         if ~isempty(sProcess.options.SS_chan_name.Value)
-            SS_name=split(sProcess.options.SS_chan_name.Value,',');
+            SS_name=strtrim(split(sProcess.options.SS_chan_name.Value,','));
             model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype));
         end    
     end 
