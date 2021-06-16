@@ -56,8 +56,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     %AtlasHead = load(OPTIONS.HeadFile, 'Atlas');
     % [AtlasCortex, ~, ~] = panel_scout('GetScouts',OPTIONS.CortexFile);
 
-    AtlasHead = load(OPTIONS.HeadFile, 'Atlas');
-    AtlasCortex = load(OPTIONS.CortexFile, 'Atlas');
+    AtlasHead = load(OPTIONS.HeadFile,  'Atlas', 'iAtlas');
+    AtlasCortex = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
 
     % ==== FRAME STRUCTURE ====
     jPanelNew = java_create('javax.swing.JPanel');
@@ -74,22 +74,145 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     jRadioLayerHead.setSelected(1);
     jPanelNew.add(jPanelSearchSpace);
-    
-    jPanelHeadAtlas =  gui_river([6,6], [-5,6,15,6], 'Head Scout'); 
-    % Combobox
-    jComboMethodMEG = gui_component('ComboBox', jPanelHeadAtlas, 'tab hfill', [], [], [], @(h,ev)UpdatePanel(), []);
-    
-    for i=1:length(AtlasHead.Atlas)
-        jComboMethodMEG.addItem(BstListItem('', '', AtlasHead.Atlas(i).Name, []));
-    end
-    jPanelNew.add(jPanelHeadAtlas);  
 
-    jPanelCortexAtlas =  gui_river([6,6], [-5,6,15,6], 'Cortical Scout');
-    jCortexAtlas = gui_component('ComboBox', jPanelCortexAtlas, 'tab hfill', [], [], [], [], []);
-    for i=1:length(AtlasCortex.Atlas)
-        jCortexAtlas.addItem(BstListItem('', '', AtlasCortex.Atlas(i).Name, []));
+    % Add panel to select scout on the cortex 
+    AtlasList = cell(length(AtlasCortex.Atlas),2);
+    SelAtlasName = AtlasCortex.Atlas(AtlasCortex.iAtlas).Name;
+    
+    for i = 1:length(AtlasCortex.Atlas)
+        AtlasList{i,1} = AtlasCortex.Atlas(i).Name;
+        if ~isempty(AtlasCortex.Atlas(i).Scouts)
+            AtlasList{i,2} = {AtlasCortex.Atlas(i).Scouts.Label};
+        else
+            AtlasList{i,2} = [];
+        end
     end
-    jPanelNew.add(jPanelCortexAtlas); 
+    % Selected atlas
+    if ~isempty(SelAtlasName)
+        iAtlasList = find(strcmpi({AtlasCortex.Atlas.Name}, SelAtlasName));
+        if isempty(iAtlasList)
+            iAtlasList = 1;
+        elseif (length(iAtlasList) > 1)
+            disp('BST> Error: Two atlases have the same name, you should rename one of them.');
+            iAtlasList = iAtlasList(1);
+        end
+    else
+        iAtlasList = 1;
+    end
+    jPanelOptCortex =  gui_river([6,6], [-5,6,15,6], 'Cortical Scout');
+    % If no scouts are available
+    if isempty(AtlasList)
+        gui_component('label', jPanelOptCortex, [], '<HTML>No scouts available.');
+    else
+        % Create list
+        jList = java_create('javax.swing.JList');
+        jList.setLayoutOrientation(jList.HORIZONTAL_WRAP);
+        jList.setVisibleRowCount(-1);
+        % Confirm selection
+
+        jCheck = [];
+        gui_component('label', jPanelOptCortex, [], ' Select scouts:', [],[],[],[]);
+        isListEnable = 1;
+        
+        % Horizontal glue
+        gui_component('label', jPanelOptCortex, 'hfill', ' ', [],[],[],[]);
+        % Atlas selection box
+        jCombo = gui_component('combobox', jPanelOptCortex, 'right', [], {AtlasList(:,1)}, [], []);
+        % Select default atlas
+        if ~isempty(iAtlasList) && (iAtlasList >= 1) && (iAtlasList <= size(AtlasList,1))
+            jCombo.setSelectedIndex(iAtlasList - 1);
+        end
+        % Enable/disable controls
+        jList.setEnabled(isListEnable);
+        jCombo.setEnabled(isListEnable);
+
+        % Set current atlas
+        AtlasSelection_Callback(AtlasList, jCombo, jList, []);
+        %drawnow;
+        % Set callbacks
+        java_setcb(jCombo, 'ItemStateChangedCallback', @(h,ev)AtlasSelection_Callback(AtlasList, jCombo, jList, ev));
+        java_setcb(jList,  'ValueChangedCallback', @(h,ev)ScoutSelection_Callback(AtlasList, jCombo, jList, jCheck, ev));
+        %if ~isempty(jCheck)
+        %    java_setcb(jCheck, 'ActionPerformedCallback', @(h,ev)ScoutSelection_Callback(iProcess, optNames{iOpt}, AtlasList, jCombo, jList, jCheck, []));
+        %end
+        % Create scroll panel
+        jScroll = javax.swing.JScrollPane(jList);
+        jPanelOptCortex.add('br hfill vfill', jScroll);
+        % Set preferred size for the container
+        prefPanelSize = java_scaled('dimension', 250,180);
+        
+        jPanelNew.add(jPanelOptCortex); 
+    end
+    
+    
+%     % Add panel to select scout on the head
+%     AtlasList = cell(length(AtlasHead.Atlas),2);
+%     SelAtlasName = AtlasHead.Atlas(AtlasHead.iAtlas).Name;
+%     
+%     for i = 1:length(AtlasHead.Atlas)
+%         AtlasList{i,1} = AtlasHead.Atlas(i).Name;
+%         if ~isempty(AtlasHead.Atlas(i).Scouts)
+%             AtlasList{i,2} = {AtlasHead.Atlas(i).Scouts.Label};
+%         else
+%             AtlasList{i,2} = [];
+%         end
+%     end
+%     % Selected atlas
+%     if ~isempty(SelAtlasName)
+%         iAtlasList = find(strcmpi({AtlasHead.Atlas.Name}, SelAtlasName));
+%         if isempty(iAtlasList)
+%             iAtlasList = 1;
+%         elseif (length(iAtlasList) > 1)
+%             disp('BST> Error: Two atlases have the same name, you should rename one of them.');
+%             iAtlasList = iAtlasList(1);
+%         end
+%     else
+%         iAtlasList = 1;
+%     end
+%     % If no scouts are available
+%     jPanelOptHead =  gui_river([6,6], [-5,6,15,6], 'Head Scout');
+%     if isempty(AtlasList)
+%         gui_component('label', jPanelOptHead, [], '<HTML>No scouts available.');
+%     else
+%         % Create list
+%         jListHead = java_create('javax.swing.JList');
+%         jListHead.setLayoutOrientation(jListHead.HORIZONTAL_WRAP);
+%         jListHead.setVisibleRowCount(-1);
+%         % Confirm selection
+% 
+%         jCheck = [];
+%         gui_component('label', jPanelOptHead, [], ' Select scouts:', [],[],[],[]);
+%         isListEnable = 1;
+%         
+%         % Horizontal glue
+%         gui_component('label', jPanelOptHead, 'hfill', ' ', [],[],[],[]);
+%         % Atlas selection box
+%         jComboHead = gui_component('combobox', jPanelOptHead, 'right', [], {AtlasList(:,1)}, [], []);
+%         % Select default atlas
+%         if ~isempty(iAtlasList) && (iAtlasList >= 1) && (iAtlasList <= size(AtlasList,1))
+%             jComboHead.setSelectedIndex(iAtlasList - 1);
+%         end
+%         % Enable/disable controls
+%         jListHead.setEnabled(isListEnable);
+%         jComboHead.setEnabled(isListEnable);
+% 
+%         % Set current atlas
+%         AtlasSelection_Callback(AtlasList, jComboHead, jListHead, []);
+%         drawnow;
+%         % Set callbacks
+%         java_setcb(jComboHead, 'ItemStateChangedCallback', @(h,ev)AtlasSelection_Callback(AtlasList, jComboHead, jListHead, ev));
+%         java_setcb(jListHead,  'ValueChangedCallback', @(h,ev)ScoutSelection_Callback(AtlasList, jComboHead, jListHead, jCheck, ev));
+%         %if ~isempty(jCheck)
+%         %    java_setcb(jCheck, 'ActionPerformedCallback', @(h,ev)ScoutSelection_Callback(iProcess, optNames{iOpt}, AtlasList, jCombo, jList, jCheck, []));
+%         %end
+%         % Create scroll panel
+%         jScroll = javax.swing.JScrollPane(jListHead);
+%         jPanelOptCortex.add('br hfill vfill', jScroll);
+%         % Set preferred size for the container
+%         prefPanelSize = java_scaled('dimension', 250,180);
+%         
+%         jPanelNew.add(jPanelOptHead); 
+%     end    
 
         % ===== VALIDATION BUTTONS =====
     jPanelValidation = gui_river([10 0], [6 10 0 10]);
@@ -101,7 +224,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Return a mutex to wait for panel close
     bst_mutex('create', panelName);
     % Create the BstPanel object that is returned by the function
-    ctrl = struct('jPanelSearchSpace',         jPanelSearchSpace);
+    ctrl = struct('jPanelSearchSpace',      jPanelSearchSpace, ...
+                  'jPanelOptCortex',        jPanelOptCortex); %, ...
+                  %'jPanelOptHead',          jPanelOptHead);
     % Create the BstPanel object that is returned by the function
     bstPanelNew = BstPanel(panelName, jPanelNew, ctrl);    
     % Redraw panel
@@ -123,6 +248,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     %% ===== UPDATE PANEL ======
     function UpdatePanel()
+        
+        if jRadioLayerCortex.isSelected()
+            jPanelOptCortex.setEnabled(1);
+            jCombo.setEnabled(1);
+            jList.setEnabled(1);
+        else
+            jPanelOptCortex.setEnabled(0);
+            jCombo.setEnabled(0);
+            jList.setEnabled(0);
+        end    
 %         % FEM Layers
 %         isIsotropic = false(1, nLayers);
 %         for j = 1:nLayers
@@ -137,15 +272,15 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 %         jPanelSim.setVisible(isSim);
 %         
         % Get panel
-        [bstPanel iPanel] = bst_get('Panel', 'FluenceOptions');
-        container = get(bstPanel, 'container');
-        % Re-pack frame
-        if ~isempty(container)
-            jFrame = container.handle{1};
-            if ~isempty(jFrame)
-                jFrame.pack();
-            end
-        end
+%         [bstPanel iPanel] = bst_get('Panel', 'FluenceOptions');
+%         container = get(bstPanel, 'container');
+%         % Re-pack frame
+%         if ~isempty(container)
+%             jFrame = container.handle{1};
+%             if ~isempty(jFrame)
+%                 jFrame.pack();
+%             end
+%         end
     end
 end
 
@@ -154,36 +289,99 @@ end
 %  === EXTERNAL CALLBACKS  =========================================================
 %  =================================================================================
 %% ===== GET PANEL CONTENTS =====
-function s = GetPanelContents() %#ok<DEFNU>
+function s = GetPaneleContents() %#ok<DEFNU>
     % Get panel controls handles
     ctrl = bst_get('PanelControls', 'FluenceOptions');
     if isempty(ctrl)
         s = [];
         return; 
     end
-    % FEM layers
-    for i = 1:length(ctrl.jTextCond)
-        s.FemCond(i) = str2double(char(ctrl.jTextCond(i).getText()));
-        s.isIsotropic(i) = ctrl.jRadioLayerIso(i).isSelected();
-    end
-    % Anisotropy options
-    if ctrl.jRadioMethodEma.isSelected()
-        s.AnisoMethod = 'ema';
-    elseif ctrl.jRadioMethodEmaVc.isSelected()
-        s.AnisoMethod = 'ema+vc';
-    elseif ctrl.jRadioMethodSim.isSelected()
-        s.AnisoMethod = 'simulated';
-    end
-    % Simulated: Ratio
-    s.SimRatio = str2double(char(ctrl.jTextSimRatio.getText()));
-    % Simulated: Constraint method
-    if ctrl.jRadioConstrWang.isSelected()
-        s.SimConstrMethod = 'wang';
-    elseif ctrl.jRadioConstrWolters.isSelected()
-        s.SimConstrMethod = 'wolters';
-    end
+    if jRadioLayerCortex.isSelected()
+        s.surface = 'cortex';
+    elseif jRadioLayerMontage.isSelected()
+        s.surface = 'montage';
+    elseif jRadioLayerHead.isSelected() 
+        s.surface = 'head';
+    end    
 end
 
 
+%% ===== OPTIONS: ATLAS SELECTION CALLBACK =====
+    function AtlasSelection_Callback(AtlasList, jCombo, jList, ev)
+        import org.brainstorm.list.*;
+        % Skip deselected event
+        if ~isempty(ev) && (ev.getStateChange() ~= ev.SELECTED)
+            return;
+        end
+        % Get current process
+        %sCurProcess = GlobalData.Processes.Current(iProcess);
+        % Get current atlas
+        
+        iAtlasList = jCombo.getSelectedIndex() + 1;
+        if (iAtlasList <= 0)
+            return;
+        end
+        % Get current scouts
+        ScoutNames = AtlasList{iAtlasList,2};
+        % Temporality disables JList selection callback
+        jListCallback_bak = java_getcb(jList, 'ValueChangedCallback');
+        java_setcb(jList, 'ValueChangedCallback', []);
+        % Create a list of the existing scouts
+        listModel = java_create('javax.swing.DefaultListModel');
+        for iScout = 1:length(ScoutNames)
+            listModel.addElement(BstListItem(ScoutNames{iScout}, '', [' ' ScoutNames{iScout} ' '], iScout));
+        end
+        jList.setModel(listModel);
+        
+        % If there are scouts in this model
+        if ~isempty(ScoutNames)
+            iSelScouts = 1:length(ScoutNames);
+            % Select scouts in the list
+            jList.setSelectedIndices(iSelScouts - 1);
+            % Save the current selection of scouts (to have the correct list of scouts if the user does not change the selection)
+            if jList.isEnabled()
+                newList = {AtlasList{iAtlasList,1}, ScoutNames(iSelScouts)};
+            else
+                newList = {};
+            end
+            %SetOptionValue(iProcess, optName, newList);
+        end
+        % Restore JList callback
+        java_setcb(jList, 'ValueChangedCallback', jListCallback_bak);
+    end
+
+%% ===== OPTIONS: SCOUT SELECTION CALLBACK =====
+function ScoutSelection_Callback(AtlasList, jCombo, jList, jCheck, ev)
+    % Cancel temporary selection
+    if ~isempty(ev) && ev.getValueIsAdjusting()
+        return;
+    end
+    % Enable/disable jList and jCombo
+    if ~isempty(jCheck)
+        isChecked = jCheck.isSelected();
+    else
+        isChecked = 1;
+    end
+    jList.setEnabled(isChecked);
+    jCombo.setEnabled(isChecked);
+    % Get current atlas
+    iAtlasList = jCombo.getSelectedIndex() + 1;
+    if (iAtlasList <= 0)
+        return;
+    end
+%     % If cluster/scout not selected
+    if ~isChecked
+%         SetOptionValue(iProcess, optName, []);
+%     % If not currently editing
+    else
+        % Get selected clusters
+        iSel = jList.getSelectedIndices() + 1;
+        % List of new selected scouts
+        newList = AtlasList(iAtlasList,:);
+        newList{1,2} = AtlasList{iAtlasList,2}(iSel);
+        % Set value
+        %SetOptionValue(iProcess, optName, newList);
+    end
+end
 
 
