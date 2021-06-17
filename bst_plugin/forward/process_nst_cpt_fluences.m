@@ -50,8 +50,6 @@ sProcess.options.fluencesCond.Comment = {'panel_nst_fluences', 'Scout: '};
 sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
 
-
-
 % sProcess.options = nst_add_scout_sel_options(struct(), 'head', str_pad('Head scout (search space):',40), ...
 %                                              'scalp', {'User scouts'}, 1); 
 
@@ -139,13 +137,70 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 % Get scout vertices & load head mesh
-head_scout_selection = nst_get_option_selected_scout(sProcess.options, 'head');
-head_vertices = head_scout_selection.sScout.Vertices;
 
-sSubject = head_scout_selection.sSubject;
+sSubject = bst_get('Subject', sProcess.options.subjectname.Value);
+if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
+    error('No available Cortex and Head surface for this subject.');
+end    
+
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+
+
+if strcmp(sProcess.options.fluencesCond.Value.surface,'cortex')
+    i_atlas = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
+    i_scout = strcmp({sCortex.Atlas(i_atlas).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI);
+    cortex_to_scalp_extent = 5;
+    cortex_scout.sSubject = sSubject;
+    cortex_scout.sScout   = sCortex.Atlas(i_atlas).Scouts(i_scout);
+    [head_vertices, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout, ...
+                                                              cortex_to_scalp_extent.*0.01, 1);
+    
+else
+    head_scout_selection = nst_get_option_selected_scout(sProcess.options, 'head');
+    head_vertices = head_scout_selection.sScout.Vertices;
+end    
 
 OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices);
+end
+
+
+function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
+
+if nargin < 3
+    save_in_db = 0;
+end
+sSubject = cortex_scout.sSubject;
+sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+dis2head = pdist2(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+head_vertices = find(min(dis2head,[],2) < extent_m); 
+
+% TODO: properly select atlas
+exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+if ~isempty(exclude_scout)
+    head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
+end
+
+limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+if ~isempty(limiting_scout)
+    head_vertices = intersect(head_vertices, limiting_scout.Vertices);
+end
+
+if save_in_db && ...,
+   ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
+    ,{sHead.Atlas.Scouts.Label}))
+    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
+    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
+    sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
+    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
+                                           '(' num2str(extent_m*100) ' cm)'];
+    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+    db_save();
+end
+
 end
 
 function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
