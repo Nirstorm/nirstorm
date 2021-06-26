@@ -173,7 +173,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             % Set current atlas
             AtlasSelection_Callback(AtlasList, jCombo, jList, []);
 
-            gui_component('label', jPanelOptCortex, 'br', 'Extent of cortical ROI to scalp projection(cm)');
+            gui_component('label', jPanelOptCortex, 'br', 'Extent of scalp projection(cm)');
             jExtent = gui_component('text', jPanelOptCortex, 'hfill', '', [], [], [], []);
 
 
@@ -185,11 +185,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             %end
             % Create scroll panel
         
-            jPanelOptCortex.add(jList)
+            jPanelOptCortex.add(jList);
             jScroll = javax.swing.JScrollPane(jList);
             jPanelOptCortex.add('br hfill vfill', jScroll);
             % Set preferred size for the container
-            prefPanelSize = java_scaled('dimension', 250,180);
+            prefPanelSize = java_scaled('dimension', 250,250);
             jPanelOptCortex.setPreferredSize(prefPanelSize)
             c.gridy = 1;
             jPanelLeft.add(jPanelOptCortex, c);
@@ -280,7 +280,15 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelRight = java_create('javax.swing.JPanel');
     jPanelRight.setLayout(java_create('java.awt.GridBagLayout'));
     
+    jPanelREF=  gui_river([6,6], [-5,6,15,6],'' );
+    gui_component('label', jPanelREF, '', ['<html>This process uses native MEX version of Monte Carlo eXtreme (MCX) to solve the fluences of each optode.<br />' ...
+    'For more details plese refer to Qianqian Fang and David A. Boas,<br />'  ...
+    '"Monte Carlo Simulation of Photon Migration in 3D Turbid Media Accelerated by Graphics Processing Units".<br />', ...
+    'Opt. Express, vol. 17, issue 22, pp. 20178-20190 (2009)</b><br />', ...
+    'For technical details please refer to mcx homepage (http://mcx.sourceforge.net/cgi-bin/index.cgi)</html>'], [],[],[],[]);
     
+    c.gridy = 1;
+    jPanelRight.add(jPanelREF, c);
 
     jPanelBtn = gui_component('Panel');
     % Search & Cancel buttons
@@ -291,12 +299,14 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelBtnRight.add(jCancelBtn);
     jPanelBtn.add(jPanelBtnRight, BorderLayout.EAST);
     
-    jPanelRight.add(jPanelBtn);
+    c.gridy = 2;
+    jPanelRight.add(jPanelBtn, c);
+    
     
    % ===== PANEL CREATION =====
     
-   jPanelMain.add(jPanelLeft)
-   jPanelMain.add(jPanelRight)
+   jPanelMain.add(jPanelLeft);
+   jPanelMain.add(jPanelRight);
 
        
     % Return a mutex to wait for panel close
@@ -326,13 +336,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     function UpdatePanel()
         if ~OPTIONS.fromMontage
             if jRadioLayerCortex.isSelected()
-                jPanelOptCortex.setEnabled(1);
-                jCombo.setEnabled(1);
-                jList.setEnabled(1);
+                jPanelOptCortex.setVisible(1);
+                jPanelOptHead.setVisible(0);
             else
-                jPanelOptCortex.setEnabled(0);
-                jCombo.setEnabled(0);
-                jList.setEnabled(0);
+                jPanelOptCortex.setVisible(0);
+                jPanelOptHead.setVisible(1);
             end    
         end    
         % Get panel
