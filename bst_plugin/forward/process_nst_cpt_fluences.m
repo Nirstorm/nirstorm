@@ -145,7 +145,7 @@ end
 
 sSubject = bst_get('Subject',SubjectName);
 if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
-    error('No available Cortex and Head surface for this subject.');
+    bst_error('No available Cortex and Head surface for this subject.');
     return;
 end    
 

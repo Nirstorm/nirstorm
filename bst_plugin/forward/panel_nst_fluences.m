@@ -71,17 +71,34 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     end    
     
     % ==== FRAME STRUCTURE ====
-    jPanelNew = java_create('javax.swing.JPanel');
-    jPanelNew.setLayout(BoxLayout(jPanelNew, BoxLayout.PAGE_AXIS));
-    jPanelNew.setBorder(BorderFactory.createEmptyBorder(12,12,12,12));
-
     
-    jPanelSearchSpace =  gui_river([6,6], [-5,6,15,6], 'Compute fluences from'); 
-    jRadioSearchSpace = javaArray('javax.swing.JRadioButton', 3);
+    jPanelMain = gui_component('Panel');
+    jPanelMain.setLayout(GridLayout(1,2)); % 2 Column
+    jPanelMain.setMinimumSize(Dimension(1500,100));
+
+    % Left column
+    jPanelLeft = java_create('javax.swing.JPanel');
+    jPanelLeft.setLayout(java_create('java.awt.GridBagLayout'));
+    
+    
+    c = GridBagConstraints();
+    c.fill = GridBagConstraints.VERTICAL;
+    c.gridy = 0;
+    c.weightx = 0;
+    c.weighty = 0;
+    c.insets = Insets(3,5,3,5); % NO IDEA OF WHAT THIS IS
+    
+
+    jPanelSearchSpace = java_create('javax.swing.JPanel');
+    jPanelSearchSpace.setLayout(GridLayout(1,3));
     jGroupRadio = ButtonGroup();
-    jRadioLayerMontage = gui_component('radio', jPanelSearchSpace, 'tab', 'Montage', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
-    jRadioLayerCortex = gui_component('radio', jPanelSearchSpace, 'tab', 'Cortex', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
-    jRadioLayerHead = gui_component('radio', jPanelSearchSpace, 'tab', 'Head', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    jRadioLayerMontage = gui_component('radio', [], 'tab', 'Montage', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    jRadioLayerCortex = gui_component('radio', [], 'tab', 'Cortex', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    jRadioLayerHead = gui_component('radio', [], 'tab', 'Head', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    
+    jPanelSearchSpace.add(jRadioLayerMontage);
+    jPanelSearchSpace.add(jRadioLayerCortex);
+    jPanelSearchSpace.add(jRadioLayerHead);
     
     if OPTIONS.fromMontage
         jRadioLayerMontage.setSelected(1);
@@ -91,8 +108,10 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         jRadioLayerMontage.setEnabled(0);
         jRadioLayerCortex.setSelected(1);
     end
-   jPanelNew.add(jPanelSearchSpace);
-   
+    
+    c.gridy = 0;
+    jPanelLeft.add(jPanelSearchSpace, c);
+
    ctrl.jRadioLayerMontage= jRadioLayerMontage;
    ctrl.jRadioLayerCortex  = jRadioLayerCortex;
    ctrl.jRadioLayerHead   = jRadioLayerHead;
@@ -153,7 +172,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
             % Set current atlas
             AtlasSelection_Callback(AtlasList, jCombo, jList, []);
-            drawnow;
 
             gui_component('label', jPanelOptCortex, 'br', 'Extent of cortical ROI to scalp projection(cm)');
             jExtent = gui_component('text', jPanelOptCortex, 'hfill', '', [], [], [], []);
@@ -166,14 +184,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             %    java_setcb(jCheck, 'ActionPerformedCallback', @(h,ev)ScoutSelection_Callback(iProcess, optNames{iOpt}, AtlasList, jCombo, jList, jCheck, []));
             %end
             % Create scroll panel
-
+        
             jPanelOptCortex.add(jList)
             jScroll = javax.swing.JScrollPane(jList);
             jPanelOptCortex.add('br hfill vfill', jScroll);
             % Set preferred size for the container
             prefPanelSize = java_scaled('dimension', 250,180);
-            jPanelNew.add(jPanelOptCortex); 
-            
+            jPanelOptCortex.setPreferredSize(prefPanelSize)
+            c.gridy = 1;
+            jPanelLeft.add(jPanelOptCortex, c);
+   
             ctrl.jCombo =                   jCombo;
             ctrl.jList  =                   jList ;
             ctrl.jExtent=                   jExtent;
@@ -242,29 +262,48 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             %end
             % Create scroll panel
             jScroll = javax.swing.JScrollPane(jListHead);
-            jPanelOptCortex.add('br hfill vfill', jScroll);
+            jPanelOptHead.add('br hfill vfill', jScroll);
             % Set preferred size for the container
             prefPanelSize = java_scaled('dimension', 250,180);
+            jPanelOptHead.setPreferredSize(prefPanelSize)
 
-            jPanelNew.add(jPanelOptHead); 
+            c.gridy = 2;
+            jPanelLeft.add(jPanelOptHead, c);
             
             ctrl.jComboHead =                jComboHead;
             ctrl.jListHead  =                 jListHead;
             ctrl.jPanelOptHead =             jPanelOptHead;
         end    
    end
-        % ===== VALIDATION BUTTONS =====
-    jPanelValidation = gui_river([10 0], [6 10 0 10]);
-        gui_component('Button', jPanelValidation, 'br right', 'Cancel', [], [], @ButtonCancel_Callback, []);
-        gui_component('Button', jPanelValidation, [], 'OK', [], [], @ButtonOk_Callback, []);
-    jPanelNew.add(jPanelValidation);
+    
+    % Right column
+    jPanelRight = java_create('javax.swing.JPanel');
+    jPanelRight.setLayout(java_create('java.awt.GridBagLayout'));
+    
+    
 
-    % ===== PANEL CREATION =====
+    jPanelBtn = gui_component('Panel');
+    % Search & Cancel buttons
+    jPanelBtnRight = java_create('javax.swing.JPanel');
+    jSearchBtn = gui_component('Button', [], [], 'OK', [], [], @ButtonOk_Callback);
+    jCancelBtn = gui_component('Button', [], [], 'Cancel', [], [], @ButtonCancel_Callback);
+    jPanelBtnRight.add(jSearchBtn);
+    jPanelBtnRight.add(jCancelBtn);
+    jPanelBtn.add(jPanelBtnRight, BorderLayout.EAST);
+    
+    jPanelRight.add(jPanelBtn);
+    
+   % ===== PANEL CREATION =====
+    
+   jPanelMain.add(jPanelLeft)
+   jPanelMain.add(jPanelRight)
+
+       
     % Return a mutex to wait for panel close
     bst_mutex('create', panelName);
 
     % Create the BstPanel object that is returned by the function
-    bstPanelNew = BstPanel(panelName, jPanelNew, ctrl);    
+    bstPanelNew = BstPanel(panelName, jPanelMain, ctrl);    
     % Redraw panel
     UpdatePanel();
 %% =================================================================================
@@ -273,7 +312,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     %% ===== BUTTON: CANCEL =====
     function ButtonCancel_Callback(varargin)
         % Close panel
-        gui_hide(panelName);
+        gui_hide(panelName); % Close panel
+        bst_mutex('release', panelName); % Release the MUTEX
     end
 
     %% ===== BUTTON: OK =====
