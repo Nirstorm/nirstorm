@@ -33,7 +33,7 @@ sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1405;
 sProcess.Description = '';
 % Definition of the input accepted by this process
-sProcess.InputTypes  = {'import'};
+sProcess.InputTypes  = {'import','data', 'raw'};
 % Definition of the outputs of this process
 sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
@@ -137,10 +137,16 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 % Get scout vertices & load head mesh
+if strcmp(sProcess.options.fluencesCond.Value.surface,'montage')
+    SubjectName = sProcess.options.fluencesCond.Value.SubjectName;
+else
+    SubjectName = sProcess.options.subjectname.Value;
+end    
 
-sSubject = bst_get('Subject', sProcess.options.subjectname.Value);
+sSubject = bst_get('Subject',SubjectName);
 if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
     error('No available Cortex and Head surface for this subject.');
+    return;
 end    
 
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
@@ -150,20 +156,50 @@ sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
 if strcmp(sProcess.options.fluencesCond.Value.surface,'cortex')
     i_atlas = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
     i_scout = strcmp({sCortex.Atlas(i_atlas).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI);
-    cortex_to_scalp_extent = 5;
+    
+    cortex_to_scalp_extent = sProcess.options.fluencesCond.Value.Extent;
     cortex_scout.sSubject = sSubject;
     cortex_scout.sScout   = sCortex.Atlas(i_atlas).Scouts(i_scout);
+    
     [head_vertices, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout, ...
                                                               cortex_to_scalp_extent.*0.01, 1);
     
+elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
+    i_atlas = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
+    i_scout = strcmp({sHead.Atlas(i_atlas).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI);
+    
+    head_vertices = sHead.Atlas(i_atlas).Scouts(i_scout).Vertices;   
 else
-    head_scout_selection = nst_get_option_selected_scout(sProcess.options, 'head');
-    head_vertices = head_scout_selection.sScout.Vertices;
-end    
+    
+    ChannelFile = sProcess.options.fluencesCond.Value.ChannelFile;
+    ChannelMat = in_bst_channel(ChannelFile);
+    
+    if ~isfield(ChannelMat.Nirs, 'Wavelengths')
+        bst_error(['Fluence can only be computed on raw or dOD data ' ...
+            ' (eg do not use MBLL prior to this process)']);
+        return;
+    end
+    sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    [head_vertices] = proj_montage_to_scalp(ChannelMat, sHead, sMri);
+    
+end
 
+    
 OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices);
 end
 
+function [head_vertices] = proj_montage_to_scalp(ChannelMat, sHead, sMri)
+    % Retrieve optode coordinates
+    % Load channel file
+    montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+    src_locs = montage_info.src_pos;
+    det_locs = montage_info.det_pos;
+
+    [src_hvidx, det_hvidx] = process_nst_import_head_model('get_head_vertices_closest_to_optodes',...
+                                                    sMri, sHead, src_locs, det_locs);
+
+    head_vertices = [ src_hvidx' , det_hvidx'];
+end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
 
