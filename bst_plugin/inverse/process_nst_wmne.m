@@ -61,7 +61,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
 
     sProcess.options.TimeSegmentNoise.Comment = str_pad('Baseline Time window:',35);
-    sProcess.options.TimeSegmentNoise.Type    = 'timewindow';
+    sProcess.options.TimeSegmentNoise.Type    = 'baseline';
     sProcess.options.TimeSegmentNoise.Value   = [];
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
 
