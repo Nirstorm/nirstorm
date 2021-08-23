@@ -49,29 +49,22 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.depth_weightingMNE.Type    = 'value';
     sProcess.options.depth_weightingMNE.Value   = {0.5, '', 1};
     
-    sProcess.options.TimeSegment_tstart.Comment = str_pad('Start time of the reconsturction',35);
-    sProcess.options.TimeSegment_tstart.Type    = 'value';
-    sProcess.options.TimeSegment_tstart.Value   = {-10, 's', 1};
+    sProcess.options.TimeSegment.Comment = str_pad('Reconstruction Time window:',35);
+    sProcess.options.TimeSegment.Type    = 'timewindow';
+    sProcess.options.TimeSegment.Value   = [];
     
-    sProcess.options.TimeSegment_tend.Comment = str_pad('End time of the econsturction',35);
-    sProcess.options.TimeSegment_tend.Type    = 'value';
-    sProcess.options.TimeSegment_tend.Value   = {60, 's', 1};
-        
+    
     sProcess.options.NoiseCov_recompute.Comment = 'Compute noise covariance of the baseline MNE';
     sProcess.options.NoiseCov_recompute.Type    = 'checkbox';
     sProcess.options.NoiseCov_recompute.Controller = 'noise_cov';
     sProcess.options.NoiseCov_recompute.Value   = 1;
     
-    sProcess.options.NoiseCov_tstart.Comment = str_pad('Start time of the baseline',30);
-    sProcess.options.NoiseCov_tstart.Type    = 'value';
-    sProcess.options.NoiseCov_tstart.Class = 'noise_cov';
-    sProcess.options.NoiseCov_tstart.Value   = {-10, 's', 1};
-    
-    sProcess.options.NoiseCov_tend.Comment = str_pad('End time of the baseline',30);
-    sProcess.options.NoiseCov_tend.Type    = 'value';
-    sProcess.options.NoiseCov_tend.Class = 'noise_cov';
-    sProcess.options.NoiseCov_tend.Value   = {0, 's', 1};
-    
+
+    sProcess.options.TimeSegmentNoise.Comment = str_pad('Baseline Time window:',35);
+    sProcess.options.TimeSegmentNoise.Type    = 'timewindow';
+    sProcess.options.TimeSegmentNoise.Value   = [];
+    sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
+
     sProcess.options.store_sparse_results.Comment = 'Store sparse results';
     sProcess.options.store_sparse_results.Type    = 'checkbox';
     sProcess.options.store_sparse_results.Value   = 0;
@@ -165,8 +158,18 @@ OPTIONS.DataTime      = round(sDataIn.Time,6);
 OPTIONS.ResultFile    = [];
 OPTIONS.HeadModelFile =  sStudy.HeadModel(sStudy.iHeadModel).FileName;
 OPTIONS.FunctionName  = 'wMNE';
-OPTIONS.BaselineSegment = [sProcess.options.NoiseCov_tstart.Value{1},sProcess.options.NoiseCov_tend.Value{1}];
-OPTIONS.TimeSegment = [sProcess.options.TimeSegment_tstart.Value{1},sProcess.options.TimeSegment_tend.Value{1}];
+
+if isempty(sProcess.options.TimeSegmentNoise.Value{1})
+    OPTIONS.BaselineSegment = [sDataIn.Time(1), sDataIn.Time(end)];
+else
+    OPTIONS.BaselineSegment  = sProcess.options.TimeSegmentNoise.Value{1};
+end   
+
+if isempty(sProcess.options.TimeSegment.Value{1})
+    OPTIONS.TimeSegment = [sDataIn.Time(1), sDataIn.Time(end)];
+else
+    OPTIONS.TimeSegment = sProcess.options.TimeSegment.Value{1};
+end    
 
 dOD_sources_wMNE = zeros(nb_nodes, nb_wavelengths, nb_samples);
 
@@ -258,6 +261,7 @@ else
     function_name='MNE';
 end    
 for ihb=1:2
+    
     [sStudy, ResultFile] = add_surf_data(squeeze(nirs_hbo_hbr(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, nirs_head_model, ...
                                          [function_name ' sources - ' hb_types{ihb}], ...

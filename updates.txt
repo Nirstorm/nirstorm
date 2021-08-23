@@ -1,3 +1,5 @@
+August 2021
+MNE - improve selection of parameters ( /!\ Might broke existing script)
 ---------------------------------------------------------------
 April 2021
 Forward model. Improve error message when fluences are missing
