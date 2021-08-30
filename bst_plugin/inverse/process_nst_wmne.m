@@ -158,17 +158,16 @@ OPTIONS.DataTime      = round(sDataIn.Time,6);
 OPTIONS.ResultFile    = [];
 OPTIONS.HeadModelFile =  sStudy.HeadModel(sStudy.iHeadModel).FileName;
 OPTIONS.FunctionName  = 'wMNE';
-
-if isempty(sProcess.options.TimeSegmentNoise.Value{1})
-    OPTIONS.BaselineSegment = [sDataIn.Time(1), sDataIn.Time(end)];
-else
+if isfield(sProcess.options.TimeSegmentNoise, 'Value') && iscell(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value{1})
     OPTIONS.BaselineSegment  = sProcess.options.TimeSegmentNoise.Value{1};
+else    
+    OPTIONS.BaselineSegment = [sDataIn.Time(1), sDataIn.Time(end)];
 end   
 
-if isempty(sProcess.options.TimeSegment.Value{1})
-    OPTIONS.TimeSegment = [sDataIn.Time(1), sDataIn.Time(end)];
-else
+if isfield(sProcess.options.TimeSegment, 'Value') && iscell(sProcess.options.TimeSegment.Value) && ~isempty(sProcess.options.TimeSegment.Value) && ~isempty(sProcess.options.TimeSegment.Value{1})
     OPTIONS.TimeSegment = sProcess.options.TimeSegment.Value{1};
+else
+    OPTIONS.TimeSegment = [sDataIn.Time(1), sDataIn.Time(end)];
 end    
 
 dOD_sources_wMNE = zeros(nb_nodes, nb_wavelengths, nb_samples);
