@@ -118,7 +118,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jExtentTitle = gui_component('label', jPanelUseDefault, 'br', 'Extent of scalp projection:', [], [], [], []);
     jExtent = gui_component('text', jPanelUseDefault, 'hfill', '5', [], [], [], []);
     jExtentTitle2 = gui_component('text', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
-
+    ctrl.jExtent= jExtent;
         
         
     jPanelScoutsHead = gui_river([2,2], [2,7,-10,7], 'Head scout (search space)');
@@ -151,51 +151,67 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelMontage = gui_river([2,2], [3,5,3,5], 'Montage');
     gui_component('label', jPanelMontage, 'br', 'Number of sources:', [], [], [], []);
     jSources = gui_component('text', jPanelMontage, 'hfill', '3', [], [], [], []);
-    
+    ctrl.jSources = jSources;
+
     
     gui_component('label', jPanelMontage, 'br', 'Number of detectors:', [], [], [], []);
     jDetectors = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
+    ctrl.jDetectors = jDetectors;
+    
     
     gui_component('label', jPanelMontage, 'br', 'Number of Adjacent:', [], [], [], []);
     jAdjacent = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
-    
+    ctrl.jAdjacent = jAdjacent;
+
+        
     gui_component('label', jPanelMontage, 'br', 'Range of optodes distance', [], [], [], []);
-    jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);
+    jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);       
     gui_component('label', jPanelMontage, '', ' - ', [], [], [], []);
     jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', '55', [], [], [], []);
     gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
+    ctrl.jSepOptodeMin = jSepOptodeMin;
+    ctrl.jSepOptodeMax = jSepOptodeMax;
+
 
     gui_component('label', jPanelMontage, 'br', 'Minimum source detector distance:', [], [], [], []);
-    jSepmin_SD = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);
+    jSepmin_SD = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);    
     gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
+    ctrl.jSepmin_SD = jSepmin_SD;
+
     jPanelRight.add('br hfill', jPanelMontage);
     
     % === PANEL: Fluence  ====
     jPanelFluence = gui_river([2,2], [3,5,3,5], 'Fluence information');
     gui_component('label', jPanelFluence, 'br', 'Fluence Data Source (URL or path):', [], [], [], []);
     jFluenceSource = gui_component('text', jPanelFluence, 'hfill', [nst_get_repository_url() '/fluence/'], [], [], [], []);
-    
+    ctrl.jFluenceSource = jFluenceSource;
+
     gui_component('label', jPanelFluence, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
     jWavelengths = gui_component('text', jPanelFluence, 'hfill', '685', [], [], [], []);
-    
+    ctrl.jWavelengths = jWavelengths;
+ 
     
     jGroupRadio = ButtonGroup();
     gui_component('label', jPanelFluence, 'br', 'Segmentation label:', [], [], [], []);
-    jRadioLayerMontage = gui_component('radio', jPanelFluence, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
-    jRadioLayerCortex = gui_component('radio', jPanelFluence, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
-
+    jRadioSegSkinAsOne = gui_component('radio', jPanelFluence, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
+    jRadioSegWMAsOne = gui_component('radio', jPanelFluence, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
+    jRadioSegWMAsOne.setSelected(1);
     jPanelRight.add('br hfill', jPanelFluence);
     
+    ctrl.jRadioSegSkinAsOne = jRadioSegSkinAsOne;
+    ctrl.jRadioSegWMAsOne   = jRadioSegWMAsOne;
     
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
     jOutputCondition = gui_component('text', jPanelOutput, 'hfill', 'OM', [], [], [], []);
-    
+    ctrl.jOutputCondition   = jOutputCondition;
+
     
     gui_component('label', jPanelOutput, 'br', 'Folder for weight table:', [], [], [], []);
     jWeightFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
-    
+    ctrl.jWeightFolder   = jWeightFolder;
+
     jPanelRight.add('br hfill', jPanelOutput);
     
     % ===== VALIDATION BUTTONS =====
@@ -249,22 +265,14 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             jPanelScoutsHead.setVisible(0);
             jExtentTitle.setVisible(1);
             jExtent.setVisible(1);
+            jExtentTitle2.setVisible(1);
         else
             jPanelScoutsHead.setVisible(1);
             jExtentTitle.setVisible(0);
             jExtent.setVisible(0);
+            jExtentTitle2.setVisible(0);
         end    
         
-%         % Get panel
-%         [bstPanel iPanel] = bst_get('Panel', 'FluenceOptions');
-%         container = get(bstPanel, 'container');
-%         % Re-pack frame
-%         if ~isempty(container)
-%             jFrame = container.handle{1};
-%             if ~isempty(jFrame)
-%                 jFrame.pack();
-%             end
-%         end
     end
 
 
@@ -330,6 +338,26 @@ function s = GetPanelContents() %#ok<DEFNU>
     s.Atlas_head   = ctrl.HeadAtlasName(ctrl.jComboHead.getSelectedIndex()+1);
     
     s.SubjectName =  ctrl.SubjectName;
+    
+     s.nb_sources = str2double(ctrl.jSources.getText);
+     s.nb_detectors = str2double(ctrl.jDetectors.getText);
+     s.nAdjacentDet = str2double(ctrl.jAdjacent.getText);
+     s.sep_optode  = [ str2double(ctrl.jSepOptodeMin.getText), str2double(ctrl.jSepOptodeMax.getText)];
+     s.sepmin_SD  = str2double(ctrl.jSepmin_SD.getText);
+
+    s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
+
+    if ctrl.jRadioSegSkinAsOne.isSelected
+        s.segmentation_label = 1;
+    else
+        s.segmentation_label = 2;
+    end   
+        
+    s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
+    s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
+    s.outputdir = strtrim(char(ctrl.jWeightFolder));
+    s.exist_weight = 0; %Todo :)
+    
 end
 
 
