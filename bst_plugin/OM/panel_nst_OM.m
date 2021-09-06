@@ -71,38 +71,12 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelMain.add(jPanelRight, BorderLayout.EAST);
     
     % === PANEL: SEARCH SPACE ===
-    
     % === PANEL: SCOUTS ===
     % Create panel
-    jPanelScoutsHead = gui_river([2,2], [2,7,-10,7], 'Scouts');
-    % Create list
-    jListHead = java_create('javax.swing.JList');
-    jListHead.setLayoutOrientation(jListHead.HORIZONTAL_WRAP);
-    jListHead.setVisibleRowCount(-1);
-    % Title
-    gui_component('label', jPanelScoutsHead, [], ' Select scouts:', [], [], [], []);
-    % Horizontal glue
-    gui_component('label', jPanelScoutsHead, 'hfill', ' ', [], [], [], []);
-    % Atlas selection box
-    jComboHead = gui_component('combobox', jPanelScoutsHead, 'right', [], [], [], []);
-    % Create scroll panel
-    jPanelScoutsHead.add(jListHead);
-    jScroll = javax.swing.JScrollPane(jListHead);
-    jPanelScoutsHead.add('br hfill vfill', jScroll);
-    % Set preferred size for the container
-    prefPanelSize = java_scaled('dimension', 250,250);
-    jPanelScoutsHead.setPreferredSize(prefPanelSize)
-    
-    % Register handles
-    ctrl.jComboHead = jComboHead;
-    ctrl.jListHead  = jListHead ;
-    ctrl.jPanelScoutsHead = jPanelScoutsHead;
-    jPanelLeft.add('br hfill vfill', jPanelScoutsHead);
+    jPanelScoutsCortex = gui_river([2,2], [2,7,-10,7], 'Cortical scout (target ROI)');
     
 
-        % === PANEL: SCOUTS ===
-    % Create panel
-    jPanelScoutsCortex = gui_river([2,2], [2,7,-10,7], 'Scouts');
+        
     % Create list
     jListCortex = java_create('javax.swing.JList');
     jListCortex.setLayoutOrientation(jListCortex.HORIZONTAL_WRAP);
@@ -129,21 +103,100 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelLeft.add('br hfill vfill', jPanelScoutsCortex);
     
     
-    % === PANEL: DESCRIPTION ===
-    jPanelRef = gui_river([2,2], [3,5,3,5], 'Description');
-        gui_component('label', jPanelRef, '', [...
-            '<html>This process uses native MEX version of Monte Carlo eXtreme (MCX)<br />' ...
-            'to solve the fluences of each optode. For more details plese refer to:<br /><br />' ...
-            'Qianqian Fang and David A. Boas, "Monte Carlo Simulation of Photon<br />'  ...
-            'Migrationin 3D Turbid Media Accelerated by Graphics Processing Units".<br />', ...
-            'Opt. Express, vol. 17, issue 22, pp. 20178-20190 (2009)</b><br /><br />', ...
-            'For technical details please refer to mcx homepage: http://mcx.space'], [],[],[],[]);
-    jPanelRight.add('hfill', jPanelRef);
 
-    % === PANEL: OTHER STUFF ====
-    jPanelOther = gui_river([2,2], [3,5,3,5], 'Description');
-        gui_component('label', jPanelOther, '', 'Any other stuff here', [], [], [], []);
-    jPanelRight.add('br hfill', jPanelOther);
+        
+    % === PANEL: SCOUTS ===
+    % Create panel
+    jPanelUseDefault = gui_river([2,2], [3,3,3,3], '');
+    jUseDefaultSpace = gui_component('checkbox', jPanelUseDefault, 'br', 'Use default search space', [], [], @(h,ev)UpdatePanel(), []);
+    gui_component('label', jPanelUseDefault, 'br', '', [], [], [], []);
+    jPanelLeft.add('br hfill vfill', jPanelUseDefault);
+
+    
+    
+        % Extent label
+    jExtentTitle = gui_component('label', jPanelUseDefault, 'br', 'Extent of scalp projection:', [], [], [], []);
+    jExtent = gui_component('text', jPanelUseDefault, 'hfill', '5', [], [], [], []);
+    jExtentTitle2 = gui_component('text', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
+
+        
+        
+    jPanelScoutsHead = gui_river([2,2], [2,7,-10,7], 'Head scout (search space)');
+    % Create list
+    jListHead = java_create('javax.swing.JList');
+    jListHead.setLayoutOrientation(jListHead.HORIZONTAL_WRAP);
+    jListHead.setVisibleRowCount(-1);
+    % Title
+    gui_component('label', jPanelScoutsHead, [], ' Select scouts:', [], [], [], []);
+    % Horizontal glue
+    gui_component('label', jPanelScoutsHead, 'hfill', ' ', [], [], [], []);
+    % Atlas selection box
+    jComboHead = gui_component('combobox', jPanelScoutsHead, 'right', [], [], [], []);
+    % Create scroll panel
+    jPanelScoutsHead.add(jListHead);
+    jScroll = javax.swing.JScrollPane(jListHead);
+    jPanelScoutsHead.add('br hfill vfill', jScroll);
+    % Set preferred size for the container
+    prefPanelSize = java_scaled('dimension', 250,250);
+    jPanelScoutsHead.setPreferredSize(prefPanelSize)
+    
+    % Register handles
+    ctrl.jComboHead = jComboHead;
+    ctrl.jListHead  = jListHead ;
+    ctrl.jPanelScoutsHead = jPanelScoutsHead;
+    jPanelLeft.add('br hfill vfill', jPanelScoutsHead);
+    
+    
+    % === PANEL: Montage information ====
+    jPanelMontage = gui_river([2,2], [3,5,3,5], 'Montage');
+    gui_component('label', jPanelMontage, 'br', 'Number of sources:', [], [], [], []);
+    jSources = gui_component('text', jPanelMontage, 'hfill', '3', [], [], [], []);
+    
+    
+    gui_component('label', jPanelMontage, 'br', 'Number of detectors:', [], [], [], []);
+    jDetectors = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
+    
+    gui_component('label', jPanelMontage, 'br', 'Number of Adjacent:', [], [], [], []);
+    jAdjacent = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
+    
+    gui_component('label', jPanelMontage, 'br', 'Range of optodes distance', [], [], [], []);
+    jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);
+    gui_component('label', jPanelMontage, '', ' - ', [], [], [], []);
+    jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', '55', [], [], [], []);
+    gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
+
+    gui_component('label', jPanelMontage, 'br', 'Minimum source detector distance:', [], [], [], []);
+    jSepmin_SD = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);
+    gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
+    jPanelRight.add('br hfill', jPanelMontage);
+    
+    % === PANEL: Fluence  ====
+    jPanelFluence = gui_river([2,2], [3,5,3,5], 'Fluence information');
+    gui_component('label', jPanelFluence, 'br', 'Fluence Data Source (URL or path):', [], [], [], []);
+    jFluenceSource = gui_component('text', jPanelFluence, 'hfill', [nst_get_repository_url() '/fluence/'], [], [], [], []);
+    
+    gui_component('label', jPanelFluence, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
+    jWavelengths = gui_component('text', jPanelFluence, 'hfill', '685', [], [], [], []);
+    
+    
+    jGroupRadio = ButtonGroup();
+    gui_component('label', jPanelFluence, 'br', 'Segmentation label:', [], [], [], []);
+    jRadioLayerMontage = gui_component('radio', jPanelFluence, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
+    jRadioLayerCortex = gui_component('radio', jPanelFluence, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
+
+    jPanelRight.add('br hfill', jPanelFluence);
+    
+    
+    % === PANEL: Output  ====
+    jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
+    gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
+    jOutputCondition = gui_component('text', jPanelOutput, 'hfill', 'OM', [], [], [], []);
+    
+    
+    gui_component('label', jPanelOutput, 'br', 'Folder for weight table:', [], [], [], []);
+    jWeightFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
+    
+    jPanelRight.add('br hfill', jPanelOutput);
     
     % ===== VALIDATION BUTTONS =====
     % Separator
@@ -168,7 +221,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Redraw panel
     UpdateScoutList(jComboHead,jListHead, AtlasHead.Atlas, AtlasHead.iAtlas);
     UpdateScoutList(jComboCortex,jListCortex, AtlasCortex.Atlas, AtlasCortex.iAtlas);
-
+    UpdatePanel();
     
     
     
@@ -190,7 +243,18 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
 
     %% ===== UPDATE PANEL ======
-    function UpdatePanel()        
+    function UpdatePanel()    
+        
+        if jUseDefaultSpace.isSelected
+            jPanelScoutsHead.setVisible(0);
+            jExtentTitle.setVisible(1);
+            jExtent.setVisible(1);
+        else
+            jPanelScoutsHead.setVisible(1);
+            jExtentTitle.setVisible(0);
+            jExtent.setVisible(0);
+        end    
+        
 %         % Get panel
 %         [bstPanel iPanel] = bst_get('Panel', 'FluenceOptions');
 %         container = get(bstPanel, 'container');
