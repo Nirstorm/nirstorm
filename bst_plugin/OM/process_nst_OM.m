@@ -47,71 +47,8 @@ sProcess.options.subjectname.Value   = '';
 sProcess.options.fluencesCond.Comment = {'panel_nst_OM', 'Select region of interest: '};
 sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
-
-
-
-sProcess.options = add_OM_options(sProcess.options);
-
 end
 
-function options = add_OM_options(options)
-
-options.condition_name.Comment = 'Output condition name:';
-options.condition_name.Type = 'text';
-options.condition_name.Value = '';
-
-options.segmentation_label.Type    = 'radio_line';
-options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-options.segmentation_label.Value   = 1;
-
-options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
-options.wavelengths.Type    = 'text';
-options.wavelengths.Value = '';
-
-options.data_source.Comment = str_pad('Fluence Data Source (URL or path)',40);
-options.data_source.Type    = 'text';
-options.data_source.Value = [nst_get_repository_url() '/fluence/'];
-
-options.nb_sources.Comment = str_pad('Number of sources:',40);
-options.nb_sources.Type = 'value';
-options.nb_sources.Value = {4,'',0};
-
-options.nb_detectors.Comment = str_pad('Number of detectors:',40);
-options.nb_detectors.Type = 'value';
-options.nb_detectors.Value =  {8,'',0};
-
-options.nAdjacentDet.Comment = str_pad('Number of Adjacent:',40);
-options.nAdjacentDet.Type = 'value';
-options.nAdjacentDet.Value = {2,'',0};
-
-options.sep_optode.Comment = str_pad('Range of optodes distance:',40);
-options.sep_optode.Type = 'range';
-options.sep_optode.Value = {[15 55],'mm',0};
-
-options.sepmin_SD.Comment = str_pad('Minimum source detector distance:',40);
-options.sepmin_SD.Type = 'value';
-options.sepmin_SD.Value = {15,'mm',0};
-
-options.exist_weight.Comment = str_pad('Use existing weight tables (speed up)',40);
-options.exist_weight.Type = 'checkbox';
-options.exist_weight.Value = 0;
-
-SelectOptions = {...
-    '', ...                            % Filename
-    '', ...                            % FileFormat
-    'save', ...                        % Dialog type: {open,save}
-    'Select output folder...', ...     % Window title
-    'ExportData', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-    'single', ...                      % Selection mode: {single,multiple}
-    'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-    {{'.folder'}, '*.*'}, ... % Available file formats
-    'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-% Option definition
-% TODO: add flag to enable ouput
-options.outputdir.Comment = 'Folder for weight table:';
-options.outputdir.Type    = 'filename';
-options.outputdir.Value   = SelectOptions;
-end
 
 function s = str_pad(s,padsize)
     if (length(s) < padsize)
@@ -173,7 +110,7 @@ catch
     return
 end
 
-condition_name = sProcess.options.condition_name.Value;
+condition_name = sProcess.options.fluencesCond.Value.condition_name;
 if isempty(condition_name)
     condition_name = 'planning_optimal_montage';
 end
@@ -182,12 +119,11 @@ end
 head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
 
 try
-    scan_res = textscan(sProcess.options.wavelengths.Value, '%d,');
+    wavelengths = str2double(strsplit(sProcess.options.fluencesCond.Value.wavelengths,','));
 catch
     bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
     return
 end
-wavelengths = double(scan_res{1}');
 
 if(length(wavelengths) < 1) % TODO: at least 2 wavelengths ?
     bst_report('Error', sProcess, [], 'List of wavelengths must not be empty');
@@ -198,15 +134,15 @@ end
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 cubeSize = size(sMri.Cube);
 
-options.nb_sources = sProcess.options.nb_sources.Value{1} ;
-options.nb_detectors = sProcess.options.nb_detectors.Value{1};
-options.nAdjacentDet = sProcess.options.nAdjacentDet.Value{1};
-options.sep_optode_min = sProcess.options.sep_optode.Value{1}(1);
-options.sep_optode_max  = sProcess.options.sep_optode.Value{1}(2);
-options.sep_SD_min = sProcess.options.sepmin_SD.Value{1};
+options.nb_sources = sProcess.options.fluencesCond.Value.nb_sources ;
+options.nb_detectors = sProcess.options.fluencesCond.Value.nb_detectors;
+options.nAdjacentDet = sProcess.options.fluencesCond.Value.nAdjacentDet;
+options.sep_optode_min = sProcess.options.fluencesCond.Value.sep_optode(1);
+options.sep_optode_max  = sProcess.options.fluencesCond.Value.sep_optode(2);
+options.sep_SD_min = sProcess.options.fluencesCond.Value.sepmin_SD;
 options.cubeSize = cubeSize;
-options.outputdir = sProcess.options.outputdir.Value{1};
-options.exist_weight = sProcess.options.exist_weight.Value;
+options.outputdir = sProcess.options.fluencesCond.Value.outputdir;
+options.exist_weight = sProcess.options.fluencesCond.Value.exist_weight;
 
 if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
@@ -251,16 +187,14 @@ for iroi=1:length(sScoutsFinal)
         bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
     end
     seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-    if sProcess.options.segmentation_label.Value == 1
+    if  sProcess.options.fluencesCond.Value.segmentation_label == 1
         seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-    elseif sProcess.options.segmentation_label.Value == 2
+    elseif  sProcess.options.fluencesCond.Value.segmentation_label == 2
         seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
     end    
-    %TODO: make sure segmentation has proper indexing from 0 to 5
-    %      Sometimes goes between 0 and 255 because of encoding issues
+    
+
     voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
-%         gm_mask = (seg.Cube == 4);
-%         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
 
     % Save MRI to nifti:
 %         sVol = sMri;
