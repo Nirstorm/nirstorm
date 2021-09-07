@@ -76,14 +76,22 @@ end
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
 sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
 
-
-i_atlas_head = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas_head);
-i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI_head);
-head_vertices = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
-
 i_atlas_cortex = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas_cortex);
 i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI_cortex);
 ROI_cortex = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
+
+if isempty(sProcess.options.fluencesCond.Value.Atlas_head) && isempty(sProcess.options.fluencesCond.Value.ROI_head)
+    
+    cortex_to_scalp_extent = sProcess.options.fluencesCond.Value.Extent;
+    cortex_scout.sSubject = sSubject;
+    cortex_scout.sScout   = ROI_cortex;
+
+    [head_vertices, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout,cortex_to_scalp_extent.*0.01, 1); 
+else    
+    i_atlas_head = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas_head);
+    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI_head);
+    head_vertices = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
+end
 
 
 OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices,sCortex, ROI_cortex);
@@ -148,13 +156,6 @@ if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
 end
 
-% 
-% % TODO: enable selection of multiple ROIs
-% % TODO: assert that selected subjecct is the same as for the head scout
-% roi_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
-% sCortex = in_tess_bst(roi_scout_selection.sSubject.Surface(roi_scout_selection.isurface).FileName);
-% sScoutsFinal = {roi_scout_selection.sScout};
-
 
 sScoutsFinal = ROI_cortex;
 
@@ -171,47 +172,29 @@ for iroi=1:length(sScoutsFinal)
     voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 
     if ~exist(voronoi_fn, 'file')
-        process_nst_compute_voronoi('Run', sProcess, sInputs);%TODO: test this because compute voro expect subject name as input option
+        bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
+                    'subjectname',        sSubject.Name, ...
+                    'segmentation_label', sProcess.options.fluencesCond.Value.segmentation_label);
     end
+    
+    
     voronoi_bst = in_mri_bst(voronoi_fn);
     voronoi = voronoi_bst.Cube;
+    
     % Load segmentation
     segmentation_name = 'segmentation_5tissues';
-    iseg = 0;
-    for ianat = 1:size(sSubject.Anatomy,2)
-        if any(strcmp(sSubject.Anatomy(ianat).Comment, segmentation_name))
-            iseg = ianat;
-        end
-    end
-    if iseg == 0
+    iseg = find(strcmp({sSubject.Anatomy.Comment},segmentation_name));
+    if isempty(iseg)
         bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
+        return;
     end
     seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-    if  sProcess.options.fluencesCond.Value.segmentation_label == 1
-        seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-    elseif  sProcess.options.fluencesCond.Value.segmentation_label == 2
-        seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
+
+    if  sProcess.options.fluencesCond.Value.segmentation_label == 1 % GM label = 4
+        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
+    elseif  sProcess.options.fluencesCond.Value.segmentation_label == 2 % GM label = 2
+        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
     end    
-    
-
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
-
-    % Save MRI to nifti:
-%         sVol = sMri;
-%         sVol.Cube(:) = gm_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-% 
-%         sVol = sMri;
-%         sVol.Cube = seg.Cube;
-%         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-%         
-%         
-%         sVol = sMri;
-%         sVol.Cube(:) = voi_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
 
     voi(voronoi_mask) = 1;
     %voi(index_binary_mask) = 1;
@@ -222,10 +205,12 @@ for iroi=1:length(sScoutsFinal)
         return;
     end
 end
+
+
 % Get fluences
 sparse_threshold = 1e-6;
 % TODO: sparsify saved fluences (faster loading, less memory during load)
-fluence_data_source = sProcess.options.data_source.Value;
+fluence_data_source = sProcess.options.fluencesCond.Value.data_source;
 if ~options.exist_weight ||~exist(fullfile(options.outputdir , 'weight_tables.mat'))
     [fluence_volumes,all_reference_voxels_index] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
         sSubject.Anatomy(sSubject.iAnatomy).Comment, ...

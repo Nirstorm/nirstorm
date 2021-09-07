@@ -111,7 +111,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jUseDefaultSpace = gui_component('checkbox', jPanelUseDefault, 'br', 'Use default search space', [], [], @(h,ev)UpdatePanel(), []);
     gui_component('label', jPanelUseDefault, 'br', '', [], [], [], []);
     jPanelLeft.add('br hfill vfill', jPanelUseDefault);
-
+    ctrl.jUseDefaultSpace = jUseDefaultSpace;
     
     
         % Extent label
@@ -204,7 +204,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
-    jOutputCondition = gui_component('text', jPanelOutput, 'hfill', 'OM', [], [], [], []);
+    jOutputCondition = gui_component('text', jPanelOutput, 'hfill', 'planning_optimal_montage', [], [], [], []);
     ctrl.jOutputCondition   = jOutputCondition;
 
     
@@ -334,9 +334,14 @@ function s = GetPanelContents() %#ok<DEFNU>
     s.ROI_cortex     = strtrim(char(ctrl.jListCortex.getSelectedValue.getName()));
     s.Atlas_cortex   = ctrl.CortexAtlasName(ctrl.jComboCortex.getSelectedIndex()+1);
 
-    s.ROI_head     = strtrim(char(ctrl.jListHead.getSelectedValue.getName()));
-    s.Atlas_head   = ctrl.HeadAtlasName(ctrl.jComboHead.getSelectedIndex()+1);
-    
+    if ctrl.jUseDefaultSpace.isSelected
+        s.ROI_head = [];
+        s.Atlas_head = [];
+        s.Extent = str2double(ctrl.jExtent.getText);
+    else    
+        s.ROI_head     = strtrim(char(ctrl.jListHead.getSelectedValue.getName()));
+        s.Atlas_head   = ctrl.HeadAtlasName(ctrl.jComboHead.getSelectedIndex()+1);
+    end
     s.SubjectName =  ctrl.SubjectName;
     
      s.nb_sources = str2double(ctrl.jSources.getText);
@@ -355,7 +360,7 @@ function s = GetPanelContents() %#ok<DEFNU>
         
     s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
-    s.outputdir = strtrim(char(ctrl.jWeightFolder));
+    s.outputdir = strtrim(char(ctrl.jWeightFolder.getText));
     s.exist_weight = 0; %Todo :)
     
 end
