@@ -722,3 +722,42 @@ sSurfNew.iAtlas   = sSurf.iAtlas;
 % db_add_surface(iSubject, NewTessFile, sSurfNew.Comment);
 
 end
+
+
+function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
+
+if nargin < 3
+    save_in_db = 0;
+end
+sSubject = cortex_scout.sSubject;
+sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+dis2head = pdist2(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+head_vertices = find(min(dis2head,[],2) < extent_m); 
+
+% TODO: properly select atlas
+exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+if ~isempty(exclude_scout)
+    head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
+end
+
+limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+if ~isempty(limiting_scout)
+    head_vertices = intersect(head_vertices, limiting_scout.Vertices);
+end
+
+if save_in_db && ...,
+   ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
+    ,{sHead.Atlas.Scouts.Label}))
+    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
+    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
+    sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
+    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
+                                           '(' num2str(extent_m*100) ' cm)'];
+    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+    db_save();
+end
+
+end
