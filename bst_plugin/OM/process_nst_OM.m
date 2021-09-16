@@ -362,32 +362,47 @@ nHolders = size(head_vertices_coords, 1);
 nVois = length(vois);
 iwl = 1;
 weight_tables = cell(nVois, 1);
-mri_zeros = zeros(options.cubeSize);
 if ~options.exist_weight || ~exist(fullfile(options.outputdir, 'weight_tables.mat'))
-    bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nVois * nHolders^2);
     for ivoi=1:nVois
         weight_tables{ivoi} = sparse(nHolders, nHolders);
+        tic
+        bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
         for isrc=1:nHolders
-            for idet=1:nHolders
+            fluenceSrc = full(fluence_volumes{isrc}{iwl}(vois{ivoi}));
+            for idet=1:isrc
                 if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
                     %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
                     
-                    fluenceSrc = full(fluence_volumes{isrc}{iwl}(vois{ivoi}));
                     fluenceDet = full(fluence_volumes{idet}{iwl}(vois{ivoi}));
                     ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-                    %fluenceSD = mri_zeros;
-                    %fluenceSD(:) = fluence_volumes{isrc}{iwl};
-                    if full(fluence_volumes{isrc}{iwl}(ref_det_pos))==0
-                        sensitivity = 0;
-                    else
-                        sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
-                        % bst_progress('text', ['Maximum sensitivity: ' num2str(round(max(sensitivity),5))]);
+                    if full(fluence_volumes{isrc}{iwl}(ref_det_pos))~=0
+                        % sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
+                        % ED: fluenceSrc' * fluenceDet is slighty faster than sum ( fluenceSrc .* fluenceDet )
+                        sensitivity = fluenceSrc' * fluenceDet; % ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
+                    
+                        weight_tables{ivoi}(isrc, idet) = sensitivity; 
+                        if isrc ~= idet
+                            weight_tables{ivoi}(idet, isrc) = sensitivity; % The matrix is symetrical before the normalization
+                        end    
                     end
-                    weight_tables{ivoi}(isrc, idet) = sum(sensitivity(:));
+                end    
+            end
+            
+            bst_progress('inc', nHolders);
+        end
+        bst_progress('start', 'Compute weights','Normalizing the sensitivities of holder pairs...', 1,  nHolders^2);
+        for isrc=1:nHolders
+            for idet=1:nHolders
+                if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
+                    ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+                    if full(fluence_volumes{isrc}{iwl}(ref_det_pos)) ~=0
+                        weight_tables{ivoi}(isrc, idet) = weight_tables{ivoi}(isrc, idet) / fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
+                    end
                 end
             end
             bst_progress('inc', nHolders);
         end
+        toc
         if(nnz(weight_tables{ivoi}) == 0)
             bst_error(sprintf('Weight table is null for VOI %d', ivoi));
             return
