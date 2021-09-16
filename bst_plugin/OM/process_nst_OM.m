@@ -1,4 +1,4 @@
-function varargout = process_nst_OM_from_head( varargin )
+function varargout = process_nst_OM( varargin )
 
 % @=============================================================================
 % This software is part of the Brainstorm software:
@@ -18,30 +18,20 @@ function varargout = process_nst_OM_from_head( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Alexis Machado, Thomas Vincent, ZhengChen Cai (2017-2018)
-
-% TODO: expose projection distance from cortex ROI to head
-% TODO: only one wavelength (quickly test if montage change from one wl to
-%      another)
-% TODO: test limitation of model size -> check with 32x32 or 16x16.
-% TODO: document computation time
-% TODO: doc params: 
-%   - nb sources/det is the nb of optodes placed by algo then post proc to
-%     remove positions
-%   - nb adjacent is MIN (can be higher). Has to be associated to dist MAX
-% TODO: fix paper reference + ref to equations
+% Authors: 
+% Edouard Delaire (2021)
+% Thomas Vincent, Alexis Machado, ZhengChen Cai (2017)
 
 eval(macro_method);
 end
 
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Compute optimal montage from head scout';
+sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
-sProcess.Index       = 1408;
+sProcess.Index       = 1406;
 sProcess.Description = '';
-sProcess.isSeparator = 0;
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process
@@ -49,73 +39,16 @@ sProcess.OutputTypes = {'import'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
-sProcess.options = nst_add_scout_sel_options(struct(), 'head', 'Head scout (search space):', ...
-                                             'scalp', {'User scouts'}, 0); 
-sProcess.options = add_OM_options(sProcess.options);
+% Subject name
+sProcess.options.subjectname.Comment = 'Subject name:';
+sProcess.options.subjectname.Type    = 'subjectname';
+sProcess.options.subjectname.Value   = '';
+
+sProcess.options.fluencesCond.Comment = {'panel_nst_OM', 'Optimal montage parameters'};
+sProcess.options.fluencesCond.Type    = 'editpref';
+sProcess.options.fluencesCond.Value   = [];
 end
 
-function options = add_OM_options(options)
-
-% Add selector of cortical scout for target VOI
-options = nst_add_scout_sel_options(options, 'roi', 'Cortical scout (target ROI):', ...
-                                    'cortex', {'User scouts'}, 1);
-
-options.condition_name.Comment = 'Output condition name:';
-options.condition_name.Type = 'text';
-options.condition_name.Value = '';
-
-options.segmentation_label.Type    = 'radio_line';
-options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-options.segmentation_label.Value   = 1;
-
-options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
-options.wavelengths.Type    = 'text';
-options.wavelengths.Value = '';
-
-options.data_source.Comment = str_pad('Fluence Data Source (URL or path)',40);
-options.data_source.Type    = 'text';
-options.data_source.Value = [nst_get_repository_url() '/fluence/'];
-
-options.nb_sources.Comment = str_pad('Number of sources:',40);
-options.nb_sources.Type = 'value';
-options.nb_sources.Value = {4,'',0};
-
-options.nb_detectors.Comment = str_pad('Number of detectors:',40);
-options.nb_detectors.Type = 'value';
-options.nb_detectors.Value =  {8,'',0};
-
-options.nAdjacentDet.Comment = str_pad('Number of Adjacent:',40);
-options.nAdjacentDet.Type = 'value';
-options.nAdjacentDet.Value = {2,'',0};
-
-options.sep_optode.Comment = str_pad('Range of optodes distance:',40);
-options.sep_optode.Type = 'range';
-options.sep_optode.Value = {[15 55],'mm',0};
-
-options.sepmin_SD.Comment = str_pad('Minimum source detector distance:',40);
-options.sepmin_SD.Type = 'value';
-options.sepmin_SD.Value = {15,'mm',0};
-
-options.exist_weight.Comment = str_pad('Use existing weight tables (speed up)',40);
-options.exist_weight.Type = 'checkbox';
-options.exist_weight.Value = 0;
-
-SelectOptions = {...
-    '', ...                            % Filename
-    '', ...                            % FileFormat
-    'save', ...                        % Dialog type: {open,save}
-    'Select output folder...', ...     % Window title
-    'ExportData', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-    'single', ...                      % Selection mode: {single,multiple}
-    'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-    {{'.folder'}, '*.*'}, ... % Available file formats
-    'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-% Option definition
-% TODO: add flag to enable ouput
-options.outputdir.Comment = 'Folder for weight table:';
-options.outputdir.Type    = 'filename';
-options.outputdir.Value   = SelectOptions;
-end
 
 function s = str_pad(s,padsize)
     if (length(s) < padsize)
@@ -131,26 +64,17 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
-
-% Get scout vertices & load head mesh
-head_scout_selection = nst_get_option_selected_scout(sProcess.options, 'head');
-head_vertices = head_scout_selection.sScout.Vertices;
-
-sSubject = head_scout_selection.sSubject;
-sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-
-OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices, sInputs);
-
-end
-
-function OutputFiles = Compute(sProcess, sSubject, sHead, head_vertex_ids, sInputs)
 OutputFiles = {};
 
-cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+if bst_iscompiled()
+    bst_error('Optimum montage is not available in the compiled version of brainstorm');
+    return;
+end        
 
+cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
 try
     cplx = Cplex();
-    cplex_version = strsplit(cplx.getVersion(), '.');
+    cplex_version = nst_strsplit(cplx.getVersion(), '.');
     if str2double(cplex_version(1)) < 12 || ...
             (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
@@ -160,8 +84,47 @@ catch
     bst_error(['CPLEX >12.3 required. See ' cplex_url]);
     return
 end
+    
+SubjectName =  sProcess.options.fluencesCond.Value.SubjectName;
+sProcess.options.subjectname.Value = SubjectName;
+sSubject = bst_get('Subject',SubjectName);
 
-condition_name = sProcess.options.condition_name.Value;
+if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
+    bst_error('No available Cortex and Head surface for this subject.');
+    return;
+end    
+
+sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+
+i_atlas_cortex = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas_cortex);
+i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI_cortex);
+ROI_cortex = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
+
+if isempty(sProcess.options.fluencesCond.Value.Atlas_head) && isempty(sProcess.options.fluencesCond.Value.ROI_head)
+    
+    cortex_to_scalp_extent = sProcess.options.fluencesCond.Value.Extent;
+    cortex_scout.sSubject = sSubject;
+    cortex_scout.sScout   = ROI_cortex;
+
+    [head_vertices, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout,cortex_to_scalp_extent.*0.01, 1); 
+else    
+    i_atlas_head = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas_head);
+    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI_head);
+    head_vertices = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
+end
+
+
+OutputFiles{1} = Compute(sProcess, sSubject, sHead, head_vertices,sCortex, ROI_cortex);
+
+end
+
+
+
+function OutputFile = Compute(sProcess, sSubject, sHead, head_vertex_ids,sCortex, ROI_cortex)
+OutputFile = {};
+
+condition_name = sProcess.options.fluencesCond.Value.condition_name;
 if isempty(condition_name)
     condition_name = 'planning_optimal_montage';
 end
@@ -170,12 +133,11 @@ end
 head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
 
 try
-    scan_res = textscan(sProcess.options.wavelengths.Value, '%d,');
+    wavelengths = str2double(strsplit(sProcess.options.fluencesCond.Value.wavelengths,','));
 catch
     bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
     return
 end
-wavelengths = double(scan_res{1}');
 
 if(length(wavelengths) < 1) % TODO: at least 2 wavelengths ?
     bst_report('Error', sProcess, [], 'List of wavelengths must not be empty');
@@ -186,84 +148,62 @@ end
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 cubeSize = size(sMri.Cube);
 
-options.nb_sources = sProcess.options.nb_sources.Value{1} ;
-options.nb_detectors = sProcess.options.nb_detectors.Value{1};
-options.nAdjacentDet = sProcess.options.nAdjacentDet.Value{1};
-options.sep_optode_min = sProcess.options.sep_optode.Value{1}(1);
-options.sep_optode_max  = sProcess.options.sep_optode.Value{1}(2);
-options.sep_SD_min = sProcess.options.sepmin_SD.Value{1};
+options.nb_sources = sProcess.options.fluencesCond.Value.nb_sources ;
+options.nb_detectors = sProcess.options.fluencesCond.Value.nb_detectors;
+options.nAdjacentDet = sProcess.options.fluencesCond.Value.nAdjacentDet;
+options.sep_optode_min = sProcess.options.fluencesCond.Value.sep_optode(1);
+options.sep_optode_max  = sProcess.options.fluencesCond.Value.sep_optode(2);
+options.sep_SD_min = sProcess.options.fluencesCond.Value.sepmin_SD;
 options.cubeSize = cubeSize;
-options.outputdir = sProcess.options.outputdir.Value{1};
-options.exist_weight = sProcess.options.exist_weight.Value;
+options.outputdir = sProcess.options.fluencesCond.Value.outputdir;
+options.exist_weight = sProcess.options.fluencesCond.Value.exist_weight;
 
 if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
+    return;
 end
-% TODO: enable selection of multiple ROIs
-% TODO: assert that selected subjecct is the same as for the head scout
-roi_scout_selection = nst_get_option_selected_scout(sProcess.options, 'roi');
-sCortex = in_tess_bst(roi_scout_selection.sSubject.Surface(roi_scout_selection.isurface).FileName);
-sScoutsFinal = {roi_scout_selection.sScout};
+
+
+sScoutsFinal = ROI_cortex;
 
 vois = cell(length(sScoutsFinal), 1);
 for iroi=1:length(sScoutsFinal)
-    sROI = extract_scout_surface(sCortex, sScoutsFinal{iroi});
-    sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices);
+    
+    sROI = extract_scout_surface(sCortex, sScoutsFinal(iroi));
+    sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices');
     
     % Get VOI from cortical ROI -> interpolate
     tess2mri_interp = tess_tri_interp(sROI.Vertices, sROI.Faces, cubeSize);
     index_binary_mask = (sum(tess2mri_interp,2) >0);
     voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
-    if 1
-        voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-        
-        if ~exist(voronoi_fn, 'file')
-            process_nst_compute_voronoi('Run', sProcess, sInputs);%TODO: test this because compute voro expect subject name as input option
-        end
-        voronoi_bst = in_mri_bst(voronoi_fn);
-        voronoi = voronoi_bst.Cube;
-        % Load segmentation
-        segmentation_name = 'segmentation_5tissues';
-        iseg = 0;
-        for ianat = 1:size(sSubject.Anatomy,2)
-            if any(strcmp(sSubject.Anatomy(ianat).Comment, segmentation_name))
-                iseg = ianat;
-            end
-        end
-        if iseg == 0
-            bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
-        end
-        seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-        if sProcess.options.segmentation_label.Value == 1
-            seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-        elseif sProcess.options.segmentation_label.Value == 2
-            seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
-        end    
-        %TODO: make sure segmentation has proper indexing from 0 to 5
-        %      Sometimes goes between 0 and 255 because of encoding issues
-        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal{iroi}.Vertices);
-%         gm_mask = (seg.Cube == 4);
-%         voi_mask = ismember(voronoi,sScoutsFinal{iroi}.Vertices);
-        
-        % Save MRI to nifti:
-%         sVol = sMri;
-%         sVol.Cube(:) = gm_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'GM.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-% 
-%         sVol = sMri;
-%         sVol.Cube = seg.Cube;
-%         out_fn =  fullfile('/home/tom/tmp/', 'seg.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-%         
-%         
-%         sVol = sMri;
-%         sVol.Cube(:) = voi_mask(:) * 1.0;
-%         out_fn =  fullfile('/home/tom/tmp/', 'voi_mask.nii');
-%         out_mri_nii(sVol, out_fn, 'float32');
-        
-        voi(voronoi_mask) = 1;
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+
+    if ~exist(voronoi_fn, 'file')
+        bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
+                    'subjectname',        sSubject.Name, ...
+                    'segmentation_label', sProcess.options.fluencesCond.Value.segmentation_label);
     end
+    
+    
+    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi = voronoi_bst.Cube;
+    
+    % Load segmentation
+    segmentation_name = 'segmentation_5tissues';
+    iseg = find(strcmp({sSubject.Anatomy.Comment},segmentation_name));
+    if isempty(iseg)
+        bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
+        return;
+    end
+    seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
+
+    if  sProcess.options.fluencesCond.Value.segmentation_label == 1 % GM label = 4
+        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
+    elseif  sProcess.options.fluencesCond.Value.segmentation_label == 2 % GM label = 2
+        voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
+    end    
+
+    voi(voronoi_mask) = 1;
     %voi(index_binary_mask) = 1;
     voi_flat = voi(:);
     vois{iroi} = sparse(voi_flat > 0);
@@ -272,11 +212,13 @@ for iroi=1:length(sScoutsFinal)
         return;
     end
 end
+
+
 % Get fluences
 sparse_threshold = 1e-6;
 % TODO: sparsify saved fluences (faster loading, less memory during load)
-fluence_data_source = sProcess.options.data_source.Value;
-if ~options.exist_weight
+fluence_data_source = sProcess.options.fluencesCond.Value.data_source;
+if ~options.exist_weight ||~exist(fullfile(options.outputdir , 'weight_tables.mat'))
     [fluence_volumes,all_reference_voxels_index] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
         sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
         wavelengths, fluence_data_source, sparse_threshold);
@@ -285,7 +227,7 @@ if ~options.exist_weight
     end
 end
 
-if options.exist_weight
+if options.exist_weight && exist(fullfile(options.outputdir , 'weight_tables.mat'))
     [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, [], wavelengths, vois, options, []);
 else
     [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, vois, options, all_reference_voxels_index);
@@ -369,6 +311,24 @@ end
 iStudy = db_add_condition(sSubject.Name, condition_name);
 sStudy = bst_get('Study', iStudy);
 db_set_channel(iStudy, ChannelMat, 1, 0);
+
+separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
+% Save time-series data
+sDataOut              = db_template('data');
+sDataOut.F            = separations;
+sDataOut.Comment      = 'Separations';
+sDataOut.ChannelFlag  = ones(length(separations),1);
+sDataOut.Time         = [1];
+sDataOut.DataType     = 'recordings';
+sDataOut.nAvg         = 1;
+sDataOut.DisplayUnits = 'cm';
+
+% Generate a new file name in the same folder
+OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
+sDataOut.FileName = file_short(OutputFile);
+bst_save(OutputFile, sDataOut, 'v7');
+% Register in database
+db_add_data(iStudy, OutputFile, sDataOut);
 end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, ...
@@ -403,7 +363,7 @@ nVois = length(vois);
 iwl = 1;
 weight_tables = cell(nVois, 1);
 mri_zeros = zeros(options.cubeSize);
-if ~options.exist_weight
+if ~options.exist_weight || ~exist(fullfile(options.outputdir, 'weight_tables.mat'))
     bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nVois * nHolders^2);
     for ivoi=1:nVois
         weight_tables{ivoi} = sparse(nHolders, nHolders);
@@ -411,6 +371,7 @@ if ~options.exist_weight
             for idet=1:nHolders
                 if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
                     %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
+                    
                     fluenceSrc = full(fluence_volumes{isrc}{iwl}(vois{ivoi}));
                     fluenceDet = full(fluence_volumes{idet}{iwl}(vois{ivoi}));
                     ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
@@ -784,5 +745,44 @@ sSurfNew.iAtlas   = sSurf.iAtlas;
 % [sSubject, iSubject] = bst_get('SurfaceFile', sSurf.FileName);
 % % Register this file in Brainstorm database
 % db_add_surface(iSubject, NewTessFile, sSurfNew.Comment);
+
+end
+
+
+function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
+
+if nargin < 3
+    save_in_db = 0;
+end
+sSubject = cortex_scout.sSubject;
+sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+dis2head = pdist2(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+head_vertices = find(min(dis2head,[],2) < extent_m); 
+
+% TODO: properly select atlas
+exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+if ~isempty(exclude_scout)
+    head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
+end
+
+limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+if ~isempty(limiting_scout)
+    head_vertices = intersect(head_vertices, limiting_scout.Vertices);
+end
+
+if save_in_db && ...,
+   ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
+    ,{sHead.Atlas.Scouts.Label}))
+    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
+    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
+    sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
+    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
+                                           '(' num2str(extent_m*100) ' cm)'];
+    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+    db_save();
+end
 
 end
