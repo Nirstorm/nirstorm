@@ -44,7 +44,7 @@ sProcess.options.subjectname.Comment = 'Subject name:';
 sProcess.options.subjectname.Type    = 'subjectname';
 sProcess.options.subjectname.Value   = '';
 
-sProcess.options.fluencesCond.Comment = {'panel_nst_OM', 'Select region of interest: '};
+sProcess.options.fluencesCond.Comment = {'panel_nst_OM', 'Optimal montage parameters'};
 sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
 end
@@ -64,10 +64,31 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+OutputFiles = {};
 
+if bst_iscompiled()
+    bst_error('Optimum montage is not available in the compiled version of brainstorm');
+    return;
+end        
+
+cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+try
+    cplx = Cplex();
+    cplex_version = nst_strsplit(cplx.getVersion(), '.');
+    if str2double(cplex_version(1)) < 12 || ...
+            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
+        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+        return
+    end
+catch
+    bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    return
+end
+    
 SubjectName =  sProcess.options.fluencesCond.Value.SubjectName;
 sProcess.options.subjectname.Value = SubjectName;
 sSubject = bst_get('Subject',SubjectName);
+
 if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
     bst_error('No available Cortex and Head surface for this subject.');
     return;
@@ -94,29 +115,14 @@ else
 end
 
 
-OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices,sCortex, ROI_cortex);
+OutputFiles{1} = Compute(sProcess, sSubject, sHead, head_vertices,sCortex, ROI_cortex);
 
 end
 
 
 
-function OutputFiles = Compute(sProcess, sSubject, sHead, head_vertex_ids,sCortex, ROI_cortex)
-OutputFiles = {};
-
-cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-
-try
-    cplx = Cplex();
-    cplex_version = nst_strsplit(cplx.getVersion(), '.');
-    if str2double(cplex_version(1)) < 12 || ...
-            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
-        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-        return
-    end
-catch
-    bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    return
-end
+function OutputFile = Compute(sProcess, sSubject, sHead, head_vertex_ids,sCortex, ROI_cortex)
+OutputFile = {};
 
 condition_name = sProcess.options.fluencesCond.Value.condition_name;
 if isempty(condition_name)
@@ -154,6 +160,7 @@ options.exist_weight = sProcess.options.fluencesCond.Value.exist_weight;
 
 if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
+    return;
 end
 
 
@@ -220,7 +227,7 @@ if ~options.exist_weight ||~exist(fullfile(options.outputdir , 'weight_tables.ma
     end
 end
 
-if options.exist_weight
+if options.exist_weight && exist(fullfile(options.outputdir , 'weight_tables.mat'))
     [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, [], wavelengths, vois, options, []);
 else
     [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, wavelengths, vois, options, all_reference_voxels_index);
@@ -304,6 +311,24 @@ end
 iStudy = db_add_condition(sSubject.Name, condition_name);
 sStudy = bst_get('Study', iStudy);
 db_set_channel(iStudy, ChannelMat, 1, 0);
+
+separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
+% Save time-series data
+sDataOut              = db_template('data');
+sDataOut.F            = separations;
+sDataOut.Comment      = 'Separations';
+sDataOut.ChannelFlag  = ones(length(separations),1);
+sDataOut.Time         = [1];
+sDataOut.DataType     = 'recordings';
+sDataOut.nAvg         = 1;
+sDataOut.DisplayUnits = 'cm';
+
+% Generate a new file name in the same folder
+OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
+sDataOut.FileName = file_short(OutputFile);
+bst_save(OutputFile, sDataOut, 'v7');
+% Register in database
+db_add_data(iStudy, OutputFile, sDataOut);
 end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, fluence_volumes, ...
