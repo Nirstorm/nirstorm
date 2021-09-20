@@ -51,10 +51,13 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             end    
             OPTIONS.HeadFile = file_fullpath(sSubject.Surface(sSubject.iScalp).FileName);
             OPTIONS.CortexFile = file_fullpath(sSubject.Surface(sSubject.iCortex).FileName);
+            OPTIONS.Wavelengths = {'685'};
         else
             OPTIONS.fromMontage = 1;
             OPTIONS.ChannelFile = sFiles.ChannelFile;
             OPTIONS.SubjectName = sFiles.SubjectName;
+            ChanneMat = in_bst_channel(sFiles.ChannelFile);
+            OPTIONS.Wavelengths = strsplit(num2str(ChanneMat.Nirs.Wavelengths));
         end
     end
     
@@ -82,25 +85,23 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     % === PANEL: SEARCH SPACE ===
     jPanelSearchSpace = gui_river([2,2], [3,3,3,3], 'Search space');
-        jGroupRadio = ButtonGroup();
-        jRadioLayerMontage = gui_component('radio', jPanelSearchSpace, [], 'Montage', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
-        jRadioLayerCortex = gui_component('radio', jPanelSearchSpace, [], 'Cortex', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
-        jRadioLayerHead = gui_component('radio', jPanelSearchSpace, [], 'Head', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
-        
-        
-        
-        if OPTIONS.fromMontage
-            jRadioLayerMontage.setSelected(1);
-            jRadioLayerCortex.setEnabled(0);
-            jRadioLayerHead.setEnabled(0);
-        else    
-            jRadioLayerMontage.setEnabled(0);
-            jRadioLayerCortex.setSelected(1);
-        end
-        % Register handles
-        ctrl.jRadioLayerMontage = jRadioLayerMontage;
-        ctrl.jRadioLayerCortex  = jRadioLayerCortex;
-        ctrl.jRadioLayerHead    = jRadioLayerHead;
+    jGroupRadio = ButtonGroup();
+    jRadioLayerMontage = gui_component('radio', jPanelSearchSpace, [], 'Montage', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    jRadioLayerCortex = gui_component('radio', jPanelSearchSpace, [], 'Cortex', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+    jRadioLayerHead = gui_component('radio', jPanelSearchSpace, [], 'Head', jGroupRadio, [], @(h,ev)UpdatePanel(), []);
+
+    if OPTIONS.fromMontage
+        jRadioLayerMontage.setSelected(1);
+        jRadioLayerCortex.setEnabled(0);
+        jRadioLayerHead.setEnabled(0);
+    else    
+        jRadioLayerMontage.setEnabled(0);
+        jRadioLayerCortex.setSelected(1);
+    end
+    % Register handles
+    ctrl.jRadioLayerMontage = jRadioLayerMontage;
+    ctrl.jRadioLayerCortex  = jRadioLayerCortex;
+    ctrl.jRadioLayerHead    = jRadioLayerHead;
     jPanelLeft.add('hfill', jPanelSearchSpace);
     
     % === PANEL: SCOUTS ===
@@ -140,13 +141,13 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     % === PANEL: DESCRIPTION ===
     jPanelRef = gui_river([2,2], [3,5,3,5], 'Description');
-        gui_component('label', jPanelRef, '', [...
-            '<html>This process uses native MEX version of Monte Carlo eXtreme (MCX)<br />' ...
-            'to solve the fluences of each optode. For more details plese refer to:<br /><br />' ...
-            'Qianqian Fang and David A. Boas, "Monte Carlo Simulation of Photon<br />'  ...
-            'Migrationin 3D Turbid Media Accelerated by Graphics Processing Units".<br />', ...
-            'Opt. Express, vol. 17, issue 22, pp. 20178-20190 (2009)</b><br /><br />', ...
-            'For technical details please refer to mcx homepage: http://mcx.space'], [],[],[],[]);
+    gui_component('label', jPanelRef, '', [...
+        '<html>This process uses native MEX version of Monte Carlo eXtreme (MCX)<br />' ...
+        'to solve the fluences of each optode. For more details plese refer to:<br /><br />' ...
+        'Qianqian Fang and David A. Boas, "Monte Carlo Simulation of Photon<br />'  ...
+        'Migrationin 3D Turbid Media Accelerated by Graphics Processing Units".<br />', ...
+        'Opt. Express, vol. 17, issue 22, pp. 20178-20190 (2009)</b><br /><br />', ...
+        'For technical details please refer to mcx homepage: http://mcx.space'], [],[],[],[]);
     jPanelRight.add('hfill', jPanelRef);
 
     % === PANEL: Forward options  ====
@@ -162,10 +163,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     ctrl.jRadioSegWMAsOne   = jRadioSegWMAsOne;
     
     gui_component('label', jPanelForward, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
-    jWavelengths = gui_component('text', jPanelForward, 'hfill', '685', [], [], [], []);
+    jWavelengths = gui_component('text', jPanelForward, 'hfill',  strjoin(OPTIONS.Wavelengths, ' ,'), [], [], [], []);
     ctrl.jWavelengths = jWavelengths;
-    
-    
+    if   OPTIONS.fromMontage
+        jWavelengths.setEnabled(0);
+    end    
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');
     info=mcxlab('gpuinfo');
@@ -187,7 +189,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
-    
     
     gui_component('label', jPanelOutput, 'br', 'Output folder:', [], [], [], []);
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);

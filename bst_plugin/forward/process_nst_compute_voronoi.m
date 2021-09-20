@@ -36,7 +36,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'import'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 0;
-    sProcess.isSeparator = 0;
+    sProcess.isSeparator = 1;
     % Option: Subject name
     sProcess.options.subjectname.Comment = 'Subject name:';
     sProcess.options.subjectname.Type    = 'subjectname';
@@ -185,7 +185,7 @@ if nargin > 2
         sSegmentation.Cube = nst_prepare_segmentation(sSegmentation.Cube,{5,4,3,2,1});
     end    
     
-    if all(sSegmentation.Histogram.fncX == 0:5)
+    if all(unique(sSegmentation.Cube)' == 0:5)
         vol_voro(sSegmentation.Cube ~= 4) = -1;
     elseif any(sSegmentation.Histogram.fncX == 204)
         vol_voro(sSegmentation.Cube ~= 204) = -1;

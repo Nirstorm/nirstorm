@@ -32,7 +32,7 @@ sProcess.Comment     = 'Head model from precomputed one';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File2';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
-sProcess.Index       = 1409;
+sProcess.Index       = 1401;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};

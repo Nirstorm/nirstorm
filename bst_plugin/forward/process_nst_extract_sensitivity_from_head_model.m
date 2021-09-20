@@ -37,7 +37,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'results', 'results'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    
+    sProcess.isSeparator = 1;
+
     sProcess.options.normalize.Type     = 'checkbox';
     sProcess.options.normalize.Comment  = 'Normalize sensitivity map';
     sProcess.options.normalize.Controller = 'normalise';
