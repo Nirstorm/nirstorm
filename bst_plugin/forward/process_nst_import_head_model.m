@@ -29,7 +29,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', 'Sources'};
-    sProcess.Index       = 1406;
+    sProcess.Index       = 1404;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Compute-head-model-from-fluence';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
@@ -37,7 +37,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'data', 'raw'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
