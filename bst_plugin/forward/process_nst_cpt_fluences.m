@@ -27,7 +27,7 @@ end
 
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = '[WIP]Compute fluences from head scout';
+sProcess.Comment     = '[WIP]Compute fluences';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1405;
@@ -45,80 +45,13 @@ sProcess.options.subjectname.Type    = 'subjectname';
 sProcess.options.subjectname.Value   = '';
 
 
-% Options: FEM conductivities
-sProcess.options.fluencesCond.Comment = {'panel_nst_fluences', 'Scout: '};
+sProcess.options.fluencesCond.Comment = {'panel_nst_fluences', 'Fluence options'};
 sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
 
-% sProcess.options = nst_add_scout_sel_options(struct(), 'head', str_pad('Head scout (search space):',40), ...
-%                                              'scalp', {'User scouts'}, 1); 
-
-sProcess.options = append_mcxlab_options(sProcess.options);
 end
 
-function options = append_mcxlab_options(options)
 
-options.segmentation.Comment = str_pad('Segmentation (Volume)',40);
-options.segmentation.Type    = 'text';
-options.segmentation.Value = 'segmentation';
-
-options.segmentation_label.Type    = 'radio_line';
-options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-options.segmentation_label.Value   = 1;   
-
-options.wavelengths.Comment = str_pad('Wavelengths (nm) [coma-separated list]',40);
-options.wavelengths.Type    = 'text';
-options.wavelengths.Value = '';
-
-options.help.Comment = ['<B>This process uses native MEX version of Monte Carlo eXtreme (MCX) to solve the fluences of each optode.</B><BR><BR>' ...
-    '<B>For more details plese refer to Qianqian Fang and David A. Boas, <BR>' ...
-    '<B>"Monte Carlo Simulation of Photon Migration in 3D Turbid Media Accelerated by Graphics Processing Units".</B> <BR>', ...
-    '<B>Opt. Express, vol. 17, issue 22, pp. 20178-20190 (2009)</B><BR>', ...
-    '<B>For technical details please refer to mcx homepage (http://mcx.sourceforge.net/cgi-bin/index.cgi)</B><BR><BR>'];
-options.help.Type    = 'label';
-
-% ref_length = 26;
-
-SelectOptions = {...
-    '', ...                            % Filename
-    '', ...                            % FileFormat
-    'save', ...                        % Dialog type: {open,save}
-    'Select output folder...', ...     % Window title
-    'ExportData', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-    'single', ...                      % Selection mode: {single,multiple}
-    'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-    {{'.folder'}, '*.*'}, ... % Available file formats
-    'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-% Option definition
-% TODO: add flag to enable ouput
-options.outputdir.Comment = 'Output folder for fluence:';
-options.outputdir.Type    = 'filename';
-options.outputdir.Value   = SelectOptions;
-
-options.mcxlab_gpuid.Comment = str_pad('cfg.gpuid: ',20);
-options.mcxlab_gpuid.Type = 'value';
-options.mcxlab_gpuid.Value={1,'',0};
-
-options.mcxlab_nphoton.Comment = str_pad('cfg.nphoton: ',20);
-options.mcxlab_nphoton.Type = 'value';
-options.mcxlab_nphoton.Value={1,'million photons', 0};
-
-options.mcxlab_flag_autoOP.Comment = str_pad('Use default OpticalProperties',20);
-options.mcxlab_flag_autoOP.Type = 'checkbox';
-options.mcxlab_flag_autoOP.Value = 1;
-
-options.mcxlab_flag_thresh.Comment = str_pad('Set threshold for fluences (reduce file size)',20);
-options.mcxlab_flag_thresh.Type = 'checkbox';
-options.mcxlab_flag_thresh.Value = 0;
-
-options.mcxlab_thresh_value.Comment = str_pad('Threshold for fluences',20);
-options.mcxlab_thresh_value.Type = 'value';
-options.mcxlab_thresh_value.Value = {1,'1e-6(1/mm2/s)',0};
-
-options.mcxlab_overwrite_fluences.Comment = str_pad('Overwirte existing fluences',20);
-options.mcxlab_overwrite_fluences.Type = 'checkbox';
-options.mcxlab_overwrite_fluences.Value = 0;
-end
 
 function s = str_pad(s,padsize)
     if (length(s) < padsize)
@@ -242,23 +175,26 @@ end
 function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
 
 OutputFiles = {};
+options = sProcess.options.fluencesCond.Value;
 
 % Load anat mri
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
 % Load segmentation 
-iseg = strcmp(sProcess.options.segmentation.Value, {sSubject.Anatomy.Comment});
+segmentation_name = 'segmentation_5tissues';
+iseg = strcmp({sSubject.Anatomy.Comment}, segmentation_name);
 if ~any(iseg)
     bst_error(sprintf('ERROR: given segmentation "%s" not found for subject "%s"', ...
                       sProcess.options.segmentation.Value, sSubject.Name));
     return
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-if sProcess.options.segmentation_label.Value == 1
+if options.segmentation_label == 1
     seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-elseif sProcess.options.segmentation_label.Value == 2
+elseif options.segmentation_label == 2
     seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
 end    
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
@@ -270,7 +206,7 @@ head_normals = -head_normals;
 nb_vertex = length(valid_vertices);
 
 %load wavelength info 
-wavelengths_input = sProcess.options.wavelengths.Value;
+wavelengths_input = options.wavelengths;
 try
     scan_res = textscan(wavelengths_input, '%d,');
 catch
@@ -286,17 +222,21 @@ nb_wavelengths = length(wavelengths);
 %=========================================================================
 % GPU thread sadfsconfiguration
 
-flag_autoOpticalProperties = sProcess.options.mcxlab_flag_autoOP.Value;
-flag_thresh_fluences = sProcess.options.mcxlab_flag_thresh.Value;
-thresh_value = sProcess.options.mcxlab_thresh_value.Value{1}.*1e-6;
-flag_overwrite_fluences = sProcess.options.mcxlab_overwrite_fluences.Value;
+flag_autoOpticalProperties = options.mcxlab_flag_autoOP;
+flag_thresh_fluences = options.mcxlab_flag_thresh;
+flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
+if flag_overwrite_fluences
+    thresh_value = options.mcxlab_thresh_value.*1e-6;
+else
+    thresh_value = 0;
+end    
 
-cfg.gpuid = sProcess.options.mcxlab_gpuid.Value{1};
+cfg.gpuid = options.mcxlab_gpuid;
 cfg.autopilot = 1;
 cfg.respin = 1;
 % set seed to make the simulation repeatible
 cfg.seed=hex2dec('623F9A9E'); 
-cfg.nphoton=sProcess.options.mcxlab_nphoton.Value{1}.*1e6;
+cfg.nphoton=options.mcxlab_nphoton*1e6;
 cfg.vol=seg.Cube; % segmentation
 cfg.unitinmm=1;   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect=1; % reflection at exterior boundary
@@ -326,7 +266,7 @@ for ivertx = 1:nb_vertex
     for iwl=1:nb_wavelengths
         wl = wavelengths(iwl);
         fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
-        output_dir = sProcess.options.outputdir.Value{1};
+        output_dir = options.outputdir;
         if exist(fullfile(output_dir, fluence_fn), 'file') == 2 && flag_overwrite_fluences == 0
             fprintf('Fluence for head vertex %g exists in the target folder\n',valid_vertices(ivertx));
             bst_progress('inc', 1);
