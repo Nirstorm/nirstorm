@@ -117,7 +117,7 @@ else
 end
 
 
-condition_name = optionscondition_name;
+condition_name = options.condition_name;
 if isempty(condition_name)
     condition_name = 'planning_optimal_montage';
 end
@@ -126,7 +126,7 @@ end
 head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
 
 try
-    wavelengths = str2double(strsplit(optionswavelengths,','));
+    wavelengths = str2double(strsplit(options.wavelengths,','));
 catch
     bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
     return
@@ -141,15 +141,9 @@ end
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 cubeSize = size(sMri.Cube);
 
-options.nb_sources = optionsnb_sources ;
-options.nb_detectors = optionsnb_detectors;
-options.nAdjacentDet = optionsnAdjacentDet;
-options.sep_optode_min = optionssep_optode(1);
-options.sep_optode_max  = optionssep_optode(2);
-options.sep_SD_min = optionssepmin_SD;
-options.cubeSize = cubeSize;
-options.outputdir = optionsoutputdir;
-options.exist_weight = optionsexist_weight;
+options.sep_optode_min = options.sep_optode(1);
+options.sep_optode_max  = options.sep_optode(2);
+options.sep_SD_min = options.sepmin_SD;
 
 if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
@@ -188,10 +182,10 @@ if isempty(iseg)
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
 
-if  optionssegmentation_label == 1 % GM label = 4
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
-elseif  optionssegmentation_label == 2 % GM label = 2
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,sScoutsFinal(iroi).Vertices);
+if  options.segmentation_label == 1 % GM label = 4
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal.Vertices);
+elseif  options.segmentation_label == 2 % GM label = 2
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,sScoutsFinal.Vertices);
 end    
 
 voi(voronoi_mask) = 1;
@@ -217,7 +211,7 @@ else
     end
     weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,all_reference_voxels_index, options);
     if(nnz(weight_tables) == 0)
-        bst_error(sprintf('Weight table is null for VOI %s', sScoutsFinal.label));
+        bst_error(sprintf('Weight table is null for ROI: %s', sScoutsFinal.Label));
         return
     end
     options.weight_tables = weight_tables;
@@ -319,7 +313,7 @@ function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coo
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
                 %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
 
-                fluenceDet = full(fluence_volumes{idet}{iwl}(vois{ivoi}));
+                fluenceDet = full(fluence_volumes{idet}{iwl}(vois));
                 ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
                 if full(fluence_volumes{isrc}{iwl}(ref_det_pos))~=0
                     % sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
