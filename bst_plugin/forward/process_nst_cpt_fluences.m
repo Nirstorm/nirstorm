@@ -225,7 +225,7 @@ nb_wavelengths = length(wavelengths);
 flag_autoOpticalProperties = options.mcxlab_flag_autoOP;
 flag_thresh_fluences = options.mcxlab_flag_thresh;
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
-if flag_overwrite_fluences
+if flag_thresh_fluences
     thresh_value = options.mcxlab_thresh_value.*1e-6;
 else
     thresh_value = 0;
