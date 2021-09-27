@@ -369,7 +369,7 @@ function s = GetPanelContents() %#ok<DEFNU>
        return;
     end  
     if length(find(GPU)) > 1
-        s.mcxlab_gpuid = GPU; %If multipe GPU,gpuid is a vector containing 1 for the active GPU 
+        s.mcxlab_gpuid = char(strjoin(string(GPU),',')); %If multipe GPU,gpuid is a vector containing 1 for the active GPU (eg '1,1' for using the firsts two GPU's
     else
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
