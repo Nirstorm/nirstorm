@@ -225,7 +225,7 @@ nb_wavelengths = length(wavelengths);
 flag_autoOpticalProperties = options.mcxlab_flag_autoOP;
 flag_thresh_fluences = options.mcxlab_flag_thresh;
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
-if flag_overwrite_fluences
+if flag_thresh_fluences
     thresh_value = options.mcxlab_thresh_value.*1e-6;
 else
     thresh_value = 0;
@@ -238,7 +238,7 @@ cfg.respin = 1;
 cfg.seed=hex2dec('623F9A9E'); 
 cfg.nphoton=options.mcxlab_nphoton*1e6;
 cfg.vol=seg.Cube; % segmentation
-cfg.unitinmm=1;   % defines the length unit for a grid ( voxel) edge length [1.0]
+cfg.unitinmm= sMri.Voxsize(1);% defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect=1; % reflection at exterior boundary
 cfg.isrefint=1;   % 1-index mismatch at inner boundaries, [0]-matched index
 % time-domain simulation parameters
