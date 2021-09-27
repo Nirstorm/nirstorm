@@ -204,8 +204,11 @@ else
     [fluence_volumes,reference] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
         sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
         wavelengths, fluence_data_source, sparse_threshold,vois,cubeSize);
+    if isempty(fluence_volumes)
+        return;
+   end
     
-    weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,reference, options);
+    weight_tables = compute_weights(fluence_volumes,head_vertices_coords,reference, options);
     
     if(nnz(weight_tables) == 0)
         bst_error(sprintf('Weight table is null for ROI: %s', sScoutsFinal.Label));
@@ -304,7 +307,7 @@ db_add_data(iStudy, OutputFile{1} , sDataOut);
 
 end
 
-function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,reference, options)
+function weight_tables = compute_weights(fluence_volumes,head_vertices_coords,reference, options)
     holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
