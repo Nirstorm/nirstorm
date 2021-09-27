@@ -144,7 +144,7 @@ cubeSize = size(sMri.Cube);
 options.sep_optode_min = options.sep_optode(1);
 options.sep_optode_max  = options.sep_optode(2);
 options.sep_SD_min = options.sepmin_SD;
-
+options.cubeSize = cubeSize;
 if options.sep_optode_min > options.sep_SD_min
     bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
     return;
@@ -156,10 +156,6 @@ sScoutsFinal = ROI_cortex;
 sROI = extract_scout_surface(sCortex, sScoutsFinal);
 sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices');
     
-% Get VOI from cortical ROI -> interpolate
-tess2mri_interp = tess_tri_interp(sROI.Vertices, sROI.Faces, cubeSize);
-index_binary_mask = (sum(tess2mri_interp,2) >0);
-
 voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
 voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 
@@ -191,7 +187,8 @@ end
 voi(voronoi_mask) = 1;
 voi_flat = voi(:);
 vois = sparse(voi_flat > 0);
-if nnz(voi)==0
+
+if nnz(vois)==0
     bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
     return;
 end
@@ -210,6 +207,7 @@ else
         return;
     end
     weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,all_reference_voxels_index, options);
+
     if(nnz(weight_tables) == 0)
         bst_error(sprintf('Weight table is null for ROI: %s', sScoutsFinal.Label));
         return
@@ -279,7 +277,11 @@ end
 
 iStudy = db_add_condition(sSubject.Name, condition_name);
 sStudy = bst_get('Study', iStudy);
-db_set_channel(iStudy, ChannelMat, 1, 0);
+
+% Save channel definition
+[tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+db_set_channel(iChannelStudy, ChannelMat, 1, 0);
+    
 
 separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
 % Save time-series data
@@ -293,56 +295,73 @@ sDataOut.nAvg         = 1;
 sDataOut.DisplayUnits = 'cm';
 
 % Generate a new file name in the same folder
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
-sDataOut.FileName = file_short(OutputFile);
-bst_save(OutputFile, sDataOut, 'v7');
+OutputFile{1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
+sDataOut.FileName = OutputFile{1} ;
+bst_save(OutputFile{1} , sDataOut, 'v7');
 % Register in database
-db_add_data(iStudy, OutputFile, sDataOut);
+db_add_data(iStudy, OutputFile{1} , sDataOut);
+    
+
 end
 
 function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,all_reference_voxels_index, options)
     holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
-    weight_tables = sparse(nHolders, nHolders);
-    tic
+
+    mat_idx = zeros(2,nHolders);
+    mat_val = zeros(1,nHolders);
+    n_val = 1;
+    
+    bst_progress('start', 'Compute weights','Preparation of fluences...', 1, 2);
+
+        
+    fluences =  zeros(size(full(fluence_volumes{1}{iwl}(vois)),1),nHolders);
+    for isrc=1:nHolders
+          fluences(:,isrc) =  full(fluence_volumes{isrc}{iwl}(vois));
+    end
+    bst_progress('inc', 1);
+    ref_det_pos = zeros(1,nHolders);
+    for idet=1:nHolders
+        ref_det_pos(idet) = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+    end
+    bst_progress('inc', 1);
+
     bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
     for isrc=1:nHolders
-        fluenceSrc = full(fluence_volumes{isrc}{iwl}(vois));
+        fluenceSrc = fluences(:,isrc);
         for idet=1:isrc
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
                 %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
+                fluenceDet = fluences(:,idet);
 
-                fluenceDet = full(fluence_volumes{idet}{iwl}(vois));
-                ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-                if full(fluence_volumes{isrc}{iwl}(ref_det_pos))~=0
+                if full(fluence_volumes{isrc}{iwl}(ref_det_pos(idet)))~=0
                     % sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
                     % ED: fluenceSrc' * fluenceDet is slighty faster than sum ( fluenceSrc .* fluenceDet )
                     sensitivity = fluenceSrc' * fluenceDet; % ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
 
-                    weight_tables(isrc, idet) = sensitivity; 
-                    if isrc ~= idet
-                        weight_tables(idet, isrc) = sensitivity; % The matrix is symetrical before the normalization
-                    end    
+                        
+                    mat_idx(1,n_val) = isrc;mat_idx(2,n_val) = idet; mat_val(n_val) = sensitivity;
+                    mat_idx(2,n_val+1) = isrc;mat_idx(1,n_val+1) = idet; mat_val(n_val+1) = sensitivity;
+                    n_val = n_val +2;
                 end
             end    
         end
         bst_progress('inc', nHolders);
     end
+    weight_tables = sparse(mat_idx(1,1:n_val-1),mat_idx(2,1:n_val-1), mat_val(1:n_val-1),nHolders,nHolders); 
+   
     bst_progress('start', 'Compute weights','Normalizing the sensitivities of holder pairs...', 1,  nHolders^2);
     for isrc=1:nHolders
         for idet=1:nHolders
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
-                ref_det_pos = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
-                if full(fluence_volumes{isrc}{iwl}(ref_det_pos)) ~=0
-                    weight_tables(isrc, idet) = weight_tables(isrc, idet) / fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
+                if full(fluence_volumes{isrc}{iwl}(ref_det_pos(idet))) ~=0
+                    weight_tables(isrc, idet) = weight_tables(isrc, idet) / fluence_volumes{isrc}{iwl}(ref_det_pos(idet)); % Asymmetry
                 end
             end
         end
         bst_progress('inc', nHolders);
     end
-    toc
-
     bst_progress('stop');
 end
 
