@@ -238,7 +238,7 @@ cfg.respin = 1;
 cfg.seed=hex2dec('623F9A9E'); 
 cfg.nphoton=options.mcxlab_nphoton*1e6;
 cfg.vol=seg.Cube; % segmentation
-cfg.unitinmm=1;   % defines the length unit for a grid ( voxel) edge length [1.0]
+cfg.unitinmm= sMri.Voxsize(1);% defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect=1; % reflection at exterior boundary
 cfg.isrefint=1;   % 1-index mismatch at inner boundaries, [0]-matched index
 % time-domain simulation parameters
