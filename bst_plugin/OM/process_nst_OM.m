@@ -200,14 +200,13 @@ else
     % Compute weight table
     sparse_threshold = 1e-6;
     fluence_data_source = options.data_source;
-    [fluence_volumes,all_reference_voxels_index] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
-        sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
-        wavelengths, fluence_data_source, sparse_threshold);
-    if isempty(fluence_volumes)
-        return;
-    end
-    weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,all_reference_voxels_index, options);
 
+    [fluence_volumes,reference] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
+        sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
+        wavelengths, fluence_data_source, sparse_threshold,vois,cubeSize);
+    
+    weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,reference, options);
+    
     if(nnz(weight_tables) == 0)
         bst_error(sprintf('Weight table is null for ROI: %s', sScoutsFinal.Label));
         return
@@ -219,6 +218,7 @@ else
 end
 
 [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options);
+
 % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
 src_indexes = zeros(max(montage_pairs(:, 1)), 1);
 det_indexes = zeros(max(montage_pairs(:, 2)), 1);
@@ -304,7 +304,7 @@ db_add_data(iStudy, OutputFile{1} , sDataOut);
 
 end
 
-function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,all_reference_voxels_index, options)
+function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coords,reference, options)
     holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
@@ -316,59 +316,49 @@ function weight_tables = compute_weights(fluence_volumes,vois, head_vertices_coo
     bst_progress('start', 'Compute weights','Preparation of fluences...', 1, 2);
 
         
-    fluences =  zeros(size(full(fluence_volumes{1}{iwl}(vois)),1),nHolders);
+    fluences =  zeros(size(full(fluence_volumes{1}{iwl}),1),nHolders);
     for isrc=1:nHolders
-          fluences(:,isrc) =  full(fluence_volumes{isrc}{iwl}(vois));
+          fluences(:,isrc) =  full(fluence_volumes{isrc}{iwl});
     end
     bst_progress('inc', 1);
-    ref_det_pos = zeros(1,nHolders);
-    for idet=1:nHolders
-        ref_det_pos(idet) = sub2ind(options.cubeSize, all_reference_voxels_index{idet}{iwl}(1), all_reference_voxels_index{idet}{iwl}(2), all_reference_voxels_index{idet}{iwl}(3));
+    
+    ref = zeros(nHolders,nHolders);
+    for isrc=1:nHolders
+        for idet=1:nHolders
+            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
+                ref(isrc,idet) = full(reference{isrc}{iwl}(idet));
+            end
+        end    
     end
+    
     bst_progress('inc', 1);
 
     bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
     for isrc=1:nHolders
         fluenceSrc = fluences(:,isrc);
-        for idet=1:isrc
+        for idet=1:nHolders
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
                 %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
                 fluenceDet = fluences(:,idet);
 
-                if full(fluence_volumes{isrc}{iwl}(ref_det_pos(idet)))~=0
+                if ref(isrc,idet) ~=0 
                     % sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
                     % ED: fluenceSrc' * fluenceDet is slighty faster than sum ( fluenceSrc .* fluenceDet )
                     sensitivity = fluenceSrc' * fluenceDet; % ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
-
-                        
-                    mat_idx(1,n_val) = isrc;mat_idx(2,n_val) = idet; mat_val(n_val) = sensitivity;
-                    mat_idx(2,n_val+1) = isrc;mat_idx(1,n_val+1) = idet; mat_val(n_val+1) = sensitivity;
-                    n_val = n_val +2;
+                    
+                    mat_idx(1,n_val) = isrc;mat_idx(2,n_val) = idet; mat_val(n_val) = sensitivity / ref(isrc,idet);
+                    n_val = n_val +1;
                 end
             end    
         end
         bst_progress('inc', nHolders);
     end
     weight_tables = sparse(mat_idx(1,1:n_val-1),mat_idx(2,1:n_val-1), mat_val(1:n_val-1),nHolders,nHolders); 
-   
-    bst_progress('start', 'Compute weights','Normalizing the sensitivities of holder pairs...', 1,  nHolders^2);
-    for isrc=1:nHolders
-        for idet=1:nHolders
-            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
-                if full(fluence_volumes{isrc}{iwl}(ref_det_pos(idet))) ~=0
-                    weight_tables(isrc, idet) = weight_tables(isrc, idet) / fluence_volumes{isrc}{iwl}(ref_det_pos(idet)); % Asymmetry
-                end
-            end
-        end
-        bst_progress('inc', nHolders);
-    end
     bst_progress('stop');
 end
 
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options)
-
-
 
 if ~isfield(options, 'nb_sources')
     bst_error('Number of sources is required');
@@ -660,6 +650,7 @@ x=results.x;
 x=round(x);
 isources = find(x(1:nH)==1);
 idetectors = find(x(nH+1:2*nH)==1);
+
 
 for isrc=1:length(isources)
     for idet=1:length(idetectors)
