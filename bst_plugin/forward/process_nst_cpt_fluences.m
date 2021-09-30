@@ -177,6 +177,12 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
 OutputFiles = {};
 options = sProcess.options.fluencesCond.Value;
 
+
+[isInstalled, errMsg, PlugDesc] = bst_plugin('Install', options.software , 0);
+if ~isInstalled 
+    return;
+end
+    
 % Load anat mri
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
@@ -257,6 +263,11 @@ vertex_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1
 %det_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(det_hvidx,:)+1,head_normals(det_hvidx,:),options,'Display',0,'Text',0);
 %TODO: set thresh flag in BST for fluences
 
+if  strcmp(options.software,'mcxlab-cuda')
+    mcx_fun = @mcxlab;
+else
+    mcx_fun = @mcxlabcl;
+end
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), ...
              1, nb_vertex * nb_wavelengths);
@@ -277,7 +288,7 @@ for ivertx = 1:nb_vertex
             % running simulation
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
-            fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
+            fluenceRate = mcx_fun(cfg); % fluence rate [1/mm2 s]
             fluence.data=fluenceRate.data.*cfg.tstep;  clear fluenceRate
             if flag_thresh_fluences
                 fluence.data(fluence.data<thresh_value) = 0;

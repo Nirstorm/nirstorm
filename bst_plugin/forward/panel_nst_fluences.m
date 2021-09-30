@@ -73,6 +73,17 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         ctrl.CortexAtlasName = {AtlasCortex.Atlas.Name};
     end    
     
+    if  ~exist('mcxlab', 'file') &&  ~exist('mcxlabcl', 'file')
+        bst_error('Please load MXClab (Cuda or OpenCl)'); 
+       return;
+    elseif exist('mcxlab', 'file')
+        ctrl.software = 'mcxlab-cuda';
+        info=mcxlab('gpuinfo');
+    else
+        ctrl.software = 'mcxlab-cl';
+        info=mcxlabcl('gpuinfo');
+    end
+    
     % ==== FRAME STRUCTURE ====
     % Create main panel
     jPanelMain = gui_component('Panel');
@@ -170,7 +181,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     end    
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');
-    info=mcxlab('gpuinfo');
     
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
 
@@ -359,6 +369,7 @@ function s = GetPanelContents() %#ok<DEFNU>
     end  
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
 
+    s.software = ctrl.software;
     GPU = zeros(1, length(ctrl.jCheckGPU));
     for k = 1:length(ctrl.jCheckGPU)
         GPU(k) = ctrl.jCheckGPU(k).isSelected;
