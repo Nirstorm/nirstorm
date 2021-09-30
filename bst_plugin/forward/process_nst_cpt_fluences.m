@@ -27,7 +27,7 @@ end
 
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = '[WIP]Compute fluences';
+sProcess.Comment     = 'Compute fluences';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1405;
@@ -290,6 +290,12 @@ for ivertx = 1:nb_vertex
             
             fluenceRate = mcx_fun(cfg); % fluence rate [1/mm2 s]
             fluence.data=fluenceRate.data.*cfg.tstep;  clear fluenceRate
+            
+            if isempty(fluence.data)
+                  bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+                  return;
+            end    
+            
             if flag_thresh_fluences
                 fluence.data(fluence.data<thresh_value) = 0;
             end
