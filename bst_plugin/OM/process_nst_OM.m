@@ -74,9 +74,7 @@ end
 cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
 try
     cplx = Cplex();
-    cplex_version = nst_strsplit(cplx.getVersion(), '.');
-    if str2double(cplex_version(1)) < 12 || ...
-            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
+    if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
         return
     end
