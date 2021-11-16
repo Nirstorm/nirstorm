@@ -61,7 +61,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         end
     end
     
-    isOk = bst_plugin('Load','mcxlab');
+    %isOk = bst_plugin('Load','mcxlab');
     have_fluence_region = 0;
     have_fluence_exclude = 0;
     if OPTIONS.fromMontage 
