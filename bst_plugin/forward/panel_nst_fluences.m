@@ -61,9 +61,13 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         end
     end
     
+    %isOk = bst_plugin('Load','mcxlab');
+    have_fluence_region = 0;
+    have_fluence_exclude = 0;
     if OPTIONS.fromMontage 
         ctrl.ChannelFile = sFiles.ChannelFile;
         ctrl.SubjectName = OPTIONS.SubjectName;
+        
     else
         % Load head atlases
         AtlasHead = load(OPTIONS.HeadFile,  'Atlas', 'iAtlas');
@@ -71,6 +75,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         % Load cortex atlases
         AtlasCortex = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
         ctrl.CortexAtlasName = {AtlasCortex.Atlas.Name};
+        
+        % ;)
+        have_fluence_region     = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceRegion'));
+        have_fluence_exclude    = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceExclude'));
+
     end    
     
     % ==== FRAME STRUCTURE ====
@@ -130,7 +139,17 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jExtentTitle = gui_component('label', jPanelScouts, 'br', 'Extent of scalp projection:', [], [], [], []);
     jExtent = gui_component('text', jPanelScouts, 'hfill', '4', [], [], [], []);
     jExtentUnit = gui_component('label', jPanelScouts, 'hfill', ' cm', [], [], [], []);
-
+    
+    if have_fluence_region && have_fluence_exclude
+        gui_component('label', jPanelScouts, 'br', 'Fluence region and Fluence exclude region detected', [], [], [], []);
+    else
+        if have_fluence_region
+            gui_component('label', jPanelScouts, 'br', 'Fluence region detected', [], [], [], []);
+        elseif have_fluence_exclude
+            gui_component('label', jPanelScouts, 'br', 'Fluence exclude region detected', [], [], [], []);
+        end        
+    end
+    
     % Register handles
     ctrl.jCombo = jCombo;
     ctrl.jList  = jList ;
@@ -338,12 +357,16 @@ function s = GetPanelContents() %#ok<DEFNU>
     end
     if ctrl.jRadioLayerCortex.isSelected()
         s.surface = 'cortex';
-        s.ROI     = strtrim(char(ctrl.jList.getSelectedValue.getName()));
+        
+        tmp = ctrl.jList.getSelectedValuesList.toArray();
+        s.ROI  = strjoin(arrayfun(@(x) strtrim(char(x.getName())), tmp, 'UniformOutput', 0 ), ',');
         s.Atlas   = ctrl.CortexAtlasName(ctrl.jCombo.getSelectedIndex()+1);
         s.Extent  = str2double(ctrl.jExtent.getText);
     elseif ctrl.jRadioLayerHead.isSelected() 
         s.surface = 'head';
-        s.ROI     = strtrim(char(ctrl.jList.getSelectedValue.getName()));
+        
+        tmp = ctrl.jList.getSelectedValuesList.toArray();
+        s.ROI  = strjoin(arrayfun(@(x) strtrim(char(x.getName())), tmp, 'UniformOutput', 0 ), ',');      
         s.Atlas   = ctrl.HeadAtlasName(ctrl.jCombo.getSelectedIndex()+1);
     elseif ctrl.jRadioLayerMontage.isSelected()
         s.surface = 'montage';
@@ -369,7 +392,7 @@ function s = GetPanelContents() %#ok<DEFNU>
        return;
     end  
     if length(find(GPU)) > 1
-        s.mcxlab_gpuid = char(strjoin(string(GPU),',')); %If multipe GPU,gpuid is a vector containing 1 for the active GPU (eg '1,1' for using the firsts two GPU's
+        s.mcxlab_gpuid = GPU; %If multipe GPU,gpuid is a vector containing 1 for the active GPU 
     else
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
@@ -384,9 +407,6 @@ function s = GetPanelContents() %#ok<DEFNU>
      s.mcxlab_overwrite_fluences = ctrl.jOverwrite.isSelected;
      
      s.mcxlab_flag_autoOP = 1; %ToDo: allow user to change optical property; needs to find a good way
-     
-     
-    
 end
 
 
@@ -404,6 +424,9 @@ function AtlasSelection_Callback(AtlasList, jCombo, jList, ev)
     end
     % Get current scouts
     ScoutNames = AtlasList{iAtlasList,2};
+    if ~isempty(ScoutNames)
+        ScoutNames  =  ScoutNames( ~strcmp(ScoutNames, 'FluenceRegion') & ~strcmp(ScoutNames, 'FluenceExclude'));
+    end
     % Temporality disables JList selection callback
     jListCallback_bak = java_getcb(jList, 'ValueChangedCallback');
     java_setcb(jList, 'ValueChangedCallback', []);

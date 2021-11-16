@@ -1,3 +1,6 @@
+November 2021
+Fluence - Major update on fluence computation
+
 August 2021
 MNE - improve selection of parameters ( /!\ Might broke existing script)
 ---------------------------------------------------------------
