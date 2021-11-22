@@ -74,9 +74,7 @@ end
 cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
 try
     cplx = Cplex();
-    cplex_version = nst_strsplit(cplx.getVersion(), '.');
-    if str2double(cplex_version(1)) < 12 || ...
-            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
+    if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
         return
     end
@@ -111,8 +109,8 @@ if isempty(options.Atlas_head) && isempty(options.ROI_head)
 
     [head_vertex_ids, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout,cortex_to_scalp_extent.*0.01, 1); 
 else    
-    i_atlas_head = strcmp({sHead.Atlas.Name},optionsAtlas_head);
-    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, optionsROI_head);
+    i_atlas_head = strcmp({sHead.Atlas.Name},options.Atlas_head);
+    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
     head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
 end
 
@@ -160,7 +158,7 @@ voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 if ~exist(voronoi_fn, 'file')
     bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
                 'subjectname',        sSubject.Name, ...
-                'segmentation_label', optionssegmentation_label);
+                'segmentation_label', options.segmentation_label);
 end
     
     
@@ -192,22 +190,21 @@ if nnz(vois)==0
 end
 
 weight_table = [];
-weight_tables_files = containers.Map;
+
+weight_cache = struct();
+
 if exist(fullfile(options.outputdir , 'weight_tables.mat'))
-    weight_tables_files = load (fullfile(options.outputdir, 'weight_tables.mat'),'weight_tables');
-    if options.exist_weight && isKey(weight_tables_files,  ROI_cortex.Label)
-        tmp = weight_tables_files( ROI_cortex.Label);
-        
-        if tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == tmp.options.sep_optode_max   
-            weight_table = tmp.weight_tables;
-        else
-             
+    load (fullfile(options.outputdir, 'weight_tables.mat'));
+    if options.exist_weight && isfield(weight_cache,  ROI_cortex.Label)
+        tmp = weight_cache.(ROI_cortex.Label);    
+        if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == tmp.options.sep_optode_max   
+            weight_table = tmp.weight_table;
         end    
     end    
 end
 
 
-if isempty(options.weight_tables)
+if isempty(weight_table)
     % Compute weight table
     sparse_threshold = 1e-6;
     fluence_data_source = options.data_source;
@@ -225,12 +222,12 @@ if isempty(options.weight_tables)
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
-    
     if ~isempty(options.outputdir)
-        
-        tmp = struct('weight_table',weight_table,'options',options);
-        weight_tables_files(ROI_cortex.Label) = tmp;
-        save(fullfile(options.outputdir, 'weight_tables.mat'), weight_tables_files);
+        options_out = options;
+        options_out.head_vertex_ids = head_vertex_ids;
+        tmp = struct('weight_table',weight_table,'options',options_out);
+        weight_cache.(ROI_cortex.Label) = tmp;
+        save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
     end
 end
 
