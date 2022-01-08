@@ -69,6 +69,11 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 %isOk = bst_plugin('Load','mcxlab');
+[isOk,] = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
+if ~isOk 
+    bst_error(['Unable to load ' options.software ]);
+    return;
+end
 
 % Get scout vertices & load head mesh
 if strcmp(sProcess.options.fluencesCond.Value.surface,'montage')
@@ -189,12 +194,6 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
 OutputFiles = {};
 options = sProcess.options.fluencesCond.Value;
 
-
-[isInstalled, errMsg, PlugDesc] = bst_plugin('Install', options.software , 0);
-if ~isInstalled 
-    return;
-end
-    
 % Load anat mri
 sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 
@@ -203,7 +202,7 @@ segmentation_name = 'segmentation_5tissues';
 iseg = strcmp({sSubject.Anatomy.Comment}, segmentation_name);
 if ~any(iseg)
     bst_error(sprintf('ERROR: given segmentation "%s" not found for subject "%s"', ...
-                      sProcess.options.segmentation.Value, sSubject.Name));
+                      segmentation_name, sSubject.Name));
     return
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
@@ -216,9 +215,7 @@ end
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-% head_normals = computeVertNorm(head_vertices_mri,sHead.Faces); %Use iso2mesh
 head_normals = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
-% put normals inward
 head_normals = -head_normals;
 
 nb_vertex = length(valid_vertices);
@@ -275,11 +272,6 @@ vertex_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1
 %det_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(det_hvidx,:)+1,head_normals(det_hvidx,:),options,'Display',0,'Text',0);
 %TODO: set thresh flag in BST for fluences
 
-if  strcmp(options.software,'mcxlab-cuda')
-    mcx_fun = @mcxlab;
-else
-    mcx_fun = @mcxlabcl;
-end
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), ...
              1, nb_vertex * nb_wavelengths);
@@ -300,12 +292,16 @@ for ivertx = 1:nb_vertex
             % running simulation
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
-            fluenceRate = mcx_fun(cfg); % fluence rate [1/mm2 s]
+            if strcmp(options.software, 'mcxlab-cuda')
+                fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
+            else
+                fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
+            end
             fluence.data=fluenceRate.data.*cfg.tstep;  clear fluenceRate
             
             if isempty(fluence.data)
-                  bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
-                  return;
+                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+                return;
             end    
             
             if flag_thresh_fluences
@@ -326,8 +322,6 @@ bst_progress('stop', 1);
 disp('');
 disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2str(toc) ' seconds']);
 %save([output_dir,'/','montage_region.mat'],'newScout');
-
-
 
 end
 
