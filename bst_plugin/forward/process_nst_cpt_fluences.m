@@ -69,6 +69,11 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 %isOk = bst_plugin('Load','mcxlab');
+[isOk,] = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
+if ~isOk 
+    bst_error(['Unable to load ' options.software ]);
+    return;
+end
 
 % Get scout vertices & load head mesh
 if strcmp(sProcess.options.fluencesCond.Value.surface,'montage')
@@ -197,7 +202,7 @@ segmentation_name = 'segmentation_5tissues';
 iseg = strcmp({sSubject.Anatomy.Comment}, segmentation_name);
 if ~any(iseg)
     bst_error(sprintf('ERROR: given segmentation "%s" not found for subject "%s"', ...
-                      sProcess.options.segmentation.Value, sSubject.Name));
+                      segmentation_name, sSubject.Name));
     return
 end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
@@ -210,9 +215,7 @@ end
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-% head_normals = computeVertNorm(head_vertices_mri,sHead.Faces); %Use iso2mesh
 head_normals = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
-% put normals inward
 head_normals = -head_normals;
 
 nb_vertex = length(valid_vertices);
@@ -289,8 +292,18 @@ for ivertx = 1:nb_vertex
             % running simulation
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
-            fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
+            if strcmp(options.software, 'mcxlab-cuda')
+                fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
+            else
+                fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
+            end
             fluence.data=fluenceRate.data.*cfg.tstep;  clear fluenceRate
+            
+            if isempty(fluence.data)
+                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+                return;
+            end    
+            
             if flag_thresh_fluences
                 fluence.data(fluence.data<thresh_value) = 0;
             end
@@ -309,8 +322,6 @@ bst_progress('stop', 1);
 disp('');
 disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2str(toc) ' seconds']);
 %save([output_dir,'/','montage_region.mat'],'newScout');
-
-
 
 end
 

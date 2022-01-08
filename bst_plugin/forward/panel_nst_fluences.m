@@ -1,8 +1,8 @@
 function varargout = panel_nst_fluences(varargin)
 % panel_nst_fluences Edit ROI for fluences computation. 
-% USAGE:  bstPanel = panel_nst_OM('CreatePanel', OPTIONS)           : Call from the interactive interface
-%         bstPanel = panel_nst_OM('CreatePanel', sProcess, sFiles)  : Call from the process editor
-%                s = panel_nst_OM('GetPanelContents')
+% USAGE:  bstPanel = panel_nst_fluences('CreatePanel', OPTIONS)           : Call from the interactive interface
+%         bstPanel = panel_nst_fluences('CreatePanel', sProcess, sFiles)  : Call from the process editor
+%                s = panel_nst_fluences('GetPanelContents')
 
 % @=============================================================================
 % This function is part of the Brainstorm software:
@@ -61,7 +61,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         end
     end
     
-    %isOk = bst_plugin('Load','mcxlab');
     have_fluence_region = 0;
     have_fluence_exclude = 0;
     if OPTIONS.fromMontage 
@@ -81,6 +80,17 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         have_fluence_exclude    = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceExclude'));
 
     end    
+    
+    if  ~exist('mcxlab', 'file') &&  ~exist('mcxlabcl', 'file')
+        bst_error('Please load MXClab (Cuda or OpenCl)'); 
+       return;
+    elseif exist('mcxlab', 'file')
+        ctrl.software = 'mcxlab-cuda';
+        info=mcxlab('gpuinfo');
+    else
+        ctrl.software = 'mcxlab-cl';
+        info=mcxlabcl('gpuinfo');
+    end
     
     % ==== FRAME STRUCTURE ====
     % Create main panel
@@ -188,9 +198,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         jWavelengths.setEnabled(0);
     end    
     % === PANEL: Simulations options  ====
-    jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');
-    info=mcxlab('gpuinfo');
-    
+    jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');    
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
 
     jCheckGPU = javaArray('javax.swing.JCheckBox', length(info));
@@ -381,7 +389,7 @@ function s = GetPanelContents() %#ok<DEFNU>
         s.segmentation_label = 2;
     end  
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
-
+    s.software = ctrl.software;
     GPU = zeros(1, length(ctrl.jCheckGPU));
     for k = 1:length(ctrl.jCheckGPU)
         GPU(k) = ctrl.jCheckGPU(k).isSelected;
@@ -392,7 +400,7 @@ function s = GetPanelContents() %#ok<DEFNU>
        return;
     end  
     if length(find(GPU)) > 1
-        s.mcxlab_gpuid = GPU; %If multipe GPU,gpuid is a vector containing 1 for the active GPU 
+        s.mcxlab_gpuid = char(strjoin(string(GPU),''));  %If multipe GPU,gpuid is a vector containing 1 for the active GPU 
     else
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
