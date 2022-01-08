@@ -30,7 +30,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Compute fluences';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
-sProcess.Index       = 1405;
+sProcess.Index       = 1402;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import','data', 'raw'};
@@ -38,7 +38,7 @@ sProcess.InputTypes  = {'import','data', 'raw'};
 sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
-
+sProcess.isSeparator = 0;
 
 sProcess.options.subjectname.Comment = 'Subject name:';
 sProcess.options.subjectname.Type    = 'subjectname';
@@ -68,6 +68,7 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+%isOk = bst_plugin('Load','mcxlab');
 
 % Get scout vertices & load head mesh
 if strcmp(sProcess.options.fluencesCond.Value.surface,'montage')
@@ -88,20 +89,31 @@ sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
 
 if strcmp(sProcess.options.fluencesCond.Value.surface,'cortex')
     i_atlas = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
-    i_scout = strcmp({sCortex.Atlas(i_atlas).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI);
-    
     cortex_to_scalp_extent = sProcess.options.fluencesCond.Value.Extent;
-    cortex_scout.sSubject = sSubject;
-    cortex_scout.sScout   = sCortex.Atlas(i_atlas).Scouts(i_scout);
+
+    rois = strsplit(sProcess.options.fluencesCond.Value.ROI,',');
+    head_vertices = [];
     
-    [head_vertices, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout, ...
-                                                              cortex_to_scalp_extent.*0.01, 1);
-    
+    for i_roi = 1:length(rois)
+        i_scout = strcmp({sCortex.Atlas(i_atlas).Scouts.Label}, strtrim(rois(i_roi)));
+
+        cortex_scout            = struct();
+        cortex_scout.sSubject   = sSubject;
+        cortex_scout.sScout     = sCortex.Atlas(i_atlas).Scouts(i_scout);
+
+        head_vertices = union(head_vertices,  ...
+                        bst_getoutvar(1,@proj_cortex_scout_to_scalp,cortex_scout,cortex_to_scalp_extent.*0.01, 1));
+    end
 elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
     i_atlas = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
-    i_scout = strcmp({sHead.Atlas(i_atlas).Scouts.Label}, sProcess.options.fluencesCond.Value.ROI);
+      
+    rois = strsplit(sProcess.options.fluencesCond.Value.ROI,',');
+    head_vertices = [];
     
-    head_vertices = sHead.Atlas(i_atlas).Scouts(i_scout).Vertices;   
+    for i_roi = 1:length(rois)
+        i_scout = strcmp({sHead.Atlas(i_atlas).Scouts.Label},  strtrim(rois(i_roi)));
+        head_vertices = union(head_vertices, sHead.Atlas(i_atlas).Scouts(i_scout).Vertices);    
+    end    
 else
     
     ChannelFile = sProcess.options.fluencesCond.Value.ChannelFile;
@@ -244,7 +256,7 @@ cfg.respin = 1;
 cfg.seed=hex2dec('623F9A9E'); 
 cfg.nphoton=options.mcxlab_nphoton*1e6;
 cfg.vol=seg.Cube; % segmentation
-cfg.unitinmm= sMri.Voxsize(1);% defines the length unit for a grid ( voxel) edge length [1.0]
+cfg.unitinmm=1;   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect=1; % reflection at exterior boundary
 cfg.isrefint=1;   % 1-index mismatch at inner boundaries, [0]-matched index
 % time-domain simulation parameters

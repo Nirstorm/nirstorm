@@ -74,9 +74,7 @@ end
 cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
 try
     cplx = Cplex();
-    cplex_version = nst_strsplit(cplx.getVersion(), '.');
-    if str2double(cplex_version(1)) < 12 || ...
-            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
+    if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
         return
     end
@@ -111,8 +109,8 @@ if isempty(options.Atlas_head) && isempty(options.ROI_head)
 
     [head_vertex_ids, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout,cortex_to_scalp_extent.*0.01, 1); 
 else    
-    i_atlas_head = strcmp({sHead.Atlas.Name},optionsAtlas_head);
-    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, optionsROI_head);
+    i_atlas_head = strcmp({sHead.Atlas.Name},options.Atlas_head);
+    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
     head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
 end
 
@@ -151,9 +149,7 @@ if options.sep_optode_min > options.sep_SD_min
 end
 
 
-sScoutsFinal = ROI_cortex;
-
-sROI = extract_scout_surface(sCortex, sScoutsFinal);
+sROI = extract_scout_surface(sCortex, ROI_cortex);
 sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices');
     
 voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
@@ -162,7 +158,7 @@ voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 if ~exist(voronoi_fn, 'file')
     bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
                 'subjectname',        sSubject.Name, ...
-                'segmentation_label', optionssegmentation_label);
+                'segmentation_label', options.segmentation_label);
 end
     
     
@@ -179,9 +175,9 @@ end
 seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
 
 if  options.segmentation_label == 1 % GM label = 4
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,sScoutsFinal.Vertices);
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,ROI_cortex.Vertices);
 elseif  options.segmentation_label == 2 % GM label = 2
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,sScoutsFinal.Vertices);
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,ROI_cortex.Vertices);
 end    
 
 voi(voronoi_mask) = 1;
@@ -193,10 +189,22 @@ if nnz(vois)==0
     return;
 end
 
-if options.exist_weight && exist(fullfile(options.outputdir , 'weight_tables.mat'))
-    tmp=load (fullfile(options.outputdir, 'weight_tables.mat'),'weight_tables');
-    options.weight_tables = tmp.weight_tables;
-else
+weight_table = [];
+
+weight_cache = struct();
+
+if exist(fullfile(options.outputdir , 'weight_tables.mat'))
+    load (fullfile(options.outputdir, 'weight_tables.mat'));
+    if options.exist_weight && isfield(weight_cache,  ROI_cortex.Label)
+        tmp = weight_cache.(ROI_cortex.Label);    
+        if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == tmp.options.sep_optode_max   
+            weight_table = tmp.weight_table;
+        end    
+    end    
+end
+
+
+if isempty(weight_table)
     % Compute weight table
     sparse_threshold = 1e-6;
     fluence_data_source = options.data_source;
@@ -208,18 +216,22 @@ else
         return;
    end
     
-    weight_tables = compute_weights(fluence_volumes,head_vertices_coords,reference, options);
+    weight_table = compute_weights(fluence_volumes,head_vertices_coords,reference, options);
     
-    if(nnz(weight_tables) == 0)
-        bst_error(sprintf('Weight table is null for ROI: %s', sScoutsFinal.Label));
+    if(nnz(weight_table) == 0)
+        bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
-    options.weight_tables = weight_tables;
     if ~isempty(options.outputdir)
-        save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_tables');
+        options_out = options;
+        options_out.head_vertex_ids = head_vertex_ids;
+        tmp = struct('weight_table',weight_table,'options',options_out);
+        weight_cache.(ROI_cortex.Label) = tmp;
+        save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
     end
 end
 
+options.weight_tables = weight_table;
 [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options);
 
 % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
@@ -329,7 +341,7 @@ function weight_tables = compute_weights(fluence_volumes,head_vertices_coords,re
     for isrc=1:nHolders
         for idet=1:nHolders
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
-                ref(isrc,idet) = full(reference{isrc}{iwl}(idet));
+                ref(isrc,idet) = full(reference{isrc}{iwl}(idet));  
             end
         end    
     end
@@ -628,7 +640,7 @@ prob.options = [];
 bst_progress('inc', 1);
 bst_progress('stop');
 
-bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 2);
+bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 1000);
 
 cplex=Cplex(prob);
 cplex.Model.sense = 'maximize';
@@ -640,6 +652,7 @@ if flag_init
     cplex.MipStart(1).x=x0;
     cplex.MipStart(1).xindices=int32([1:numel(x0)]');
 end
+
 results = cplex.solve;
 bst_progress('inc', 2);
 bst_progress('stop');
