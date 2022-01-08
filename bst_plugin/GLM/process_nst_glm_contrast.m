@@ -84,7 +84,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     if( strcmp( sProcess.options.Contrast.Value(1),'[') && strcmp( sProcess.options.Contrast.Value(end),']') )
         % The constrast vector is in a SPM-format : 
         % sProcess.options.Contrast.Value = '[1,0,-1]'
-        C=strsplit( sProcess.options.Contrast.Value(2:end-1),',');
+        C=nst_strsplit( sProcess.options.Contrast.Value(2:end-1),',');
         C=str2num(cell2mat(C));
     else 
         C=[];

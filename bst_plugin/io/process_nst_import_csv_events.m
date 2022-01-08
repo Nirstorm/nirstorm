@@ -489,7 +489,7 @@ end
 
 if ~isempty(sfilters)
     filters = struct([]);
-    filter_toks = strsplit(sfilters, ',');
+    filter_toks = nst_strsplit(sfilters, ',');
     for ifilter=1:length(filter_toks)
         subtokens = regexp(filter_toks{ifilter}, '([^\s,=<>~]+)([~=><]+)([^\s,=<>~]+)', 'tokens');
         ftoks = subtokens{1};

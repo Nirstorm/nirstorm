@@ -106,7 +106,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     if isempty(sProcess.options.stim_events.Value)
          bst_error('No event selected');
     end
-    selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
+    selected_event_names = cellfun(@strtrim, nst_strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
 
     % Get option values   

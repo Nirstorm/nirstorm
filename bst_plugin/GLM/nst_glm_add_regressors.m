@@ -1,4 +1,4 @@
-function model = nst_glm_add_regressors(model,Regressor_type,varargin)
+function [model,code,message] = nst_glm_add_regressors(model,Regressor_type,varargin)
 % Call exemple 
 % model = add_regressors(Model, "event", Events, basis_choice, hrf_duration)
 % model = add_regressors(Model, "external_input", external_input)
@@ -7,10 +7,11 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
 % model = add_regressors(Model, "linear") Add a linear regressor
 % model = add_regressors(Model, "DCT", frequences, names)
 
+code = 1;
+message = '';
 
     switch Regressor_type
         case'event'
-            
             events=varargin{1};
             if nargin < 4 
                 hrf_types   = process_nst_glm_fit('get_hrf_types');
@@ -50,8 +51,13 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
             else 
                 types=varargin{4};
             end
+             if nargin < 7
+               baseline = [];
+            else 
+               baseline=varargin{5};
+            end
             
-            model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types); 
+            [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteria,params,types,baseline); 
             
         case 'constant'
             model=nst_glm_add_constant_regressors(model);
@@ -66,10 +72,12 @@ function model = nst_glm_add_regressors(model,Regressor_type,varargin)
 
 end
 
-function model=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
+function [model,code,message]=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
     % Todo, maybe make sure that event are at the egening of the design
     % matrix. Can be forced by changing model.X= [model.X X_event] to
     % model.X= [X_event model.X]; 
+    code = 1;
+    message = '';
     
     % reconstruct time course
     time=model.time;
@@ -77,7 +85,8 @@ function model=nst_glm_add_event_regressors(model,events,hrf_type, hrf_duration)
     hrf_time = 0:dt:hrf_duration; 
     
     if hrf_time(end) ~= hrf_duration
-        warning('HRF duration mismatch due to sampling: %f sec',hrf_duration-hrf_time(end));
+        message = sprintf('HRF duration mismatch due to sampling: %f sec',hrf_duration-hrf_time(end));
+        code = 1;
     end
     
     % Setup HRF
@@ -124,7 +133,7 @@ function model=nst_glm_add_constant_regressors(model)
 end
 
 function model=nst_glm_add_linear_regressors(model)
-    
+
     nTime=model.ntime;
     regressor=(0:nTime-1)./nTime(end);
     regressor=regressor-mean(regressor);
@@ -138,7 +147,10 @@ function model=nst_glm_add_linear_regressors(model)
 end
 
 
-function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
+function [model,code,message]=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
+    code = 1;
+    message = '';
+    
     if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
         
         DataMatExt = in_bst_data(sInput_ext.FileName);
@@ -172,7 +184,7 @@ function model=nst_glm_add_ext_input_regressors(model, sInput_ext,hb_types)
     end
 end
 
-function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
+function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteria,params,types,baseline)
 % Add regressor from data matrix based on the channel name or
 % Source-dectecor distance. 
 % Usage : 
@@ -180,7 +192,10 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'})
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'HbO'})
 % model=nst_glm_add_channel_regressors(model,sFile,'name',{'S1D17','S2D17'},{'WL860'})
-
+    
+    code = 1;
+    message = '';
+    
     % Load recordings
     if strcmp(sFile.FileType, 'data')     % Imported data structure
         sDataIn = in_bst_data(sFile.FileName);
@@ -191,43 +206,79 @@ function model=nst_glm_add_channel_regressors(model,sFile,criteria,params,types)
     ChannelMat = in_bst_channel(sFile.ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
     
+    % Get time window
+    if ~isempty(baseline)
+        iBaseline = panel_time('GetTimeIndices', sDataIn.Time, baseline);
+    else
+        iBaseline = 1:length(sDataIn.Time);
+    end
+
+    
     idx=zeros(1,length(nirs_ichans));
     for i_type=1:length(types)
        idx=idx | strcmp({ChannelMat.Channel(nirs_ichans).Group},types{i_type});        
     end    
     
     channels=ChannelMat.Channel(idx);
-    F=sDataIn.F(idx', :);
+    F=sDataIn.F(idx', iBaseline);
     separations = process_nst_separations('Compute',channels);
     switch criteria
         case 'distance'
             if isempty(separations)
-                warning(sprintf('Separations could not be computed for %s', sFile.FileName));
+                code = -1;
+                message = sprintf('Separations could not be computed for %s', sFile.FileName);
+                return;
             end
             idx_chann =   separations <= params & ~isnan(separations);
 
         case 'name'
             [~,idx_chann] = find(contains( {channels.Name},params));
     end
-    
+    idx_chann = find(idx_chann);
    if isempty(idx_chann)
-      bst_error('No supperficial channel found');
+      code = -1;
+      message ='No supperficial channel found';
       return;
    else
+       
        for i_chan = 1 :length(idx_chann)
-           disp(sprintf( 'Superficial channel: %s - %1.2f cm', channels(idx_chann(i_chan)).Name, 100*separations(idx_chann(i_chan))));
+           message = [message sprintf( '- Superficial channel: %s - %1.2f cm', channels(idx_chann(i_chan)).Name, 100*separations(idx_chann(i_chan)))];
        end      
    end    
             
-    y=mean(F(idx_chann, :),1)';
-    names={ sprintf('Short-Separation - %s',types{1})};
+     y=mean(F(idx_chann, :),1)';
+%     [y_PCA,score,latent,tsquared,explained,mu] = pca(F(idx_chann, :));
+%     n_pca  = 3;
+%     y = y_PCA(:,1:n_pca);
+%     figure; 
+%     subplot(2,2,1);hold on;
+%     title('All SS')
+%     plot(sDataIn.Time, F(idx_chann, :))
+%     xlim([sDataIn.Time(1) sDataIn.Time(end)])
+% 
+%     subplot(2,2,2);hold on;
+%     title('Mean SS')
+%     shadedErrorBar(sDataIn.Time, mean(F(idx_chann, :),1), std(F(idx_chann, :),[],1),'lineProps',{'b','markerfacecolor','b'})
+%     xlim([sDataIn.Time(1) sDataIn.Time(end)])
+%     
+%     subplot(2,2,4);hold on;
+%     title(sprintf('3 main PCA componnent (%.f%% explained)', sum(explained(1:n_pca))))
+%     plot(sDataIn.Time, [-0.02  0 0.02] + y_PCA(:,1:n_pca))
+%     xlim([sDataIn.Time(1) sDataIn.Time(end)])
+    
+    
+%    names{1}={ sprintf('Short-Separation - %s-1',types{1})};
+%      names{2}={ sprintf('Short-Separation - %s-2',types{1})};
+%      names{3}={ sprintf('Short-Separation - %s-3',types{1})};
+     
+    names{1}={ sprintf('Short-Separation - %s',types{1})};
     model.X        = [model.X y];
     model.reg_names= [model.reg_names names];
     % We apply low and high pass filter 
     model.accept_filter = [model.accept_filter 3*ones(1,length(names))];
 end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)
-        
+
     [cmat,band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences,0);
     
     % Add the regressor at the end of the design matrix

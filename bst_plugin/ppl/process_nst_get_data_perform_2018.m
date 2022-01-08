@@ -163,7 +163,7 @@ bst_progress('start', 'Check dependencies', 'Checking dependencies...', 1, 3);
 %% Check CPLEX
 try
     cplx = Cplex();
-    cplex_version = strsplit(cplx.getVersion(), '.');
+    cplex_version = nst_strsplit(cplx.getVersion(), '.');
     if str2double(cplex_version(1)) < 12 || ...
             (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);

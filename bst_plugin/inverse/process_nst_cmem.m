@@ -300,8 +300,12 @@ for iwl=1:nb_wavelengths
         ['cMEM sources - ' swl 'nm'], ...
         sInputs, sStudy, 'cMEM sources reconstruction', ...
         'OD', store_sparse_results);
-    OutputFiles{end+1} = ResultFile;
     
+    ResultsMat = load(ResultFile);
+    ResultsMat.MEMoptions = Results.MEMoptions;   
+    bst_save(file_fullpath(ResultFile), ResultsMat,'v6',1);
+    OutputFiles{end+1} = ResultFile;
+        
     %MNE results
 %     grid_amp = zeros(nb_nodes, nb_samples);
 %     grid_amp(valid_nodes,:) = Results.MEMoptions.automatic.minimum_norm;

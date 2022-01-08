@@ -99,7 +99,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Process inputs & do checks
     event_file  = sProcess.options.evtfile.Value{1};
-    raw_events_name= strsplit(sProcess.options.label_cols.Value, ','); 
+    raw_events_name= nst_strsplit(sProcess.options.label_cols.Value, ','); 
     
     
     if ~exist(event_file, 'file')
