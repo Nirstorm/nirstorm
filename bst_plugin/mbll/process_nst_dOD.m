@@ -210,12 +210,14 @@ end
 switch parameters.baseline_method
     case 'mean'
         od_ref = mean(nirs_sig(:, parameters.baseline_window), 2);
+        od_ref = repmat(od_ref, 1, nb_samples); 
     case 'median'
         od_ref = median(nirs_sig(:, parameters.baseline_window), 2);
+        od_ref = repmat(od_ref, 1, nb_samples); 
     case 'movmean'
         od_ref = movmean(nirs_sig(:, parameters.baseline_window),1000, 2);
 
 end
 
-delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, 1) );
+delta_od = -log10( nirs_sig ./ od_ref);
 end
