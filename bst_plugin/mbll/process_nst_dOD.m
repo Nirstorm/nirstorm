@@ -52,7 +52,7 @@ end
 
 options.option_baseline_method.Comment = 'Baseline method';
 options.option_baseline_method.Type    = 'combobox';
-options.option_baseline_method.Value   = {1, {'mean', 'median'}};    % {Default index, {list of entries}}
+options.option_baseline_method.Value   = {1, {'mean', 'median', 'movmean'}};    % {Default index, {list of entries}}
 
 % === Estimation time window
 options.timewindow.Comment = 'Baseline window:';
@@ -199,20 +199,23 @@ function delta_od = Compute(nirs_sig, parameters)
 
 nb_samples = size(nirs_sig, 2);
 
-if nargin < 2 || ~isfield(parameters, 'method')
-   parameters.method = 'mean'; 
+if nargin < 2 || ~isfield(parameters, 'baseline_method')
+   parameters.baseline_method = 'mean'; 
 end
 
 if nargin < 2 || ~isfield(parameters, 'baseline_window') || isempty(parameters.baseline_window)
     parameters.baseline_window = 1:nb_samples;
 end
 
-switch parameters.method
+switch parameters.baseline_method
     case 'mean'
         od_ref = mean(nirs_sig(:, parameters.baseline_window), 2);
     case 'median'
         od_ref = median(nirs_sig(:, parameters.baseline_window), 2);
+    case 'movmean'
+        od_ref = movmean(nirs_sig(:, parameters.baseline_window),1000, 2);
+
 end
 
-delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, nb_samples) );
+delta_od = -log10( nirs_sig ./ repmat(od_ref, 1, 1) );
 end

@@ -67,7 +67,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 % Get scout vertices & load head mesh
 atlas_name = sProcess.options.atlas.Value;
 surface_name = sProcess.options.surface_name.Value;
-scout_names = cellfun(@(s) strtrim(s), nst_strsplit(sProcess.options.scout_names.Value, ','), ...
+scout_names = cellfun(@(s) strtrim(s), strsplit(sProcess.options.scout_names.Value, ','), ...
                       'UniformOutput', false);
                   
 [sSubject, iSubject] = bst_get('Subject', sInputs(1).SubjectName);

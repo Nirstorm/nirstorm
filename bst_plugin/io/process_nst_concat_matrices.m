@@ -76,7 +76,7 @@ stacking_type_str = sProcess.options.stacking_type.Value{2}{stacking_type_int};
 varying_comment(cellfun(@isempty, varying_comment)) = {''};
 
 % if ~isempty(sProcess.options.prefixes.Value)
-%     prefixes = cellfun(@strtrim, nst_strsplit(sProcess.options.prefixes.Value, ','),...
+%     prefixes = cellfun(@strtrim, strsplit(sProcess.options.prefixes.Value, ','),...
 %         'UniformOutput', 0);
 %     
 %     if length(sInputs) ~= length(prefixes)
