@@ -118,7 +118,15 @@ elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
     for i_roi = 1:length(rois)
         i_scout = strcmp({sHead.Atlas(i_atlas).Scouts.Label},  strtrim(rois(i_roi)));
         head_vertices = union(head_vertices, sHead.Atlas(i_atlas).Scouts(i_scout).Vertices);    
-    end    
+    end  
+    
+    
+    % TODO: properly select atlas
+    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+    if ~isempty(exclude_scout)
+        head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
+    end
+
 else
     
     ChannelFile = sProcess.options.fluencesCond.Value.ChannelFile;
@@ -253,7 +261,7 @@ cfg.respin = 1;
 cfg.seed=hex2dec('623F9A9E'); 
 cfg.nphoton=options.mcxlab_nphoton*1e6;
 cfg.vol=seg.Cube; % segmentation
-cfg.unitinmm=1;   % defines the length unit for a grid ( voxel) edge length [1.0]
+cfg.unitinmm=seg.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect=1; % reflection at exterior boundary
 cfg.isrefint=1;   % 1-index mismatch at inner boundaries, [0]-matched index
 % time-domain simulation parameters
@@ -268,10 +276,27 @@ cfg.issrcfrom0=0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 options.proj.stepAlongNorm=1;
 options.meshes.skin.vertices=head_vertices_mri;
 options.meshes.skin.faces=sHead.Faces;
-vertex_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
-%det_pos=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(det_hvidx,:)+1,head_normals(det_hvidx,:),options,'Display',0,'Text',0);
-%TODO: set thresh flag in BST for fluences
 
+[vertex_pos,invalid_id]=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
+
+if ~isempty(invalid_id)
+    
+    bst_report('Warning', sProcess, [], 'Some vertices could not be project into the volume and were discarded (check scout Wrong vertex)');
+
+    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
+    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas.Scouts(scout_idx).Vertices = valid_vertices(invalid_id)';
+    sHead.Atlas.Scouts(scout_idx).Seed = sHead.Atlas.Scouts(scout_idx).Vertices(1);
+    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas.Scouts(scout_idx).Label = sprintf('Wrong vertex for ROI %s', options.ROI);
+
+    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+    db_save();
+    % remove vertices from fluence
+
+    valid_vertices = setdiff(valid_vertices,valid_vertices(invalid_id));
+end
+    
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), ...
              1, nb_vertex * nb_wavelengths);
@@ -348,7 +373,7 @@ if sum(s>0)>sum(s<0)
 end
 end
 
-function [pos] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
+function [pos, invalid_id] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
 
 %==========================================================================
 % parse optional parameters
@@ -380,11 +405,14 @@ end
 stepAlongNorm=opt.proj.stepAlongNorm;
 FV=opt.meshes.skin;
 
+invalid_id = [];
 %==========================================================================
 % display 
 %==========================================================================
 if flag_display
-    %FV=opt.meshes.skin;
+    %FV=opt.meshes.skin
+    
+
     hFig1=figure('name','before projection');
     hPatches = patch(FV,'Parent',gca);
     set(hPatches,...
@@ -425,6 +453,8 @@ idx = pos(:,3)>dim3; pos(idx,3)=dim3; clear idx
 %==========================================================================
 
 % find linear index in the volume matrix
+hFig1 = [];
+
 for iOpt=1:size(pos,1)
     if vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0 % 0 is for background in fuzzy vol
         fprintf('opt %g (%f %f %f) is located outside the domain\n',iOpt,pos(iOpt,:));
@@ -443,61 +473,70 @@ for iOpt=1:size(pos,1)
         % =================================================================
         % Controlling bad optodes
         % =================================================================
+        
         if  vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0
-            fprintf('opt %g (%f %f %f) cannot be fixed ; stopping\n');
-            hFig1=figure('name','bad optode');
-            subplot(1,1,1)
-            hPatches = patch(FV,'Parent',gca);
-            set(hPatches,...
-                'facecolor', [.5 .5 .5], ...
-                'EdgeColor', 'none',...
-                'FaceAlpha', 0.3);
-            axis equal;
-            mfip_setAxesOrientation(gca,'RAS')
-            hold on
-            plot3(pos_orig(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.b','MarkerSize',25)
-            plot3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.r','MarkerSize',25)
-            quiver3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),10*normals(iOpt,1),10*normals(iOpt,2),10*normals(iOpt,3))
-            
-          
-             x=1:dim1; y=1:dim2; z=1:dim3;
-             [a b c]=ndgrid(1:dim1,1:dim2,1:dim3);
-             volVoxCoord=[a(:) b(:) c(:)]; clear a b c
-             
-             viewMode='sagital';
-             switch viewMode
-                 case 'axial'
-             [mx,my] = meshgrid(x,y);
-             coeff(1)=0;
-             coeff(2)=0;
-             coeff(3)=1;
-             coeff(4)=-pos_orig(iOpt,3);
-             imData=squeeze(vol(:,:,pos_orig(iOpt,3)))';
-             mz = (coeff(1)*mx+ coeff(2)*my + coeff(4)) / -coeff(3);
-             mz=round(mz);  % the slice will be defined with the nearest voxel of mz
-              case 'sagital'
-             [my,mz] = meshgrid(y,z);
-             coeff(1)=1;
-             coeff(2)=0;
-             coeff(3)=0;
-             coeff(4)=-pos_orig(iOpt,1);
-             imData=squeeze(vol(pos_orig(iOpt,1),:,:))';
-             mx = (coeff(3)*mz+ coeff(2)*my + coeff(4)) / -coeff(1);
-             mx=round(mx);  % the slice will be defined with the nearest voxel of mz
-             case 'coronal'
-             [mx,mz] = meshgrid(x,z);
-             coeff(1)=0;
-             coeff(2)=1;
-             coeff(3)=0;
-             coeff(4)=-pos_orig(iOpt,2);
-             imData=squeeze(vol(:,:,pos_orig(iOpt,2)))';  
-             my = (coeff(3)*mz+ coeff(1)*mx + coeff(4)) / -coeff(2);
-             my=round(my);  % the slice will be defined with the nearest voxel of mz
-             end
-             hold on
-             hsp =surf(mx,my,mz,double(imData),'edgecolor','none');     
-             clear x y z
-            error('Stopped because the algorithm cannot project one optode')
+            fprintf('opt %g (%f %f %f) cannot be fixed ; stopping\n',iOpt,pos(iOpt,:));
+%             [hFig1, iFig, iDS] = bst_figures('GetFigure', hFig1);
+%             if isempty(hFig1)
+%                 hFig1=figure('name','bad optode');
+%                 
+%             subplot(1,1,1)
+%             hPatches = patch(FV,'Parent',gca);
+%             set(hPatches,...
+%                 'facecolor', [.5 .5 .5], ...
+%                 'EdgeColor', 'none',...
+%                 'FaceAlpha', 0.3);
+%             axis equal;
+%             mfip_setAxesOrientation(gca,'RAS')
+%             end
+%             hold on
+%             plot3(pos_orig(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.b','MarkerSize',25)
+%             plot3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.r','MarkerSize',25)
+%             quiver3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),10*normals(iOpt,1),10*normals(iOpt,2),10*normals(iOpt,3))
+%             
+%           
+%              x=1:dim1; y=1:dim2; z=1:dim3;
+%              [a b c]=ndgrid(1:dim1,1:dim2,1:dim3);
+%              volVoxCoord=[a(:) b(:) c(:)]; clear a b c
+%              
+%              viewMode='sagital';
+%              switch viewMode
+%                  case 'axial'
+%              [mx,my] = meshgrid(x,y);
+%              coeff(1)=0;
+%              coeff(2)=0;
+%              coeff(3)=1;
+%              coeff(4)=-pos_orig(iOpt,3);
+%              imData=squeeze(vol(:,:,pos_orig(iOpt,3)))';
+%              mz = (coeff(1)*mx+ coeff(2)*my + coeff(4)) / -coeff(3);
+%              mz=round(mz);  % the slice will be defined with the nearest voxel of mz
+%               case 'sagital'
+%              [my,mz] = meshgrid(y,z);
+%              coeff(1)=1;
+%              coeff(2)=0;
+%              coeff(3)=0;
+%              coeff(4)=-pos_orig(iOpt,1);
+%              imData=squeeze(vol(pos_orig(iOpt,1),:,:))';
+%              mx = (coeff(3)*mz+ coeff(2)*my + coeff(4)) / -coeff(1);
+%              mx=round(mx);  % the slice will be defined with the nearest voxel of mz
+%              case 'coronal'
+%              [mx,mz] = meshgrid(x,z);
+%              coeff(1)=0;
+%              coeff(2)=1;
+%              coeff(3)=0;
+%              coeff(4)=-pos_orig(iOpt,2);
+%              imData=squeeze(vol(:,:,pos_orig(iOpt,2)))';  
+%              my = (coeff(3)*mz+ coeff(1)*mx + coeff(4)) / -coeff(2);
+%              my=round(my);  % the slice will be defined with the nearest voxel of mz
+%              end
+%              hold on
+%              hsp =surf(mx,my,mz,double(imData),'edgecolor','none');     
+%              clear x y z
+             if nargout < 2 
+                error('Stopped because the algorithm cannot project one optode')
+             else
+                 invalid_id(end+1) = iOpt;
+             end    
         else
         fprintf('fixing position to (%f %f %f)\n\n',pos(iOpt,:));
         end
@@ -583,22 +622,22 @@ end
 function mfip_setAxesOrientation (hAxes, orientation)
 
 for iA=1:length(hAxes)
-switch orientation 
-        case 'RAS'
-    set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-    set(get(hAxes(iA),'YLabel'),'String','y:P-->A')
-    set(get(hAxes(iA),'ZLabel'),'String','z:I-->S') 
-    set(hAxes(iA),'Xdir','reverse')
-    set(hAxes(iA),'Ydir','reverse')
-    set(hAxes(iA),'Zdir','normal')
-        
-        case 'RPI'
-    set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-    set(get(hAxes(iA),'YLabel'),'String','y:A-->P')
-    set(get(hAxes(iA),'ZLabel'),'String','z:S-->I') 
-    set(hAxes(iA),'Xdir','reverse')
-    set(hAxes(iA),'Ydir','normal')
-    set(hAxes(iA),'Zdir','reverse')
+    switch orientation 
+            case 'RAS'
+        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
+        set(get(hAxes(iA),'YLabel'),'String','y:P-->A')
+        set(get(hAxes(iA),'ZLabel'),'String','z:I-->S') 
+        set(hAxes(iA),'Xdir','reverse')
+        set(hAxes(iA),'Ydir','reverse')
+        set(hAxes(iA),'Zdir','normal')
+
+            case 'RPI'
+        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
+        set(get(hAxes(iA),'YLabel'),'String','y:A-->P')
+        set(get(hAxes(iA),'ZLabel'),'String','z:S-->I') 
+        set(hAxes(iA),'Xdir','reverse')
+        set(hAxes(iA),'Ydir','normal')
+        set(hAxes(iA),'Zdir','reverse')
     end 
 
 end
