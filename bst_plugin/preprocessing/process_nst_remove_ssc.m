@@ -28,7 +28,7 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Remove superficial noise';
-sProcess.Category    = 'Custom';
+sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1308;
 sProcess.isSeparator = 0;
@@ -56,6 +56,11 @@ sProcess.options.separation_threshold_cm.Comment = str_pad('Separation threshold
 sProcess.options.separation_threshold_cm.Type    = 'value';
 sProcess.options.separation_threshold_cm.Value   = {1.5, 'cm', 2}; 
 sProcess.options.separation_threshold_cm.Class   = 'distance';
+
+% === Baseline time window
+sProcess.options.baseline.Comment = 'Baseline:';
+sProcess.options.baseline.Type    = 'baseline';
+sProcess.options.baseline.Value   = [];
 
 end
 
@@ -90,37 +95,89 @@ ChannelMat = in_bst_channel(sInput.ChannelFile);
 
 types=unique({ChannelMat.Channel(nirs_ichans).Group});
 
+% Get time window
+if isfield(sProcess.options, 'baseline') && isfield(sProcess.options.baseline, 'Value') && iscell(sProcess.options.baseline.Value) && ~isempty(sProcess.options.baseline.Value) && ~isempty(sProcess.options.baseline.Value{1})
+    Time = sProcess.options.baseline.Value{1};
+    iBaseline = panel_time('GetTimeIndices', sDataIn.Time, Time);
+else
+    Time = [];
+    iBaseline = 1:length(sDataIn.Time);
+end
+
+
 F= sDataIn.F;
+F_resudial= sDataIn.F;
+
 for itype = 1 :length(types)
-    
-    model= nst_glm_initialize_model(sDataIn.Time);
+    nirs_ichans = strcmp( {ChannelMat.Channel.Type},'NIRS') & strcmp( {ChannelMat.Channel.Group},types{itype});
+    model= nst_glm_initialize_model(sDataIn.Time(iBaseline));
     
     % Include short-seperation channel
     if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
 
         separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100; %convert to meter
-        model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype));
-
+        [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype), Time);
     elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
 
         if ~isempty(sProcess.options.SS_chan_name.Value)
             SS_name=strtrim(split(sProcess.options.SS_chan_name.Value,','));
-            model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype));
+            [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),Time);
         end    
     end 
-    model = nst_glm_add_regressors(model, 'constant');
     
-    nirs_ichans = strcmp( {ChannelMat.Channel.Type},'NIRS') & strcmp( {ChannelMat.Channel.Group},types{itype});
-    Y= sDataIn.F(nirs_ichans,:)';
+    if code < 0 
+        bst_report('Error',   sProcess, sInput, message)
+        Y= sDataIn.F(nirs_ichans,:)';
+        F(nirs_ichans,:) = Y';
+        continue;
+    else
+        bst_report('Info',    sProcess, sInput, message)
+    end    
+    
+    
+    model = nst_glm_add_regressors(model, "constant");
+        
+    Y_baseline= sDataIn.F(nirs_ichans,iBaseline)';
+    [B,proj_X] = nst_glm_fit_B(model,Y_baseline, 'SVD');
+    
+    if ~ isempty(Time) % if Time = [] -> Y_baseline = Y and there is no need to redefine the model
+        %remove from all the data
+        model= nst_glm_initialize_model(sDataIn.Time);
 
-    [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
-    Y= Y - model.X*B;
+        % Include short-seperation channel
+        if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
+
+            separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100; %convert to meter
+            model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype), []);
+
+        elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
+
+            if ~isempty(sProcess.options.SS_chan_name.Value)
+                SS_name=strtrim(split(sProcess.options.SS_chan_name.Value,','));
+                model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),[]);
+            end    
+        end 
+        model = nst_glm_add_regressors(model, "constant");
+    end
+    
+    Y= sDataIn.F(nirs_ichans,:)';
+    Y = Y - model.X*B;
     F(nirs_ichans,:) = Y';
+    F_resudial(nirs_ichans,:) = (model.X*B)';
 end    
+
+
 
 sDataOut                    = sDataIn;
 sDataOut.F                  = F;
-sDataOut.Comment            = [sInput.Comment '| SSC'];
+% Add time window to the comment
+strMethod = '| SSC (mean)';
+if isempty(Time)
+    Comment = [strMethod, ': [All file]'];
+else 
+    Comment = [strMethod, sprintf(': [%1.3fs,%1.3fs]', Time(1), Time(2))];
+end
+sDataOut.Comment            = [sInput.Comment Comment];
 sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
 
 % Generate a new file name in the same folder
@@ -131,5 +188,29 @@ bst_save(OutputFile, sDataOut, 'v7');
 % Register in database
 db_add_data(sInput.iStudy, OutputFile, sDataOut);
 OutputFiles_SSC{1} = OutputFile;
+
+
+
+sDataOut                    = sDataIn;
+sDataOut.F                  = F_resudial;
+% Add time window to the comment
+strMethod = '| SSC(residual)';
+if isempty(Time)
+    Comment = [strMethod, ': [All file]'];
+else 
+    Comment = [strMethod, sprintf(': [%1.3fs,%1.3fs]', Time(1), Time(2))];
+end
+sDataOut.Comment            = [sInput.Comment Comment];
+sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
+
+% % Generate a new file name in the same folder
+% sStudy = bst_get('Study', sInput.iStudy);
+% OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_lsc2');
+% sDataOut.FileName = file_short(OutputFile);
+% bst_save(OutputFile, sDataOut, 'v7');
+% % Register in database
+% db_add_data(sInput.iStudy, OutputFile, sDataOut);
+% OutputFiles_SSC{2} = OutputFile;
+
 
 end    

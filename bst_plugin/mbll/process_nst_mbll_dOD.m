@@ -122,7 +122,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Save time-series data
     sDataOut = db_template('data');
     sDataOut.F            = final_nirs'; % TOCHECK brainstorm expects MILLIMOL!!
-    sDataOut.Comment      = 'Hb [Topo]';
+    sDataOut.Comment      = sDataIn.Comment;
     sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
     sDataOut.Time         = sDataIn.Time;
     sDataOut.DataType     = 'recordings'; 

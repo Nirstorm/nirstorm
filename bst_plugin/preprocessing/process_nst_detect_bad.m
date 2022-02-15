@@ -18,7 +18,7 @@ function varargout = process_nst_detect_bad( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2020; Thomas Vincent, 2015-2019
+% Authors: Edouard Delaire, 2021; Thomas Vincent, 2015-2019
 
 
 eval(macro_method);
@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     %TOCHECK: how do we limit the input file types (only NIRS data)?
     sProcess.Comment     = 'Detect bad channels';
     sProcess.FileTag     = '';
-    sProcess.Category    = 'File';
+    sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
     sProcess.Index       = 1301; %0: not shown, >0: defines place in the list of processes
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Bad_channel_tagging';
@@ -123,71 +123,106 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
-        
-    % Load channel file
-    ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
+
+    % Compute bad channel for each Input file
+    % Assume that the same mobtage is used for each file
     
-    % Load recordings
-    if strcmp(sInputs.FileType, 'data')     % Imported data structure
-        sData = in_bst_data(sInputs(1).FileName);
-    elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
-        sData = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    bad_chan_names  = cell(1, length(sInputs));
+    bad_chan_msg = cell(1, length(sInputs));
+    nirs_flags = cell(1, length(sInputs));
+
+    all_bad_channels = {}; 
+    for i_input = 1:length(sInputs)
+        % Load channel file
+        ChanneMat = in_bst_channel(sInputs(i_input).ChannelFile);
+    
+        % Load recordings
+        if strcmp(sInputs(i_input).FileType, 'data')     % Imported data structure
+            sData = in_bst_data(sInputs(i_input).FileName);
+        elseif strcmp(sInputs(i_input).FileType, 'raw')  % Continuous data file       
+            sData = in_bst(sInputs(i_input).FileName, [], 1, 1, 'no');
+        end
+        
+        nirs_flag= strcmpi({ChanneMat.Channel.Type}, 'NIRS');
+        nirs_flags{i_input} = nirs_flag;
+        nb_channel=sum(nirs_flag);
+
+        [new_ChannelFlag, bad_chan,msg] = Compute(sData, ChanneMat,sProcess.options);
+        bad_chan_names{i_input} = bad_chan;
+        bad_chan_msg{i_input} = msg;
+        
+        all_bad_channels = union(all_bad_channels, bad_chan);
     end
-    nirs_flags= strcmpi({ChanneMat.Channel.Type}, 'NIRS');
-    nb_channel=sum(nirs_flags);
     
-    [new_ChannelFlag, bad_chan_names,msg] = Compute(sData, ChanneMat, ...
-                                                sProcess.options);
+    % Set the bad channel in all inputs
+    for i_input = 1:length(sInputs)
+        tree_set_channelflag({sInputs(i_input).FileName}, 'AddBad', all_bad_channels);
+    end
     
-    % Compute stats                                          
-    critera=zeros( size(msg,1), nb_channel);
-    text=cell(1,size(msg,1));
-    figure_list={};
-    figure_legend={};
-    for i = 1:size(msg,1)
-        critera(i,:)= msg{i,2}(nirs_flags);
-        text{i}=msg{i,1};
-        
-        if ~isempty(msg{i,3})
-            figure_list{end+1} = msg{i,3}{1};
-            figure_legend{end+1} = msg{i,3}{2};
-        end    
-    end    
     
-%     n_figure=length(figure_list);
-%     fnew=figure;
-%     for i=1:n_figure
-%         ax_copy = copyobj(figure_list{i},fnew);
-%         subplot(n_figure,1,i,ax_copy )
-%         legend(figure_legend{i}.String{:})
-%     end
-
-
-    confusion=computeConfusion(critera);
-    
-    %figure;
-    %plotConfMat(confusion,text);
-                                            
-    % Warning if too many channels are removed                                         
-    for i=1:size(msg,1)
-        if any(strfind(text{i},'SCI')) || any(strfind(text{i},'power'))
-            continue
-        end
-        
-        fraction= round(100* confusion(i,i)/nb_channel);
-        if fraction > 80  % send an error if more than 80% of the channels are marked bad
-            bst_report('Error',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
-        elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
-            bst_report('Warning',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
-        elseif confusion(i,i)> 0
-            bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', text{i},confusion(i,i)))
-        else 
-            bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
-        end
-    end    
+    % Compute stats  
+    % compute the channels that are bad in all runs
+    comon_bad_channel = all_bad_channels; 
+    for i_input = 1:length(sInputs)
+        % Only report NIRS channels
+        ChanneMat = in_bst_channel(sInputs(i_input).ChannelFile);
+        comon_bad_channel = intersect( comon_bad_channel, intersect( bad_chan_names{i_input}, {ChanneMat.Channel(nirs_flags{i_input}).Name} ));
+    end
+   
+   ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
+   all_bad_channels_nirs = intersect( all_bad_channels,  {ChanneMat.Channel(nirs_flags{1}).Name});
+   
+   fraction= round(100* length(all_bad_channels_nirs)/nb_channel);
+   if fraction > 80  % send an error if more than 80% of the channels are marked bad
+        bst_report('Error',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
+   elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
+        bst_report('Warning',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
+   elseif fraction > 0
+        bst_report('Info',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
+   else 
+        bst_report('Info',    sProcess, sInputs, sprintf('No bad channel removed from the files'))
+   end
+   
+   if fraction > 0
+         if length(sInputs) > 1 
+            bst_report('Info',    sProcess, sInputs, sprintf('Common bad channels: %s', strjoin(comon_bad_channel, ' ,')));
+         else
+            bst_report('Info',    sProcess, sInputs, sprintf('Bad channels: %s', strjoin(comon_bad_channel, ' ,')));       
+         end      
+   end
+   for i=1: length(sInputs) 
+       C = setdiff( intersect(bad_chan_names{i},{ChanneMat.Channel(nirs_flags{1}).Name}),comon_bad_channel); 
+       if ~isempty(C) > 0
+          bst_report('Info',    sProcess, sInputs(i), sprintf('Bad channels: %s', strjoin(C, ' ,')));
+       end
+   end     
+   
+%     critera=zeros( size(msg,1), nb_channel);
+%     text=cell(1,size(msg,1));
+%     for i = 1:size(msg,1)
+%         critera(i,:)= msg{i,2}(nirs_flags);
+%         text{i}=msg{i,1};
+%     end    
+%     confusion=computeConfusion(critera);
+%                                             
+%     % Warning if too many channels are removed                                         
+%     for i=1:size(msg,1)
+%         if any(strfind(text{i},'SCI')) || any(strfind(text{i},'power'))
+%             continue
+%         end
+%         fraction= round(100* confusion(i,i)/nb_channel);
+%         if fraction > 80  % send an error if more than 80% of the channels are marked bad
+%             bst_report('Error',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
+%         elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
+%             bst_report('Warning',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
+%         elseif confusion(i,i)> 0
+%             bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', text{i},confusion(i,i)))
+%         else 
+%             bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
+%         end
+%     end    
     bst_report('Open', 'current');                                      
     % Add bad channels
-    tree_set_channelflag({sInputs.FileName}, 'AddBad', bad_chan_names);
     OutputFiles = {sInputs.FileName};
 end
 
@@ -293,31 +328,41 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     end
     
     if options.option_coefficient_variation.Value
-        CV_threshold = options.coefficient_variation.Value{1};
+        CV_threshold = options.coefficient_variation.Value{1};                 
+        low_cutoff  = 1/200;
+        high_cutoff = 0.1;
+        order       = 2;
+        fs = 1 / diff(sData.Time(1:2));
+
+        [nirs_filtered, transient] = process_nst_iir_filter('Compute',nirs_signal(100:end,:), fs, 'bandpass', low_cutoff, ...
+                                  high_cutoff, order, 1);
         
-        CV = std(nirs_signal,1)./mean(nirs_signal,1).*100;
+        %CV2 = std(nirs_signal,1)./mean(nirs_signal,1).*100;
+        CV = std(nirs_filtered,1,'omitnan')./mean(nirs_filtered,1).*100;
+        
+        % To see the impact of adding the filter: (large drop of CV)
+        % figure; boxplot([CV,CV2],[ ones(1,size(nirs_signal,2)),2*ones(1,size(nirs_signal,2))])
         
         CV_channels = false(1,nb_chnnels);
         CV_channels(nirs_flags) = CV>CV_threshold ;
         
-        CV_fit = fitdist(CV','Normal');
         channel_flags(CV_channels) = -1;
         
         %create figure
-        fig1= figure('visible','off');
-        h1_axes=subplot(1,1,1);
-        h=histfit(CV',12,'normal');
-        h(1).Annotation.LegendInformation.IconDisplayStyle = 'off';
-        h(2).Annotation.LegendInformation.IconDisplayStyle = 'off';
-        
-        line(h1_axes,[CV_threshold, CV_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-        line(h1_axes,[icdf(CV_fit,0.99), icdf(CV_fit,0.99)], ylim(gca), 'LineWidth', 2, 'Color', 'g');
-        
-        leg=legend(h1_axes,{sprintf('Used threshold: %.1f (Prob of rejection %.3f%%)',CV_threshold,100*cdf(CV_fit,CV_threshold,'upper')), ...
-                              sprintf('Suggested threshold: %.3f',icdf(CV_fit,0.99))});
-                           
-        title(sprintf('CV rejection: %d channels',sum(CV_channels)))        
-        criteria(end+1,:)= {'high coeffience variation channels', CV_channels,{h1_axes,leg}};
+%         fig1= figure('visible','off');
+%         h1_axes=subplot(1,1,1);
+%         h=histfit(CV',12,'normal');
+%         h(1).Annotation.LegendInformation.IconDisplayStyle = 'off';
+%         h(2).Annotation.LegendInformation.IconDisplayStyle = 'off';
+% %         
+%         line(h1_axes,[CV_threshold, CV_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
+%         line(h1_axes,[icdf(CV_fit,0.99), icdf(CV_fit,0.99)], ylim(gca), 'LineWidth', 2, 'Color', 'g');
+%         
+%         leg=legend(h1_axes,{sprintf('Used threshold: %.1f (Prob of rejection %.3f%%)',CV_threshold,100*cdf(CV_fit,CV_threshold,'upper')), ...
+%                               sprintf('Suggested threshold: %.3f',icdf(CV_fit,0.99))});
+%                            
+%         title(sprintf('CV rejection: %d channels',sum(CV_channels)))        
+        criteria(end+1,:)= {'high coeffience variation channels', CV_channels,{}};
     end    
     
     if options.option_remove_saturating.Value

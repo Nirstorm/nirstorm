@@ -111,7 +111,13 @@ if isempty(options.Atlas_head) && isempty(options.ROI_head)
 else    
     i_atlas_head = strcmp({sHead.Atlas.Name},options.Atlas_head);
     i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
-    head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;   
+    head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;  
+    
+    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+    if ~isempty(exclude_scout)
+        head_vertex_ids = setdiff(head_vertex_ids, exclude_scout.Vertices);
+    end
+    
 end
 
 
@@ -204,6 +210,8 @@ if exist(fullfile(options.outputdir , 'weight_tables.mat'))
 end
 
 
+
+
 if isempty(weight_table)
     % Compute weight table
     sparse_threshold = 1e-6;
@@ -230,6 +238,23 @@ if isempty(weight_table)
         save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
     end
 end
+
+% weight_table_new = weight_table;
+% nrqr = 5;
+% spurious = median(weight_table(weight_table>0)) + nrqr* iqr(weight_table(weight_table>0));
+% weight_table_new(weight_table > spurious) = 0;
+%     
+% figure;
+% subplot(221)
+% imagesc(full(weight_table))
+% title('Before Removing supirous node')
+% subplot(222)
+% imagesc(full(weight_table_new))
+% title('After Removing supirous node')
+% subplot(223); hist(weight_table(weight_table < spurious)); subplot(224); hist(weight_table(weight_table > spurious));
+% title(sprintf('Threshold %.f (M interquartile %d)',spurious,nrqr))
+% 
+% weight_table = weight_table_new;
 
 options.weight_tables = weight_table;
 [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options);

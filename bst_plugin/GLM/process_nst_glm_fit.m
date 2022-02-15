@@ -679,8 +679,9 @@ end
 
 function hrf_types = get_hrf_types()
 hrf_types.CANONICAL = 1;
-hrf_types.GAMMA = 2;
-hrf_types.BOXCAR = 3;
+hrf_types.GAUSSIAN = 2;
+hrf_types.DECONV = 3;
+
 end
 
 function [X, names, hrf] = make_design_matrix(time, events, hrf_type, hrf_duration, include_trend)

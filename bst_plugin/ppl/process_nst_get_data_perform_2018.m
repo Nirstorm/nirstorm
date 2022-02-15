@@ -163,15 +163,13 @@ bst_progress('start', 'Check dependencies', 'Checking dependencies...', 1, 3);
 %% Check CPLEX
 try
     cplx = Cplex();
-    cplex_version = strsplit(cplx.getVersion(), '.');
-    if str2double(cplex_version(1)) < 12 || ...
-            (length(cplex_version) > 1 && str2double(cplex_version(1)) < 3)
+    if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
         return
     end
-    bst_report('Info', sProcess, sInputs, 'Cplex >= v12.3 found');
 catch
-    bst_report('Error', sProcess, sInputs, 'Cplex >= v12.3 not found.<BR>Required for optimal montage computation.');
+    bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    return
 end
 bst_progress('inc', 1);
 
