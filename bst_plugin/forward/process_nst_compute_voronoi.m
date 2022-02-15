@@ -37,15 +37,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 0;
     sProcess.isSeparator = 1;
+    
     % Option: Subject name
     sProcess.options.subjectname.Comment = 'Subject name:';
     sProcess.options.subjectname.Type    = 'subjectname';
     sProcess.options.subjectname.Value   = '';
-    
-    sProcess.options.segmentation_label.Type    = 'radio_line';
-    sProcess.options.segmentation_label.Comment = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-    sProcess.options.segmentation_label.Value   = 1;  
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -80,13 +76,12 @@ end
 % Get given data information
 voronoi_fn = get_voronoi_fn(sSubject);
 
-seg_label = 'segmentation_5tissues';
+seg_label ='segmentation_5tissues';% 'segmentation_5tissues';
 segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 if ~isempty(segmentation_id)               
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
-                      sSubject.Anatomy(segmentation_id).FileName, ...
-                      sProcess.options.segmentation_label.Value);
+                      sSubject.Anatomy(segmentation_id).FileName);
 else
     msg = ['MRI segmentation (' seg_label ') not found. ' ...
            'Interpolator cannot be constrained to grey matter, so expect PVE.'];
@@ -105,12 +100,8 @@ add_vol_data(voronoi, voronoi_fn, ...
 OutputFiles = {'import'};
 end
 
-function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file,segmentation_label)
+function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
 
-if nargin < 4
-    segmentation_label=1;
-end    
-    
 
 % Obtain the cortical surface
 sCortex = in_tess_bst(cortex_file);
@@ -176,24 +167,28 @@ distance='d8';
 vox_size = sMri.Voxsize ;
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning (~3min) ...', 1, 2);
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
-% vol_voro = binary_volume_dilated; %HACK
+
 if nargin > 2
     sSegmentation = in_mri_bst(segmentation_file);
-    if segmentation_label == 1
-        sSegmentation.Cube = nst_prepare_segmentation(sSegmentation.Cube,{1,2,3,4,5});
-    elseif segmentation_label == 2
-        sSegmentation.Cube = nst_prepare_segmentation(sSegmentation.Cube,{5,4,3,2,1});
-    end    
-    
-    if all(unique(sSegmentation.Cube)' == 0:5)
-        vol_voro(sSegmentation.Cube ~= 4) = -1;
-    elseif any(sSegmentation.Histogram.fncX == 204)
-        vol_voro(sSegmentation.Cube ~= 204) = -1;
-    else
-        bst_error('Unrecognized segmentation labels: should be from 0 to 5');
+
+    idx = [];
+    if any(contains({sSegmentation.Labels{:,2}}, 'Cortex'))
+        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Cortex'),1}});
+    elseif any(contains({sSegmentation.Labels{:,2}}, 'Gray'))
+        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Gray'),1}});
+    end
+
+    if isempty(idx)
+        bst_error('Unrecognized segmentation.');
         vol_voro = [];
         return;
+    end    
+
+    tmp = -1 * ones(size(vol_voro));
+    for i = 1:length(idx)               
+        tmp(sSegmentation.Cube == idx(i)) = vol_voro(sSegmentation.Cube == idx(i));
     end
+    vol_voro = tmp;
 end
 
 bst_progress('inc',1);
@@ -202,12 +197,18 @@ end
 
 
 function voronoi_fn = get_voronoi_fn(sSubject)
-[cortex_root, cortex_bfn, cortex_ext] = fileparts(sSubject.Surface(sSubject.iCortex).FileName);
-[anat_root, anat_bfn, anat_ext] = fileparts(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi' anat_ext];
-subjectSubDir = bst_fileparts(sSubject.FileName);
-ProtocolInfo = bst_get('ProtocolInfo');
-voronoi_fn =  bst_fullfile(ProtocolInfo.SUBJECTS, subjectSubDir, voronoi_bfn);
+    i_voronoi = find(strcmp( {sSubject.Anatomy.Comment}, sprintf('Voronoi interpolator for %s onto %s',sSubject.Anatomy(sSubject.iAnatomy).Comment, sSubject.Surface(sSubject.iCortex).Comment)));
+    
+    if any(i_voronoi)
+        voronoi_fn = file_fullpath(sSubject.Anatomy(i_voronoi(1)).FileName);
+    else
+        [cortex_root, cortex_bfn, cortex_ext] = fileparts(sSubject.Surface(sSubject.iCortex).FileName);
+        [anat_root, anat_bfn, anat_ext] = fileparts(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+        voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi' anat_ext];
+        subjectSubDir = bst_fileparts(sSubject.FileName);
+        ProtocolInfo = bst_get('ProtocolInfo');
+        voronoi_fn =  bst_fullfile(ProtocolInfo.SUBJECTS, subjectSubDir, voronoi_bfn);
+    end    
 end
 
 
