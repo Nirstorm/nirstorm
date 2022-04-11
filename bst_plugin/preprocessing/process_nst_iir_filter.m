@@ -18,7 +18,7 @@ function varargout = process_nst_iir_filter( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2016)
+% Authors: Thomas Vincent (2015-2016), Edouard Delaire (2022)
 
 eval(macro_method);
 end
@@ -229,19 +229,24 @@ end
 
 
 function [b,a] = ComputeFilter(fs, filter_type, low_cutoff,high_cutoff, order)
+    if bst_get('UseSigProcToolbox') 
+        butter_fcn = @butter;
+    else
+        butter_fcn = @oc_butter;
+    end
 
     switch filter_type
         % HP filtering
         case 'highpass'
-            [b,a]= butter(order,low_cutoff*2/fs, 'high');
+            [b,a]= butter_fcn(order,low_cutoff*2/fs, 'high');
         % LP filtering
         case 'lowpass'
-            [b,a]= butter(order,high_cutoff*2/fs, 'low');
+            [b,a]= butter_fcn(order,high_cutoff*2/fs, 'low');
         % BP filtering
         case 'bandpass'
-            [b,a]= butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
+            [b,a]= butter_fcn(order,[low_cutoff*2/fs high_cutoff*2/fs]);
         case 'bandstop'
-            [b,a]= butter(order,[low_cutoff*2/fs high_cutoff*2/fs], 'stop');
+            [b,a]= butter_fcn(order,[low_cutoff*2/fs high_cutoff*2/fs], 'stop');
     end
     %figure(1);
     %zplane(b,a)

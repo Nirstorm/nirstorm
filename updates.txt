@@ -1,3 +1,6 @@
+April 2022
+Filter - Remove dependency to signal processing toolbox
+---
 November 2021
 Fluence - Major update on fluence computation
 
