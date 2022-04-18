@@ -157,7 +157,7 @@ for itype = 1 :length(types)
                 model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),[]);
             end    
         end 
-        model = nst_glm_add_regressors(model, "constant");
+        model = nst_glm_add_regressors(model, 'constant');
     end
     
     Y= sDataIn.F(nirs_ichans,:)';
