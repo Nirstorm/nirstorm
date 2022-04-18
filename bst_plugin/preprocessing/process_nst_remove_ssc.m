@@ -135,7 +135,7 @@ for itype = 1 :length(types)
     end    
     
     
-    model = nst_glm_add_regressors(model, "constant");
+    model = nst_glm_add_regressors(model, 'constant');
         
     Y_baseline= sDataIn.F(nirs_ichans,iBaseline)';
     [B,proj_X] = nst_glm_fit_B(model,Y_baseline, 'SVD');
