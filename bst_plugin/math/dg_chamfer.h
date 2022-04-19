@@ -1,4 +1,6 @@
 #include "mex.h"
+#include <math.h>
+#include <string.h>
 
 /* 3D Point Structure */
 typedef struct {
@@ -203,4 +205,3 @@ void geodesic_voronoi(double *img,         /* domain image mask */
 
 void mexFunction(int nlhs, mxArray *plhs[],
 				 int nrhs, const mxArray *prhs[]);
-
