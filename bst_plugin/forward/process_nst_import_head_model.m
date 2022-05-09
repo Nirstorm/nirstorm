@@ -334,7 +334,6 @@ for ipair=1:nb_pairs
             out_mri_nii(sVol, out_fn, 'float32');
         end
 
-        sensitivity_vol = ones(size(voronoi_mask));
          sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
              [nb_nodes+1 1],@(x)sum(x)/numel(x)); % http://www.mathworks.com/help/matlab/ref/accumarray.html#bt40_mn-1 % TODO: maybe not divide by number of voxels in VORO cell
 %         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
