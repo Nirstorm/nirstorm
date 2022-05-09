@@ -46,12 +46,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.use_closest_wl.Comment = 'Use closest available wavelength';
     sProcess.options.use_closest_wl.Type    = 'checkbox';
     sProcess.options.use_closest_wl.Value   = 0;
-    
-%     %TODO: complete file selection window for segmentation 
-    sProcess.options.do_grey_mask.Comment = 'Grey matter masking';
-    sProcess.options.do_grey_mask.Type    = 'checkbox';
-    sProcess.options.do_grey_mask.Value   = 1;       
-    
+
     % Smoothing options
     % === DESCRIPTION   copied from process_ssmooth_surfstat
 %     sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
@@ -73,18 +68,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.normalize_fluence.Type    = 'checkbox';
     sProcess.options.normalize_fluence.Value   = 1;
 
-    
     sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
     sProcess.options.sensitivity_threshold_pct.Type    = 'value';
-    sProcess.options.sensitivity_threshold_pct.Value   = {0.5, '%', 2};
+    sProcess.options.sensitivity_threshold_pct.Value   = {0, '%', 2};
     
     sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
     sProcess.options.use_all_pairs.Type    = 'checkbox';
     sProcess.options.use_all_pairs.Value   = 0;
-    
-    sProcess.options.segmentation_label.Type    = 'radio_line';
-    sProcess.options.segmentation_label.Comment   = {'1:skin, 2:skull, 3:CSF, 4:GM, 5:WM', '5: skin,  4: skull, 3: CSF, 2: GM, 1: WM','Segmentation label: '};
-    sProcess.options.segmentation_label.Value   = 1;
 
     sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
     sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
@@ -116,15 +106,6 @@ end
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess) %#ok<DEFNU>
     Comment = sProcess.Comment;
-    %TODO: add this following smoothing comments
-    % Absolute values 
-%     if isfield(sProcess.options, 'source_abs') && sProcess.options.source_abs.Value
-%         strAbs = ',abs';
-%     else
-%         strAbs = '';
-%     end
-%     % Final comment
-%     Comment = sprintf('%s (%1.2f%s)', sProcess.Comment, sProcess.options.fwhm.Value{1}, strAbs);
 end
 
 
@@ -133,12 +114,12 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {};
 
-do_export_fluences = sProcess.options.do_export_fluence_vol.Value;
-do_grey_mask = sProcess.options.do_grey_mask.Value;
-use_closest_wl = sProcess.options.use_closest_wl.Value;
-use_all_pairs = sProcess.options.use_all_pairs.Value;
-sens_thresh_pct = sProcess.options.sensitivity_threshold_pct.Value{1};
-normalize_fluence = sProcess.options.normalize_fluence.Value;
+do_export_fluences  = sProcess.options.do_export_fluence_vol.Value;
+do_grey_mask        = sProcess.options.do_grey_mask.Value;
+use_closest_wl      = sProcess.options.use_closest_wl.Value;
+use_all_pairs       = sProcess.options.use_all_pairs.Value;
+sens_thresh_pct     = sProcess.options.sensitivity_threshold_pct.Value{1};
+normalize_fluence   = sProcess.options.normalize_fluence.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -165,13 +146,13 @@ sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
 % Retrieve optode coordinates
 % Load channel file
 
-montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
-pair_names = montage_info.pair_names;
-src_locs = montage_info.src_pos;
-src_ids = montage_info.src_ids;
-det_locs = montage_info.det_pos;
-det_ids = montage_info.det_ids;
-pair_sd_idx =  montage_info.pair_sd_indexes;
+montage_info    = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+pair_names      = montage_info.pair_names;
+src_locs        = montage_info.src_pos;
+src_ids         = montage_info.src_ids;
+det_locs        = montage_info.det_pos;
+det_ids         = montage_info.det_ids;
+pair_sd_idx     =  montage_info.pair_sd_indexes;
 
 nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
@@ -277,39 +258,29 @@ end
 bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
 % [vol_size_x, vol_size_y, vol_size_z] = size(src_fluences{1}{1}.fluence.data);
 % sensitivity = zeros(nb_pairs, nb_wavelengths, vol_size_x, vol_size_y, vol_size_z);
+
 cortex_data = load(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes = size(cortex_data.Vertices, 1);
-bad_nodes = zeros(nb_nodes, 1);
 sensitivity_surf = zeros(nb_pairs, nb_wavelengths, nb_nodes);
+
 voronoi = get_voronoi(sProcess, sInputs);
-if do_grey_mask
-    disp(['Voronoi cell masked in grey matter']);
-    segmentation_name = 'segmentation_5tissues';
-    % Load segmentation
-    iseg = 0;    
-    for ianat = 1:size(sSubject.Anatomy,2)
-        if ~isempty(strfind(sSubject.Anatomy(ianat).Comment, segmentation_name))
-            iseg = ianat;
-        end
-    end
-    if iseg == 0
-        bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
-    end
-    seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-    if sProcess.options.segmentation_label.Value == 1
-        seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-    elseif sProcess.options.segmentation_label.Value == 2
-        seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
-    end    
-    
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4);
-else
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
-end
+voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
+
 
 
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,[ src_ids(pair_sd_idx(:, 1))' , det_ids(pair_sd_idx(:, 2))'] );
+
+if length(src_ids) == 1
+    tmp  = [ src_ids(pair_sd_idx(:, 1))]; 
+else 
+    tmp  = [ src_ids(pair_sd_idx(:, 1))]'; 
+end    
+if length(det_ids) == 1
+    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))];
+else 
+    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))'];
+end    
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,tmp);
 
 
 for ipair=1:nb_pairs
@@ -373,6 +344,7 @@ for ipair=1:nb_pairs
             out_fn = fullfile(output_dir, out_bfn);
             out_mri_nii(sVol, out_fn, 'float32');
         end
+
          sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
              [nb_nodes+1 1],@(x)sum(x)/numel(x)); % http://www.mathworks.com/help/matlab/ref/accumarray.html#bt40_mn-1 % TODO: maybe not divide by number of voxels in VORO cell
 %         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
@@ -409,28 +381,26 @@ bst_progress('stop');
 %% Sensitivity thresholding
 if sens_thresh_pct > 0
 
-nz_sensitivity = sensitivity_surf(sensitivity_surf>0);
-min_sens =  min(nz_sensitivity);
-max_sens =  max(nz_sensitivity);
-sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
+    nz_sensitivity = sensitivity_surf(sensitivity_surf>0);
+    min_sens =  min(nz_sensitivity);
+    max_sens =  max(nz_sensitivity);
+    sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
 
-%  sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
-%  thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
-%  [N,D] = rat(thresh_sort_idx);
-% if isequal(D,1) % integer
-%     thresh_sort_idx = thresh_sort_idx+0.5;
-% else                           
-%     thresh_sort_idx = round(thresh_sort_idx);
-% end
-% [T,R] = strtok(num2str(thresh_sort_idx),'0.5');
-% if strcmp(R,'.5')
-%     sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
-% else
-%     sens_thresh = sensivitity_sorted(thresh_sort_idx);
-% end
-
-sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
-
+    %  sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
+    %  thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
+    %  [N,D] = rat(thresh_sort_idx);
+    % if isequal(D,1) % integer
+    %     thresh_sort_idx = thresh_sort_idx+0.5;
+    % else                           
+    %     thresh_sort_idx = round(thresh_sort_idx);
+    % end
+    % [T,R] = strtok(num2str(thresh_sort_idx),'0.5');
+    % if strcmp(R,'.5')
+    %     sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
+    % else
+    %     sens_thresh = sensivitity_sorted(thresh_sort_idx);
+    % end
+    sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
 end
 
 if sProcess.options.force_median_spread.Value
