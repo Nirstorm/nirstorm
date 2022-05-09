@@ -42,6 +42,10 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.subjectname.Comment = 'Subject name:';
     sProcess.options.subjectname.Type    = 'subjectname';
     sProcess.options.subjectname.Value   = '';
+
+    sProcess.options.do_grey_mask.Comment = 'Grey matter masking';
+    sProcess.options.do_grey_mask.Type    = 'checkbox';
+    sProcess.options.do_grey_mask.Value   = 1;      
 end
 
 %% ===== FORMAT COMMENT =====
@@ -78,11 +82,11 @@ voronoi_fn = get_voronoi_fn(sSubject);
 
 seg_label ='segmentation_5tissues';% 'segmentation_5tissues';
 segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
-if ~isempty(segmentation_id)               
+if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value              
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
-else
+elseif isempty(segmentation_id) && ~sProcess.options.do_grey_mask.Value 
     msg = ['MRI segmentation (' seg_label ') not found. ' ...
            'Interpolator cannot be constrained to grey matter, so expect PVE.'];
     disp(['BST Warning> ' msg]);
