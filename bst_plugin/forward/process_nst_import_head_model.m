@@ -269,7 +269,18 @@ voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
 
 
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,[ src_ids(pair_sd_idx(:, 1))' , det_ids(pair_sd_idx(:, 2))'] );
+
+if length(src_ids) == 1
+    tmp  = [ src_ids(pair_sd_idx(:, 1))]; 
+else 
+    tmp  = [ src_ids(pair_sd_idx(:, 1))]'; 
+end    
+if length(det_ids) == 1
+    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))];
+else 
+    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))'];
+end    
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,tmp);
 
 
 for ipair=1:nb_pairs
