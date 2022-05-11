@@ -220,6 +220,11 @@ elseif options.segmentation_label == 2
     seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
 end    
 
+if ~isequal(sMri.Voxsize,seg.Voxsize)
+    bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
+    return
+end
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
