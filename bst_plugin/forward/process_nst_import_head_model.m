@@ -115,7 +115,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 
 do_export_fluences  = sProcess.options.do_export_fluence_vol.Value;
-do_grey_mask        = sProcess.options.do_grey_mask.Value;
 use_closest_wl      = sProcess.options.use_closest_wl.Value;
 use_all_pairs       = sProcess.options.use_all_pairs.Value;
 sens_thresh_pct     = sProcess.options.sensitivity_threshold_pct.Value{1};
