@@ -59,7 +59,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.depth_weightingMEM.Comment = 'Depth weighting factor for <B>MEM</B>';
     sProcess.options.depth_weightingMEM.Type    = 'value';
     sProcess.options.depth_weightingMEM.Value   = {0.3, '', 1};
-    
+
+    sProcess.options.NoiseCov_recompute.Comment = 'Compute noise convariance for MNE';
+    sProcess.options.NoiseCov_recompute.Type    = 'checkbox';
+    sProcess.options.NoiseCov_recompute.Value   = 1;
+        
+
     %TODO: tell neighborhood order will be ignored after
     sProcess.options.auto_neighborhood_order.Comment = 'Set neighborhood order automatically (default)';
     sProcess.options.auto_neighborhood_order.Type    = 'checkbox';
@@ -165,6 +170,7 @@ OPTIONS.NoiseCov = [];
 OPTIONS.MEMpaneloptions.solver.NoiseCov_recompute = 1;
 OPTIONS.MEMpaneloptions.model.depth_weigth_MNE = sProcess.options.depth_weightingMNE.Value{1};
 OPTIONS.MEMpaneloptions.model.depth_weigth_MEM = sProcess.options.depth_weightingMEM.Value{1};
+OPTIONS.MEMpaneloptions.model.NoiseCov_recompute = sProcess.options.NoiseCov_recompute.Value;
 
 %% Old baseline definition code -> see how it can be defined from here and injected through new panel option
 % O.optional.TimeSegment                = [sDataIn.Time(1) sDataIn.Time(end)];
@@ -266,8 +272,8 @@ for iwl=1:nb_wavelengths
         ratiolH = length(lH)./(length(lH)+length(rH));
         ratiorH = length(rH)./(length(lH)+length(rH));
         Labels = ones(length(valid_nodes), 1); 
-        Labels(ismember(valid_nodes,lH)) = tess_cluster(cortex.VertConn(lH,lH), round(nClust.*ratiolH), isRandom);
-        Labels(ismember(valid_nodes,rH)) = tess_cluster(cortex.VertConn(rH,rH), round(nClust.*ratiorH), isRandom) + max(Labels(ismember(valid_nodes,lH)));
+        Labels(ismember(valid_nodes,lH)) = tess_cluster(cortex.VertConn(lH,lH), max(1,round(nClust.*ratiolH)), isRandom);
+        Labels(ismember(valid_nodes,rH)) = tess_cluster(cortex.VertConn(rH,rH), max(1,round(nClust.*ratiorH)), isRandom) + max(Labels(ismember(valid_nodes,lH)));
     end    
     uniqueLabels = unique(Labels);
     
@@ -297,8 +303,8 @@ for iwl=1:nb_wavelengths
     dOD_sources_cMEM(:, iwl, :) = grid_amp;
     
     [sStudy, ResultFile] = add_surf_data(grid_amp, sDataIn.Time, nirs_head_model, ...
-        ['wMEM sources - ' swl 'nm'], ...
-        sInputs, sStudy, 'cMEM sources reconstruction', ...
+        [OPTIONS.Comment     ' sources - ' swl 'nm'], ...
+        sInputs, sStudy, O_updated.Comment, ...
         'OD', store_sparse_results);
     
     ResultsMat = load(ResultFile);
@@ -343,15 +349,15 @@ hb_types = {'HbO', 'HbR'};
 for ihb=1:2
     [sStudy, ResultFile] = add_surf_data(squeeze(nirs_hbo_hbr(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, nirs_head_model, ...
-                                         ['wMEM sources - ' hb_types{ihb}], ...
-                                         sInputs, sStudy, 'wMEM sources reconstruction - dHb', ...
+                                         [OPTIONS.Comment  ' sources - ' hb_types{ihb}], ...
+                                         sInputs, sStudy, O_updated.Comment, ...
                                          hb_unit, store_sparse_results);    
     OutputFiles{end+1} = ResultFile;
 end
 
 [sStudy, ResultFile] = add_surf_data(nirs_hbt .* hb_unit_factor, sDataIn.Time, nirs_head_model, ...
-                                     'wMEM sources - HbT', ...
-                                     sInputs, sStudy, 'wMEM sources reconstruction - dHb', ...
+                                     [OPTIONS.Comment  ' sources - HbT'], ...
+                                     sInputs, sStudy, O_updated.Comment, ...
                                      hb_unit, store_sparse_results);
 OutputFiles{end+1} = ResultFile;
 pbar = bst_progress('stop', 'Reconstruction by cMEM', 'Finishing...');

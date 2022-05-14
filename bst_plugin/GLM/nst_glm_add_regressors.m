@@ -232,7 +232,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
             idx_chann =   separations <= params & ~isnan(separations);
 
         case 'name'
-            [~,idx_chann] = find(contains( {channels.Name},params));
+            idx_chann = contains( {channels.Name},params);
     end
     idx_chann = find(idx_chann);
    if isempty(idx_chann)
