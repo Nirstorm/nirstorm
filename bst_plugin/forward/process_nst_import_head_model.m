@@ -837,7 +837,8 @@ function voronoi = get_voronoi(sProcess, sInputs)
 voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 
 if ~exist(voronoi_fn, 'file')
-    process_nst_compute_voronoi('Run', sProcess, sInputs);%TODO: test this because compute voro expect subject name as input option
+    sProcess.options.do_grey_mask.Value   = 1; 
+    process_nst_compute_voronoi('Run', sProcess, sInputs);
 end
 voronoi_bst = in_mri_bst(voronoi_fn);
 voronoi = voronoi_bst.Cube;

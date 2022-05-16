@@ -227,7 +227,8 @@ end
 
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
+head_vertices_mri = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
+%head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
 head_normals = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
 head_normals = -head_normals;
 
