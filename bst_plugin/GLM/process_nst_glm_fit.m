@@ -70,12 +70,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.dct_cutoff.Comment = 'Detrend miminum Period (0= only linear detrend): ';
     sProcess.options.dct_cutoff.Type    = 'value';
     sProcess.options.dct_cutoff.Value   = {200, 's', 0};
-    
-    sProcess.options.trim_start.Comment = 'Ignore starting signal: ';
-    sProcess.options.trim_start.Type    = 'value';
-    sProcess.options.trim_start.Value   = {0, 'sec', 2};
-    sProcess.options.trim_start.Hidden   = 1; % Hide, as it is deprecated
-    
+        
     sProcess.options.label3.Comment = '<U><B>Design Matrix</B></U>:';
     sProcess.options.label3.Type    = 'label';
     
@@ -169,23 +164,17 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     save_betas = sProcess.options.extra_output.Value ||  sProcess.options.save_betas.Value;
     save_fit = sProcess.options.extra_output.Value || sProcess.options.save_fit.Value;
 
-    trim_start = sProcess.options.trim_start.Value{1};
-    if trim_start > 0
-       warning(['trim_start option is deprecated. ' ...
-                'Use process_extract_time beforehand instead.']); 
-    end
-    
     %% Select events
-    % TODO: utests with all events found, no event selected, no available
-    %       event in data, one event missing
     if isempty(sProcess.options.stim_events.Value)
          bst_error('No event selected');
+         return;
     end
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     
     %% Load data and events
     ChannelMat = in_bst_channel(sInput.ChannelFile);
+    data_types = {}; % Chromophore present in the data (eg HbO, HbR, or WL860)
     if isfield(DataMat, 'SurfaceFile')
         surface_data = 1;
         channel_data = in_bst_data(DataMat.DataFile);
@@ -194,7 +183,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         if isempty(DataMat.Events) && isfield(channel_data, 'Events')
             DataMat.Events = channel_data.Events;
         end
-        if isempty(DataMat.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
+        if ~isempty(channel_data.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
             Y = DataMat.ImageGridAmp';
             if issparse(Y)
                 Y = full(Y);
@@ -205,6 +194,14 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         else
             bst_error('Cannot get signals from surface data');
         end
+        
+        hb_types = {'hbo','hbr','hbt','wl'};
+        iChromohpore = find(cellfun(@(x)contains(lower(sInput.FileName),x),hb_types));
+        if iChromohpore < 3 
+            data_types = hb_types(iChromohpore);
+        else
+            data_types = regexp(lower(sInput.FileName),'wl([0-9]*)','match'); %note: there is probably an easier way but it works :)
+        end
     else
         surface_data = 0;
         % Get signals of NIRS channels only:
@@ -212,8 +209,11 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         Y = DataMat.F(nirs_ichans,:)';
         mask=[];
         n_voxel=size(Y,2);
+        data_types = unique({ChannelMat.Channel.Group});
+
     end
     
+    % TODO: Check for dOD
     Y=nst_misc_convert_to_mumol(Y,DataMat.DisplayUnits);
     DataMat.DisplayUnits = 'mumol.l-1';
     
@@ -241,83 +241,91 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     
     
     %% Create model
-    hrf_duration = 32; % sec -- TODO: expose as process parameter?
-    % Initialize model 
-    model=nst_glm_initialize_model(DataMat.Time);
     
-    % Add event-related regressors
-    model=nst_glm_add_regressors(model,'event', DataMat.Events(ievents), basis_choice,hrf_duration);
-    model=nst_glm_add_regressors(model,'constant');
+    %Init GLM results struct
 
-    if  sProcess.options.lfO.Value>=2
-        model=nst_glm_add_regressors(model,'linear');
-    end
-    
-    if  sProcess.options.lfO.Value>=3
-        lfo_cutoff=sProcess.options.lfo_cutoff.Value{1};
-        model=nst_glm_add_regressors(model,'DCT',[1/model.time(end) 1/lfo_cutoff],{'LFO'});  
-    end
-    
-    % Comment this section as DCT is adding too many regressor ( >1500 when
-    % using the defaults bands [.2 .6; .8 .15]
-    %if sProcess.options.use_DCT.Value 
-    %    bands_name=sProcess.options.freqbands.Value(:,1)';
-    %    freq_bands=process_tf_bands('GetBounds',sProcess.options.freqbands.Value);
-    %    model=nst_glm_add_regressors(model,"DCT",freq_bands,bands_name);  
-    %end
-    
-    
-    % Include short-seperation channel
-    if sProcess.options.SS_chan.Value==2 % based on distance
-        separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
-        model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,{'HbO'});
-        model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,{'HbR'});
+    results = []; 
 
-    elseif sProcess.options.SS_chan.Value==3 % based on name  
-        if ~isempty(sProcess.options.SS_chan_name.Value)
-            SS_name=split(sProcess.options.SS_chan_name.Value,',');
-            model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',{'HbO'});
-            model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',{'HbR'});
-        end    
-    end   
+
+
+    for data_type = data_types
+        bst_progress('text', sprintf('Fitting the model for %s',data_type{1})); 
+
+        % Initialize model 
+        model=nst_glm_initialize_model(DataMat.Time);
+        
+        % Add event-related regressors
+        hrf_duration = 32;
+        model=nst_glm_add_regressors(model,'event', DataMat.Events(ievents), basis_choice,hrf_duration);
+        model=nst_glm_add_regressors(model,'constant');
     
-    % Add Regressor from file2
-    if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
-                
-        hb_types = {'HbO', 'HbR', 'HbT'};
-        hb_type = [];
-        for ihb=1:length(hb_types)
-            if ~isempty(strfind(lower(sInput.FileName), lower(hb_types{ihb})))
-                hb_type = hb_types{ihb};
-                break;
-            end
+        if  sProcess.options.lfO.Value>=2
+            model=nst_glm_add_regressors(model,'linear');
         end
-        model=nst_glm_add_regressors(model,'external_input',hb_type);
+        
+        if  sProcess.options.lfO.Value>=3
+            lfo_cutoff=sProcess.options.lfo_cutoff.Value{1};
+            model=nst_glm_add_regressors(model,'DCT',[1/model.time(end) 1/lfo_cutoff],{'LFO'});  
+        end
+        
+        % Comment this section as DCT is adding too many regressor ( >1500 when
+        % using the defaults bands [.2 .6; .8 .15]
+        %if sProcess.options.use_DCT.Value 
+        %    bands_name=sProcess.options.freqbands.Value(:,1)';
+        %    freq_bands=process_tf_bands('GetBounds',sProcess.options.freqbands.Value);
+        %    model=nst_glm_add_regressors(model,"DCT",freq_bands,bands_name);  
+        %end
+        
+        
+        % Include short-seperation channel
+        if sProcess.options.SS_chan.Value==2 % based on distance
+            separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
+            model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,data_type);
+    
+        elseif sProcess.options.SS_chan.Value==3 % based on name  
+            if ~isempty(sProcess.options.SS_chan_name.Value)
+                SS_name=split(sProcess.options.SS_chan_name.Value,',');
+                model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',data_type);
+            end    
+        end   
+        
+        % Add Regressor from file2
+        if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
+            model=nst_glm_add_regressors(model,'external_input',data_type);
+        end
+        
+        % Display Model
+        nst_glm_display_model(model,'timecourse');
+        
+        nb_regressors = size(model.X, 2);
+
+        if isempty(results)
+            results = struct('B',zeros(nb_regressors,n_voxel), ...
+                             'covB', zeros(nb_regressors,nb_regressors,n_voxel), ...
+                             'dfe' , zeros(1,n_voxel) , ...
+                             'residuals', zeros( size(model.X,1),n_voxel), ...
+                             'mse_residuals', zeros(1,n_voxel) );
+        end
+        if ~surface_data
+            mask = strcmp({ChannelMat.Channel.Group},data_type);
+            Y_trim = Y(:, mask);
+        else
+            Y_trim = Y;
+        end
+    
+        %% Solve Y = XB + e 
+        if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
+            method_name = 'OLS_precoloring';
+        else
+            method_name = 'OLS_prewhitening';
+        end
+        
+        fitted_model= nst_glm_fit(model, Y_trim, filter_type, filter_param, method_name);
+        results = nst_misc_unpack_glm_result(results, fitted_model,method_name,mask);
     end
-    
-    % Display Model
-    nst_glm_display_model(model,'timecourse');
-    
-    nb_regressors = size(model.X, 2);
+
+
     iStudy = sInput.iStudy;
-
-    dt = diff(DataMat.Time(1:2));
-    trim_start_sample = round(trim_start / dt);
-    Y_trim = Y((trim_start_sample+1):end, :);
-    model.X = model.X((trim_start_sample+1):end, :);
-
-    %% Solve Y = XB + e 
-    if sProcess.options.statistical_processing.Value == 1 % Pre-coloring
-        method_name = 'OLS_precoloring';
-    else
-        method_name = 'OLS_prewhitening';
-    end
-    
-    fitted_model= nst_glm_fit(model, Y_trim, filter_type, filter_param, method_name);
-    [B,covB,dfe,residuals,mse_residuals] = nst_misc_unpack_glm_result(fitted_model,method_name,surface_data,nb_regressors,n_voxel,mask);
-    
-
-    
     %% Save results
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Main output is beta maps stacked in temporal axis
@@ -329,20 +337,20 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     extra_output.X = model.X; % nb_samples x nb_regressors
     extra_output.X_time = DataMat.Time;
     extra_output.reg_names = model.reg_names;
-    extra_output.beta_cov = covB; % nb_regressors x nb_regressors x nb_positions
-    extra_output.edf = dfe;
-    extra_output.mse_residuals = mse_residuals;
+    extra_output.beta_cov = results.covB; % nb_regressors x nb_regressors x nb_positions
+    extra_output.edf = results.dfe;
+    extra_output.mse_residuals = results.mse_residuals;
     extra_output.DisplayUnits = DataMat.DisplayUnits; %TODO: check scaling
     
     output_comment = [output_prefix 'fitted model'];
     
     if surface_data
-        [sStudy, ResultFile] = nst_bst_add_surf_data(B', 1:nb_regressors, [], 'surf_glm_res', output_comment, ...
+        [sStudy, ResultFile] = nst_bst_add_surf_data(results.B', 1:nb_regressors, [], 'surf_glm_res', output_comment, ...
                                                      [], sStudy, 'GLM', DataMat.SurfaceFile, 0, extra_output);
         OutputFiles{end+1} = ResultFile;
     else
         sDataOut = db_template('data');
-        sDataOut.F            = B';
+        sDataOut.F            = results.B';
         sDataOut.Comment      = output_comment;
         sDataOut.ChannelFlag  = DataMat.ChannelFlag;
         sDataOut.Time         = 1:nb_regressors;
@@ -373,10 +381,10 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
             output_comment = [output_prefix '- beta ' model.reg_names{i_reg_name}];
 
             if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(results.B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
             else
-                data_out(nirs_ichans,:) = B(i_reg_name,:);
+                data_out(nirs_ichans,:) = results.B(i_reg_name,:);
                 sDataOut = db_template('data');
                 sDataOut.F            = data_out;
                 sDataOut.Comment      = output_tag;
@@ -401,16 +409,16 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         output_tag = sprintf('ir%d_glm_res', sInput.iItem);
         output_comment = [output_prefix '- residuals'];
         if surface_data
-                [sStudy, ResultFile] = nst_bst_add_surf_data(residuals', DataMat.Time((trim_start_sample+1):end), [], output_tag, output_comment, ...
+                [sStudy, ResultFile] = nst_bst_add_surf_data(results.residuals', DataMat.Time, [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
                 OutputFiles{end+1} = ResultFile;
         else
             
             Out_DataMat = db_template('data');
-            Out_DataMat.F           =  residuals';
+            Out_DataMat.F           =  results.residuals';
             Out_DataMat.Comment     = output_comment;
             Out_DataMat.DataType     = 'recordings';
-            Out_DataMat.Time        =  DataMat.Time((trim_start_sample+1):end);
+            Out_DataMat.Time        =  DataMat.Time;
             Out_DataMat.Events      =  DataMat.Events;
             Out_DataMat.ChannelFlag =  DataMat.ChannelFlag;% List of good/bad channels (1=good, -1=bad)
             Out_DataMat.DisplayUnits = DataMat.DisplayUnits;
@@ -428,7 +436,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     end
     
     if save_fit
-        fit = model.X*B;
+        fit = model.X*results.B;
         output_tag = sprintf('ir%d_glm_fit', sInput.iItem);
         output_comment = [output_prefix '- signal fit'];
         if surface_data
@@ -458,205 +466,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     end
 end
 
-function [B,proj_X] = compute_B_svd(y,X)
-    warning('Deprecated process');
-    
-    [X_u, X_s, X_v] = svd(X,0);
-    X_diag_s = diag(X_s);
-    X_rank_tol =  max(size(X)) * max(abs(X_diag_s)) * eps;
-    X_rank =  sum(X_diag_s > X_rank_tol);
-
-    % Compute projector based on X to solve Y = X*B
-    proj_X = X_v(:,1:X_rank) * diag(1./X_diag_s(1:X_rank)) * X_u(:,1:X_rank)';
-    
-    % Fit to data
-    B = proj_X * y; 
-
-end
-function [B, covB, dfe, residuals, mse_residuals] = ols_fit(y, dt, X, hrf, hpf_low_cutoff)
-    warning('Deprecated process');
-    % Low pass filter, applied to input data
-    lpf = full(lpf_hrf(hrf, size(y, 1)));
-    % Convert to full mat since operation on sparse matrices are
-    % single-threaded only but full 
-    y_filtered = lpf * y;
-    
-    if any(~isfinite(y_filtered))
-        warning('Found non-finite values in filtered input data.');
-    end
-
-    % Band-pass filtering of the design matrix
-    if hpf_low_cutoff > 0 
-        X_filtered = lpf * process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
-                                              'highpass', hpf_low_cutoff, ...
-                                               0, 2, 0);
-    else
-        X_filtered = lpf * X(:,1:(end-1));
-    end    
-    X_filtered = [X_filtered X(:,end)];
-    
-    %% Solve y = X*B using SVD as in SPM
-    [B,proj_X] = compute_B_svd(y_filtered,X_filtered);
-    
-    %% For stat afterwards
-    res_form_mat = eye(size(lpf)) - X_filtered * proj_X;
-    lpf_lpf_T = full(lpf * lpf');
-    RV = res_form_mat * lpf_lpf_T;
-    trRV = sum(diag(RV));
-    RVRVt = RV .* RV';
-    trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
-    dfe = trRV^2 / trRVRV;
-    
-    fit = X_filtered * B;
-    residuals = y_filtered - fit;     
-    mse_residuals = var(residuals) * (size(y,1)-1) / trRV;
-        
-%     figure();plot(y_filtered(:, 161)/max(y_filtered(:,161)), 'b', 'LineWidth', 2); hold on; plot(X_filtered);
-%     figure(); hold on; plot(y_filtered(:,161), 'b'); plot(residual(:,161), 'g'); plot(fit(:,161), 'r');
-%   
-    pXS = proj_X * lpf;
-    covB = pXS * pXS';
-
-    if 0 % for test when running GLMTest.test_cortical_simulation
-       
-        % activ pos hbO: 4708
-        % inactiv pos hbo: 4977
-        
-        poi_inact = 4955;
-        
-        figure(); hold on;
-        plot(y(:,poi_inact), 'k');
-        plot(residuals(:,poi_inact), 'g');
-        plot(fit(:,poi_inact), 'r');
-        mse_residuals_inact = mse_residuals(poi_inact);
-        fprintf('MSE_inact = %e\n', mse_residuals_inact);
-        t_stat_inact = B(poi_inact) / sqrt(covB(1,1,poi_inact));
-        fprintf('tstat_inact = %1.3f\n', t_stat_inact);
-        p_val_inact = process_test_parametric2('ComputePvalues', t_stat_inact, dfe, 't', ...
-                                               'one+');
-        fprintf('p_val_inact = %1.3f\n', p_val_inact);
-        
-    end
-end
-function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = AR1_ols_fit(Y, dt, X, hpf_low_cutoff)
-    
-    warning('Deprecated process');
-
-    n_chan=size(Y,2);
-    n_cond=size(X,2);
-    n_time=size(Y,1);
-    
-    max_iter=10;
-    B_out=zeros(n_cond,n_chan);
-    
-    covB_out=zeros(n_cond,n_cond,n_chan);
-    dfe_out=zeros(1,n_chan);
-    residuals_out=zeros(n_time,n_chan);
-    mse_residuals_out=zeros(1,n_chan);
-    
-    % high-pass filtering of the design matrix
-    if hpf_low_cutoff > 0 
-        X_hpf = process_nst_iir_filter('Compute', X(:,1:(end-1)), 1/dt, ...
-                                              'highpass', hpf_low_cutoff, ...
-                                               0, 2, 0);    
-    else
-        X_hpf = X(:,1:(end-1));
-    end
-    
-    X_hpf = [X_hpf X(:,end)];
-    
-    %X_hpf=X;
-    
-    [B_init,proj_X] = compute_B_svd(Y,X_hpf);
-    bst_progress('start', 'GLM - Pre-whitenning ' , 'Fitting the GLM', 1, n_chan);
-    
-    parfor i_chan=1:n_chan
-        % Solve B for chan i_chan. We need to solve B for each channel
-        % speratly as we are fitting one AR model per channel. This might 
-        % not be a good idead in the source space. 
-        tic;
-        iter=0;
-       
-        y=Y(:,i_chan);
-        SX=X_hpf;
-        SY=y;
-       
-        B=B_init(:,i_chan);
-        B0=zeros(n_cond,1);
-        S_prod=speye(n_time);
-        
-        while( norm(B-B0)/norm(B) > 1e-2 && iter < max_iter )
-            
-            B0=B;
-            
-            % Estimate the AR(1) processe on the residual
-            res=SY-SX*B0; 
-            W=nst_math_fit_AR(res',1);
-        
-            %W=[1  -W(2:end)];
-            %X_filtered(:,1:end-1)=filter(1,W,X_filtered(:,1:end-1));
-            %y_filtered=filter(1,W,y_filtered);
-       
-            % Compute the filtering matrix 
-            a1 = -W(2);
-            ka = sparse( ( eye(n_time) - diag( ones(1,n_time-1)*a1,-1) ))^(-1); 
-            Va = ka* ka';
-        
-            S= full( inv(Va) )^(0.5); % can't use power .5 on sparse matrix
-            S_prod=sparse(S)*S_prod;
-            
-            % Apply the filtering to the data and the deisgn matrix
-            SY = S*SY;
-            SX = S*SX;
-
-            % Compute B for Sy = SXB + Se following an iid normal distribution
-            [B,proj_X] = compute_B_svd(SY,SX);
-       
-            iter=iter+1;
-            disp([ 'iter ' num2str(iter) ' norm(B-B0)/norm(B) = ' num2str(norm(B-B0)/norm(B)) ])
-       end
-       
-        S=S_prod;
-        Va=full(inv(S))^2;
-        S=full(S);
-        
-        % Compute stat afterwards
-       
-        pSX=pinv(SX);
-        
-        R = eye(n_time) - SX * pSX;
-        
-        S_Va_S_t = S * Va * S';
-        RV = R * S_Va_S_t;
-        trRV = sum(diag(RV));
-        RVRVt = RV .* RV';
-        trRVRV = sum(RVRVt(:)); % faster than sum(diag(RV * RV));
-        
-        fit = SX * B;
-        residuals = SY - fit;
-        sigma2=var(residuals);
-
-        dfe = trRV^2 / trRVRV;
-        mse_residuals =  sigma2* (size(y,1)-1)/trRV;
-        covB = pSX * pSX';
-
-        
-        % Save stats 
-        
-               
-        B_out(:,i_chan)=B;
-        covB_out(:,:,i_chan)=covB;
-        dfe_out(i_chan)=dfe;
-        residuals_out(:,i_chan)=residuals;
-        mse_residuals_out(i_chan)=mse_residuals;
-        e = toc;
-        disp( [ '#' num2str(i_chan) ' analized in ' num2str(iter) ' iteration (' num2str(e) ' sec)']) 
-        bst_progress('inc', 1); 
-    end
-    
-    bst_progress('stop');
-
-end
 
 function freqBands= getDefaultFreqBands() 
     freqBands=[ {'heart'},{'.2, .6'},{'all'}; ...
@@ -666,21 +475,21 @@ end
 
 
 function lpf = lpf_hrf(h, signal_length)
-% From NIRS_SPM / NIRS10
-h = [h; zeros(size(h))];
-g = abs(fft(h));
-h = real(ifft(g));
-h = fftshift(h)';
-n = length(h);
-d = (1:n) - n/2 -1;
-lpf = spdiags(ones(signal_length,1)*h, d, signal_length, signal_length);
-lpf = spdiags(1./sum(lpf')', 0, signal_length, signal_length) * lpf;
+    % From NIRS_SPM / NIRS10
+    h = [h; zeros(size(h))];
+    g = abs(fft(h));
+    h = real(ifft(g));
+    h = fftshift(h)';
+    n = length(h);
+    d = (1:n) - n/2 -1;
+    lpf = spdiags(ones(signal_length,1)*h, d, signal_length, signal_length);
+    lpf = spdiags(1./sum(lpf')', 0, signal_length, signal_length) * lpf;
 end
 
 function hrf_types = get_hrf_types()
-hrf_types.CANONICAL = 1;
-hrf_types.GAUSSIAN = 2;
-hrf_types.DECONV = 3;
+    hrf_types.CANONICAL = 1;
+    hrf_types.GAUSSIAN = 2;
+    hrf_types.DECONV = 3;
 
 end
 

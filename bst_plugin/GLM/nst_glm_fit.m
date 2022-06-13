@@ -62,48 +62,28 @@ function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y,
         
 %     figure();plot(y_filtered(:, 161)/max(y_filtered(:,161)), 'b', 'LineWidth', 2); hold on; plot(X_filtered);
 %     figure(); hold on; plot(y_filtered(:,161), 'b'); plot(residual(:,161), 'g'); plot(fit(:,161), 'r');
-%   
+
     pXS = proj_X * lpf;
     covB = pXS * pXS';
 
-    if 0 % for test when running GLMTest.test_cortical_simulation
-       
-        % activ pos hbO: 4708
-        % inactiv pos hbo: 4977
-        
-        poi_inact = 4955;
-        
-        figure(); hold on;
-        plot(y(:,poi_inact), 'k');
-        plot(residuals(:,poi_inact), 'g');
-        plot(fit(:,poi_inact), 'r');
-        mse_residuals_inact = mse_residuals(poi_inact);
-        fprintf('MSE_inact = %e\n', mse_residuals_inact);
-        t_stat_inact = B(poi_inact) / sqrt(covB(1,1,poi_inact));
-        fprintf('tstat_inact = %1.3f\n', t_stat_inact);
-        p_val_inact = process_test_parametric2('ComputePvalues', t_stat_inact, dfe, 't', ...
-                                               'one+');
-        fprintf('p_val_inact = %1.3f\n', p_val_inact);
-        
-    end
 end
 
 
 function [B_out, covB_out, dfe_out, residuals_out, mse_residuals_out] = OLS_AR1_fit(model,y,filter_type, filter_param)
     
-    n_chan=size(y,2);
-    n_cond=size(model.X,2);
-    n_time=size(y,1);
+    n_chan  = size(y,2);
+    n_cond  = size(model.X,2);
+    n_time  = size(y,1);
     
-    B_out=zeros(n_cond,n_chan);
+    B_out   = zeros(n_cond,n_chan);
     
-    covB_out=zeros(n_cond,n_cond,n_chan);
-    dfe_out=zeros(1,n_chan);
-    residuals_out=zeros(n_time,n_chan);
-    mse_residuals_out=zeros(1,n_chan);
+    covB_out    =  zeros(n_cond,n_cond,n_chan);
+    dfe_out     =  zeros(1,n_chan);
+    residuals_out       = zeros(n_time,n_chan);
+    mse_residuals_out   = zeros(1,n_chan);
     
     % high-pass filtering of the design matrix
-     model = nst_glm_apply_filter(model,filter_type, filter_param );
+    model = nst_glm_apply_filter(model,filter_type, filter_param );
     [B_init,proj_X] = nst_glm_fit_B(model,y, 'SVD');
     bst_progress('start', 'GLM - Pre-whitenning ' , 'Fitting the GLM', 1, n_chan);
     

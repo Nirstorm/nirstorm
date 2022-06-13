@@ -221,6 +221,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
     
     channels=ChannelMat.Channel(idx);
     F=sDataIn.F(idx', iBaseline);
+    F = (F - mean(F,2)) ./ std(F,[],2);
     separations = process_nst_separations('Compute',channels);
     switch criteria
         case 'distance'
@@ -271,7 +272,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
 %      names{2}={ sprintf('Short-Separation - %s-2',types{1})};
 %      names{3}={ sprintf('Short-Separation - %s-3',types{1})};
      
-    names{1}={ sprintf('Short-Separation - %s',types{1})};
+    names{1}=sprintf('Short-Separation - %s',types{1});
     model.X        = [model.X y];
     model.reg_names= [model.reg_names names];
     % We apply low and high pass filter 
