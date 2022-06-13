@@ -130,16 +130,15 @@ OPTIONS = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
 
 %% Run cMEM
 bst_progress('start', 'Reconstruction by cMEM', 'Launching cMEM...');
-[dOD_sources_cMEM,Hb_sources, O_updated] = Compute(OPTIONS,ChannelMat, sDataIn );
-
+[dOD_sources_cMEM,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn );
+%% Save results
 bst_progress('text', 'Saving Results...');
-
 for iwl=1:nb_wavelengths
      swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-     [sStudy, ResultFile] = add_surf_data(dOD_sources_cMEM(:,iwl,:), sDataIn.Time, nirs_head_model, ...
+     [sStudy, ResultFile] = add_surf_data(squeeze(dOD_sources_cMEM(:,iwl,:)), sDataIn.Time, nirs_head_model, ...
          [OPTIONS.Comment     ' sources - ' swl 'nm'], ...
-         sInputs, sStudy, O_updated.Comment, ...
-         'OD', store_sparse_results);
+         sInputs, sStudy, diagnosis(iwl).Comment, ...
+         'OD', store_sparse_results,1,diagnosis(iwl));
      OutputFiles{end+1} = ResultFile;
 end
 
@@ -150,7 +149,7 @@ for ihb=1:3
     [sStudy, ResultFile] = add_surf_data(squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, nirs_head_model, ...
                                          [OPTIONS.Comment  ' sources - ' hb_types{ihb}], ...
-                                         sInputs, sStudy, O_updated.Comment, ...
+                                         sInputs, sStudy, diagnosis(iwl).Comment, ...
                                          hb_unit, store_sparse_results);    
     OutputFiles{end+1} = ResultFile;
 end
@@ -160,7 +159,9 @@ bst_progress('stop', 'Reconstruction by cMEM', 'Finishing...');
 bst_set('Study', sInputs.iStudy, sStudy);
 end
 
-function [dOD_sources,Hb_sources, O_updated] = Compute(OPTIONS,ChannelMat, sDataIn )
+function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn )
+    diagnosis= [];
+
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
@@ -187,7 +188,7 @@ function [dOD_sources,Hb_sources, O_updated] = Compute(OPTIONS,ChannelMat, sData
         OPTIONS.MEMpaneloptions.clustering.neighborhood_order = nbo;
     end
 
-
+    
     dOD_sources = zeros(nb_nodes, nb_wavelengths, nb_samples);
 
     for iwl=1:nb_wavelengths
@@ -217,7 +218,10 @@ function [dOD_sources,Hb_sources, O_updated] = Compute(OPTIONS,ChannelMat, sData
         grid_amp = zeros(nb_nodes, nb_samples); 
         grid_amp(valid_nodes,:) = Results.ImageGridAmp;
         
-        dOD_sources(:, iwl, :) = grid_amp; 
+        dOD_sources(:, iwl, :)  = grid_amp;
+        Results.MEMoptions.automatic.neighborhood_order = O_updated.MEMpaneloptions.clustering.neighborhood_order;
+        Results.MEMoptions.automatic.valid_nodes = valid_nodes;
+        diagnosis          = [diagnosis Results.MEMoptions.automatic];
     end
     
     bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
@@ -328,7 +332,7 @@ end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
-                                              data_unit, store_sparse)
+                                              data_unit, store_sparse,store_diagnosis,diagnosis)
                                           
     if nargin < 8
         data_unit = '';
@@ -345,6 +349,9 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
         ResultsMat.ImageGridAmp = sparse(data); %TODO TOCHECK with FT: sparse data seem not well handled. Eg while viewing (could not reproduce)
     else
         ResultsMat.ImageGridAmp = data;
+    end
+    if nargin >=10 && store_diagnosis && ~isempty(diagnosis) 
+        ResultsMat.diagnosis = diagnosis;
     end
     ResultsMat.DisplayUnits = data_unit;
     ResultsMat.Time          = time;
