@@ -1,3 +1,6 @@
+June 2022
+GLM - BUGFIX fix a bug where the signal of [HbO] and [HbR] was used for short separation instead of using [HbO] for [Hbo] ... 
+---
 April 2022
 Filter - Remove dependency to signal processing toolbox
 ---
