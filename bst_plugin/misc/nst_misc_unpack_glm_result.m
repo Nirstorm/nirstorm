@@ -1,37 +1,14 @@
-function [B,covB,dfe,residuals,mse_residuals] = nst_misc_unpack_glm_result(model,method_name,surface_data,nb_regressors,n_voxel,mask)
-    if surface_data
-        B=zeros(nb_regressors,n_voxel);
-        B(:,mask)=model.B;
-        
-        residuals=zeros( size(model.residuals,1),n_voxel);
-        residuals(:,mask)=model.residuals;
+function results = nst_misc_unpack_glm_result(results, model,method_name,mask)
+   
 
-        mse_residuals=zeros(1,n_voxel);
-        mse_residuals(:,mask)=model.mse_residuals;
-        
-        dfe=zeros(1,n_voxel);
-        dfe(:,mask)=model.dfe;
-        
-        covB=model.covB;
-    else 
-        B=model.B;
-        residuals=model.residuals;
-        mse_residuals=model.mse_residuals;
-        
-        dfe=model.dfe;
-        covB=model.covB;     
+    results.B(:,mask)=model.B;
+    if strcmp(method_name,'OLS_prewhitening')
+        results.covB(:,:,mask)=model.covB;
+    else
+        results.covB(:,:,mask)=repmat(model.covB,1,1,sum(mask));
     end
-    
-    if strcmp(method_name,'OLS_prewhitening') && surface_data
-        covB=zeros(nb_regressors,nb_regressors,n_voxel);
-        covB(:,:,mask)=model.covB;
 
-        dfe=zeros(1,n_voxel);
-        dfe(mask)=model.dfe;        
-    end
-    
-    if strcmp(method_name,'OLS_precoloring') && surface_data
-        covB=model.covB; % This is weird
-    end    
+    results.residuals(:,mask)=model.residuals;
+    results.mse_residuals(:,mask)=model.mse_residuals;
 end
 
