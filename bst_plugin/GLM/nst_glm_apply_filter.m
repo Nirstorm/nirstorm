@@ -41,7 +41,7 @@ function model = nst_glm_apply_filter(model,filter_name, varargin )
             if nargin < 5
                 order = 3;
             else
-               order = 3; varargin{3};
+               order = varargin{3};
             end
 
             ind=find(model.accept_filter == 1 | model.accept_filter == 3);
