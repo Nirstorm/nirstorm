@@ -59,13 +59,34 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.label0.Comment = '<U><B>Signal Information</B></U>:';
     sProcess.options.label0.Type    = 'label';
     
-    sProcess.options.filter_model.Type    = 'radio_line';
-    sProcess.options.filter_model.Comment   = {'No filter','IIR filter','Detrending','Process used to remove slow fluctuations: '};
-    sProcess.options.filter_model.Value=1;
+    sProcess.options.filter_model.Comment = {'No filter', 'IIR filter','FIR filter', 'Filter applied on the data: '; ...
+                                            'none', 'IIR_bp', 'FIR_bp',''};
+    sProcess.options.filter_model.Type    = 'radio_linelabel';
+    sProcess.options.filter_model.Value   = 'IIR_bp';
+    sProcess.options.filter_model.Controller = struct('IIR_bp','IIR_bp','FIR_bp','FIR_bp' );
     
     sProcess.options.hpf_low_cutoff.Comment = 'High-pass filter frequency: ';
     sProcess.options.hpf_low_cutoff.Type    = 'value';
     sProcess.options.hpf_low_cutoff.Value   = {0.01, 'Hz', 2};
+
+    sProcess.options.hpf_high_cutoff.Comment = 'High-pass filter frequency: ';
+    sProcess.options.hpf_high_cutoff.Type    = 'value';
+    sProcess.options.hpf_high_cutoff.Value   = {0.1, 'Hz', 2};
+
+    sProcess.options.hpf_transition_band.Comment = 'Transition band (0=default):';
+    sProcess.options.hpf_transition_band.Type    = 'value';
+    sProcess.options.hpf_transition_band.Value   = {0.05, 'Hz', 2};
+    sProcess.options.hpf_transition_band.Class = 'FIR_bp';
+
+    sProcess.options.hpf_order.Comment = 'Filter order:';
+    sProcess.options.hpf_order.Type    = 'value';
+    sProcess.options.hpf_order.Value   = {3, '', 0};
+    sProcess.options.hpf_order.Class = 'IIR_bp';
+
+
+    sProcess.options.has_detrending.Comment = 'Did you used NIRS > remove slow-fluctuations ? ';
+    sProcess.options.has_detrending.Type    = 'checkbox';
+    sProcess.options.has_detrending.Value   =  0;
     
     sProcess.options.dct_cutoff.Comment = 'Detrend miminum Period (0= only linear detrend): ';
     sProcess.options.dct_cutoff.Type    = 'value';
@@ -227,27 +248,11 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         return;
     end
     ievents = cellfun(@(l) find(strcmp(l,all_event_names)), selected_event_names);
-    
-    %% previus processing 
-    filter_type='none';
-    filter_param=0;
-    if sProcess.options.statistical_processing.Value == 2
-        filter_type='IIR_highpass';
-        filter_param=sProcess.options.hpf_low_cutoff.Value{1};
-    elseif sProcess.options.statistical_processing.Value == 3
-        filter_type='DCT_filter';
-        filter_param=sProcess.options.dct_cutoff.Value{1};  
-    end        
-    
-    
+        
     %% Create model
     
     %Init GLM results struct
-
     results = []; 
-
-
-
     for data_type = data_types
         bst_progress('text', sprintf('Fitting the model for %s',data_type{1})); 
 
@@ -275,9 +280,32 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         %    freq_bands=process_tf_bands('GetBounds',sProcess.options.freqbands.Value);
         %    model=nst_glm_add_regressors(model,"DCT",freq_bands,bands_name);  
         %end
+        % Add Regressor from file2
+        if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
+            model=nst_glm_add_regressors(model,'external_input',data_type);
+        end
         
-        
+        % apply the same filter that was applied to the data to the design
+        % matrix
+        filter_type = sProcess.options.filter_model.Value;
+        low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
+        high_cutoff = sProcess.options.hpf_high_cutoff.Value{1};
+
+        if strcmp(filter_type, 'FIR_bp')
+            param = sProcess.options.hpf_transition_band.Value{1};
+        elseif strcmp(filter_type, 'IIR_bp')
+            param = sProcess.options.hpf_order.Value{1};
+        end
+
+        model = nst_glm_apply_filter(model,filter_type, low_cutoff,high_cutoff,param  );
+        if sProcess.options.has_detrending.Value
+                model = nst_glm_apply_filter(model,'DCT_filter', sProcess.options.dct_cutoff.Value{1}  );
+        end
+
         % Include short-seperation channel
+        % Note: we add them after applying filter to the design matrix as
+        % we know they have already been filter so we don't filter twice
+
         if sProcess.options.SS_chan.Value==2 % based on distance
             separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
             model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,data_type);
@@ -288,12 +316,10 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
                 model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',data_type);
             end    
         end   
-        
-        % Add Regressor from file2
-        if ~isempty(sInput_ext) && ~isempty(sInput_ext.FileName)
-            model=nst_glm_add_regressors(model,'external_input',data_type);
-        end
-        
+
+        % Normalize regressors 
+        % model = nst_glm_normalize_design(model);
+
         % Display Model
         nst_glm_display_model(model,'timecourse');
         
@@ -320,7 +346,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
             method_name = 'OLS_prewhitening';
         end
         
-        fitted_model= nst_glm_fit(model, Y_trim, filter_type, filter_param, method_name);
+        fitted_model= nst_glm_fit(model, Y_trim, method_name);
         results = nst_misc_unpack_glm_result(results, fitted_model,method_name,mask);
     end
 
