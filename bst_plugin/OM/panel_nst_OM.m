@@ -361,7 +361,7 @@ function s = GetPanelContents() %#ok<DEFNU>
     s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
     s.outputdir = strtrim(char(ctrl.jWeightFolder.getText));
-    s.exist_weight = 0; %Todo :)
+    s.exist_weight = 1;  
     
 end
 
