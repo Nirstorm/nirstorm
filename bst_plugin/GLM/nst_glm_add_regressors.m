@@ -67,6 +67,9 @@ message = '';
             frequences=varargin{1};
             names=varargin{2};
             model=nst_glm_add_DCT_regressors(model,frequences,names);
+        case 'legendre'
+            order = varargin{1};
+            model=nst_glm_add_Legendre_regressors(model,order);
     end    
 
 
@@ -296,4 +299,36 @@ function model=nst_glm_add_DCT_regressors(model,frequences,names)
         end    
     end
     
+end
+function model=nst_glm_add_Legendre_regressors(model,order)
+    if nargin < 2
+        order = 2;
+    end
+    P = legendre( model.time , order);
+    model.X= [model.X P]; 
+
+    model.accept_filter = [model.accept_filter zeros(1, order)];
+    for i_name=1:order
+        model.reg_names{end+1}= sprintf('%s%i','Poly',i_name); 
+    end
+
+end
+function L = legendre( t, P )
+
+    assert( isvector(t) && isscalar(P) )
+
+    % recursive definition: not orthogonal
+    % gram-schmidt: not numerically stable
+    
+    %% using cholesky decomposition
+    n = length(t);
+    
+    x = linspace(-1, 1, n)';                        % polys on [-1 1]
+    
+    L = bsxfun( @power, x, 1:P );                   % polynomials of x
+    L = bsxfun( @rdivide, L, sqrt(sum(L.^2,1)) );   % normalize
+    
+    L = L*inv(chol(L'*L));                          % orthonormalization
+    
+
 end

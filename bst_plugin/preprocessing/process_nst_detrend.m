@@ -18,7 +18,7 @@ function varargout = process_nst_detrend( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Delaire Edouard (2020)
+% Authors: Delaire Edouard (2022)
 %
 %
 eval(macro_method);
@@ -38,9 +38,25 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 sProcess.InputTypes  = {'data','raw'};
 sProcess.OutputTypes = {'data','data'};
 
+
+sProcess.options.filter_model.Comment = {'Polynome', 'DCT', 'Trend modelisation: '; ...
+                                        'legendre', 'DCT',''};
+sProcess.options.filter_model.Type    = 'radio_linelabel';
+sProcess.options.filter_model.Value   = 'DCT';
+sProcess.options.filter_model.Controller = struct('legendre','legendre','DCT','DCT' );
+
+    
 sProcess.options.option_period.Comment = 'Miminum Period (0= only linear detrend):';
 sProcess.options.option_period.Type    = 'value';
 sProcess.options.option_period.Value   = {200, 's', 0};
+sProcess.options.option_period.Class = 'DCT';
+    
+
+sProcess.options.poly_order.Comment = 'Polynome order:';
+sProcess.options.poly_order.Type    = 'value';
+sProcess.options.poly_order.Value   = {3, '', 0};
+sProcess.options.poly_order.Class = 'legendre';
+
 
 sProcess.options.option_keep_mean.Comment = 'Keep the mean';
 sProcess.options.option_keep_mean.Type    = 'checkbox';
@@ -75,21 +91,26 @@ nirs_ichans = sDataIn.ChannelFlag ~= -1 & strcmpi({ChannelMat.Channel.Type}, 'NI
 Y= sDataIn.F(nirs_ichans,:)';
 
 model= nst_glm_initialize_model(sDataIn.Time);
-model=nst_glm_add_regressors(model,'constant');
-model=nst_glm_add_regressors(model,'linear');  
+model= nst_glm_add_regressors(model,'constant');
 
-
-if sProcess.options.option_period.Value{1} > 0
-   period=sProcess.options.option_period.Value{1};
-   model=nst_glm_add_regressors(model,'DCT',[1/sDataIn.Time(end) 1/period],{'LFO'});  
+switch sProcess.options.filter_model.Value
+    case 'DCT'
+        model=nst_glm_add_regressors(model,'linear');  
+        if sProcess.options.option_period.Value{1} > 0
+           period=sProcess.options.option_period.Value{1};
+           model=nst_glm_add_regressors(model,'DCT',[1/sDataIn.Time(end) 1/period],{'LFO'});  
+        end
+    case 'legendre'
+        model=nst_glm_add_regressors(model,'legendre', sProcess.options.poly_order.Value{1} );  
 end
-       
+
+
 [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
 
 if keep_mean
-    Y= Y - model.X(:,2:end)*B(2:end,:);
+    Y = Y - model.X(:,2:end)*B(2:end,:);
 else    
-    Y= Y - model.X*B;
+    Y = Y - model.X*B;
 end
 
 %disp(sprintf('Rank X: %d, dim X: %d',rank(model.X),size(model.X,2)))
@@ -99,8 +120,11 @@ sDataOut                    = sDataIn;
 sDataOut.F(nirs_ichans,:)   = Y';
 sDataOut.Comment            = [sInput.Comment '| detrend'];
 History                     = 'Remove Linear trend';
-if sProcess.options.option_period.Value{1}
-    History                 = [History sprintf(', uses DCT of period > %ds',period)];
+if strcmp(sProcess.options.filter_model.Value,'DCT') && sProcess.options.option_period.Value{1}
+    History                 = [History sprintf(', uses DCT of period > %ds)',period)];
+end    
+if strcmp(sProcess.options.filter_model.Value,'legendre') && sProcess.options.option_period.Value{1}
+    History                 = [History sprintf('(order %d)',sProcess.options.poly_order.Value{1})];
 end    
 sDataOut                    = bst_history('add', sDataOut, 'process_nst_detrend',History);
 

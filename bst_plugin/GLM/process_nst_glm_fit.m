@@ -218,7 +218,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         
         hb_types = {'hbo','hbr','hbt','wl'};
         iChromohpore = find(cellfun(@(x)contains(lower(sInput.FileName),x),hb_types));
-        if iChromohpore < 3 
+        if iChromohpore < 4
             data_types = hb_types(iChromohpore);
         else
             data_types = regexp(lower(sInput.FileName),'wl([0-9]*)','match'); %note: there is probably an easier way but it works :)
