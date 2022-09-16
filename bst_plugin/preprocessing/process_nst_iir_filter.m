@@ -217,9 +217,13 @@ function [nirs_filtered, transient] = Compute(nirs_sig, fs, filter_type, low_cut
     
     [b,a] = ComputeFilter(fs, filter_type, low_cutoff,high_cutoff, order);
     transient = ComputeTransient(b,a,fs);
-    
-    nirs_filtered = filtfilt(b,a,data);
 
+    if bst_get('UseSigProcToolbox') 
+        nirs_filtered = filtfilt(b,a,data);
+    else
+        nirs_filtered = oc_filtfilt(b,a,data);
+    end
+    
     % Add the mean back
     if keep_mean
         nirs_filtered=nirs_filtered+meanMatrix;
