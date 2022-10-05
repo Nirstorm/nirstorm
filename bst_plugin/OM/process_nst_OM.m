@@ -203,14 +203,11 @@ if exist(fullfile(options.outputdir , 'weight_tables.mat'))
     load (fullfile(options.outputdir, 'weight_tables.mat'));
     if options.exist_weight && isfield(weight_cache,  ROI_cortex.Label)
         tmp = weight_cache.(ROI_cortex.Label);    
-        if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == tmp.options.sep_optode_max   
+        if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
             weight_table = tmp.weight_table;
         end    
     end    
 end
-
-
-
 
 if isempty(weight_table)
     % Compute weight table
