@@ -224,7 +224,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
     
     channels=ChannelMat.Channel(idx);
     F=sDataIn.F(idx', iBaseline);
-    F = (F - mean(F,2)) ./ std(F,[],2);
+    F = (F - repmat(mean(F,2),1, size(F,2))) ./ repmat(std(F,[],2),1,size(F,2));
     separations = process_nst_separations('Compute',channels);
     switch criteria
         case 'distance'
