@@ -22,7 +22,7 @@ function model = nst_glm_apply_filter(model,filter_name, varargin )
             ind=find(model.accept_filter >= 2);
 
             model.X(:,ind)= lpf*model.X(:,ind);
-            model.X(:,ind) = model.X(:,ind) ./ max(abs(model.X(:,ind)));
+            model.X(:,ind) = model.X(:,ind) ./ repmat(max(abs(model.X(:,ind))), size(model.X(:,ind),1)  ,1);
 
         case 'IIR_highpass'
             % Applied the GLM IIR high pass filter;
