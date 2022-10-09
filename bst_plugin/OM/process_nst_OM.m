@@ -158,7 +158,6 @@ end
 sROI = extract_scout_surface(sCortex, ROI_cortex);
 sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices');
     
-voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
 voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 
 if ~exist(voronoi_fn, 'file')
@@ -186,6 +185,7 @@ elseif  options.segmentation_label == 2 % GM label = 2
     voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,ROI_cortex.Vertices);
 end    
 
+voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
 voi(voronoi_mask) = 1;
 voi_flat = voi(:);
 vois = sparse(voi_flat > 0);
@@ -201,8 +201,8 @@ weight_cache = struct();
 
 if exist(fullfile(options.outputdir , 'weight_tables.mat'))
     load (fullfile(options.outputdir, 'weight_tables.mat'));
-    if options.exist_weight && isfield(weight_cache,  ROI_cortex.Label)
-        tmp = weight_cache.(ROI_cortex.Label);    
+    if options.exist_weight && isfield(weight_cache,  strrep(ROI_cortex.Label,' ','_'))
+        tmp = weight_cache.(strrep(ROI_cortex.Label,' ','_'));    
         if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
             weight_table = tmp.weight_table;
         end    
@@ -231,7 +231,7 @@ if isempty(weight_table)
         options_out = options;
         options_out.head_vertex_ids = head_vertex_ids;
         tmp = struct('weight_table',weight_table,'options',options_out);
-        weight_cache.(ROI_cortex.Label) = tmp;
+        weight_cache.(strrep(ROI_cortex.Label,' ','_')) = tmp;
         save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
     end
 end
