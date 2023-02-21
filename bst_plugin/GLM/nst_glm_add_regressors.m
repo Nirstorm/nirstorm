@@ -250,7 +250,11 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
        end      
    end    
             
-     y=mean(F(idx_chann, :),1)';
+    if length(idx_chann) > 1
+        y=mean(F(idx_chann, :),1)';
+    else
+        y=F(idx_chann, :)';
+    end
 %     [y_PCA,score,latent,tsquared,explained,mu] = pca(F(idx_chann, :));
 %     n_pca  = 3;
 %     y = y_PCA(:,1:n_pca);
