@@ -117,7 +117,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         % Extent label
     jExtentTitle = gui_component('label', jPanelUseDefault, 'br', 'Extent of scalp projection:', [], [], [], []);
     jExtent = gui_component('text', jPanelUseDefault, 'hfill', '5', [], [], [], []);
-    jExtentTitle2 = gui_component('text', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
+    jExtentTitle2 = gui_component('label', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
     ctrl.jExtent= jExtent;
         
         

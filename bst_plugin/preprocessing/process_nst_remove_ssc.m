@@ -110,18 +110,18 @@ F_resudial= sDataIn.F;
 
 for itype = 1 :length(types)
     nirs_ichans = strcmp( {ChannelMat.Channel.Type},'NIRS') & strcmp( {ChannelMat.Channel.Group},types{itype});
-    model= nst_glm_initialize_model(sDataIn.Time(iBaseline));
+    model       = nst_glm_initialize_model(sDataIn.Time);
     
     % Include short-seperation channel
     if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
 
         separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100; %convert to meter
-        [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype), Time);
+        [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype), []);
     elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
 
         if ~isempty(sProcess.options.SS_chan_name.Value)
             SS_name=strtrim(split(sProcess.options.SS_chan_name.Value,','));
-            [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),Time);
+            [model,code,message]=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),[]);
         end    
     end 
     
@@ -133,34 +133,20 @@ for itype = 1 :length(types)
     else
         bst_report('Info',    sProcess, sInput, message)
     end    
-    
-    
     model = nst_glm_add_regressors(model, 'constant');
         
-    Y_baseline= sDataIn.F(nirs_ichans,iBaseline)';
-    [B,proj_X] = nst_glm_fit_B(model,Y_baseline, 'SVD');
+
+    model_fit = model;
+    model_fit.X = model_fit.X(iBaseline,:);
+    model_fit.time = model_fit.time(iBaseline);
+
+
+
+    Y_baseline = sDataIn.F(nirs_ichans,iBaseline)';
+    [B,proj_X] = nst_glm_fit_B(model_fit,Y_baseline, 'SVD');
     
-    if ~ isempty(Time) % if Time = [] -> Y_baseline = Y and there is no need to redefine the model
-        %remove from all the data
-        model= nst_glm_initialize_model(sDataIn.Time);
 
-        % Include short-seperation channel
-        if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
-
-            separation_threshold_m = sProcess.options.separation_threshold_cm.Value{1} / 100; %convert to meter
-            model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,types(itype), []);
-
-        elseif strcmp(sProcess.options.SS_chan.Value,'name') % based on name 
-
-            if ~isempty(sProcess.options.SS_chan_name.Value)
-                SS_name=strtrim(split(sProcess.options.SS_chan_name.Value,','));
-                model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',types(itype),[]);
-            end    
-        end 
-        model = nst_glm_add_regressors(model, 'constant');
-    end
-    
-    Y= sDataIn.F(nirs_ichans,:)';
+    Y = sDataIn.F(nirs_ichans,:)';
     Y = Y - model.X*B;
     F(nirs_ichans,:) = Y';
     F_resudial(nirs_ichans,:) = (model.X*B)';
