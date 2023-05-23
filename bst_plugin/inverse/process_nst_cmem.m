@@ -174,7 +174,7 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
 
     %% define the reconstruction FOV
     thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
-    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex);
+    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex,sDataIn.ChannelFlag );
 
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);

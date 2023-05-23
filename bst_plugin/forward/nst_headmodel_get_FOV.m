@@ -1,7 +1,11 @@
-function valid_nodes = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex)
+function valid_nodes = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag)
     %% define the reconstruction FOV
-
-    montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+    
+    if nargin < 4
+        ChannelFlag = ones(1, length(ChannelMat.Channel));
+    end
+    
+    montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel, ChannelFlag);
     src_locs = montage_info.src_pos;
     det_locs = montage_info.det_pos;
     
