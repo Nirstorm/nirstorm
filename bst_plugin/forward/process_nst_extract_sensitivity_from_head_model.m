@@ -132,7 +132,9 @@ end
 if sProcess.options.normalize.Value
     for iwl=1:nb_Wavelengths
         sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ max(sensitivity_surf_sum(:,iwl)));
-        sensitivity_surf_sum(sensitivity_surf_sum(:,iwl) < -2,iwl) = 0;
+        mask = zeros(size(sensitivity_surf_sum));
+        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < -2;
+        sensitivity_surf_sum(mask == 1) = 0;
 
         k = zeros(1,  size(sensitivity_surf,3));
 
