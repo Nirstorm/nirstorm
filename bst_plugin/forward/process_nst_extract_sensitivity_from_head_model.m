@@ -71,8 +71,13 @@ if isempty(sStudy.iHeadModel)
     return;
 end
 
+bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+ChannelFlag = bst_chan_data.ChannelFlag;
+
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
+
+
 
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
@@ -80,76 +85,90 @@ if ~strcmp(head_model.HeadModelType, 'surface')
 end
 
 if ndims(head_model.Gain) ~= 3
-    % TODO: better test shape consistency
    bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
    return;
 end
  
-montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
 src_coords = montage_info.src_pos;
 det_coords = montage_info.det_pos;
 
-nb_sources = size(src_coords, 1);
-nb_dets = size(det_coords, 1);
-sensitivity_surf = head_model.Gain;
-pair_names = head_model.pair_names;
-nb_nodes = size(sensitivity_surf, 3);
-% Save sensitivities
+nb_sources          = size(src_coords, 1);
+nb_dets             = size(det_coords, 1);
+pair_names          = head_model.pair_names;
+
+nb_nodes            = size(head_model.Gain   , 3);
+nb_Wavelengths      = size(head_model.Gain   , 2);
+
+time = 1:(nb_sources*100 + nb_dets + 1);
+isUsedTime = zeros(1, length(time));
+
+sensitivity_surf = zeros(nb_nodes, nb_Wavelengths, length(time));
+sensitivity_surf_sum = zeros(nb_nodes, nb_Wavelengths);
+
+%% Compute sensitivity
+for iwl=1:nb_Wavelengths
+    swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
+    selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
+    idx_chan       = find(selected_chans);
+        
+    sensitivity     = nst_headmodel_get_gains(head_model,iwl, ChannelMat.Channel,idx_chan );
+
+
+    for iChan = 1:length(idx_chan)
+        chan = ChannelMat.Channel(idx_chan(iChan));
+        [src_id, det_id] = nst_unformat_channel(chan.Name );
+
+        sensitivity_surf(:,iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
+        isUsedTime(det_id + src_id*100)              = 1;
+    end
+
+    sensitivity_surf_sum(:,iwl) = sum(sensitivity,  1) ;
+end
+
+
+%% Normalize values and threshold 
+if sProcess.options.normalize.Value
+    for iwl=1:nb_Wavelengths
+        sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ max(sensitivity_surf_sum(:,iwl)));
+        sensitivity_surf_sum(sensitivity_surf_sum(:,iwl) < -2,iwl) = 0;
+
+        k = zeros(1,  size(sensitivity_surf,3));
+
+        if sProcess.options.normalize_type.Value == 1 % channel wise 
+            k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :)));     
+        else % Global normalisation 
+            k(1,:) = max(max(sensitivity_surf(:, iwl, :)));  
+        end    
+        
+        sensitivity_surf(:,iwl,isUsedTime == 1) = log10( squeeze(sensitivity_surf(:, iwl, isUsedTime == 1)) ./ repmat(k(isUsedTime == 1),nb_nodes,1));
+        
+        mask = zeros(size(sensitivity_surf));
+        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) < -2;
+        sensitivity_surf(mask == 1 ) = 0;
+    end
+end   
+
+
+%% Save sensitivity 
+
 for iwl=1:size(sensitivity_surf, 2)
-    sensitivity_surf_sum = sum(sensitivity_surf(:, iwl, :),  1) ;
-    
-    if sProcess.options.normalize.Value
-        sensitivity_surf_sum = log10(sensitivity_surf_sum ./ max(sensitivity_surf_sum));
-        sensitivity_surf_sum(sensitivity_surf_sum < -2) = 0;
-    end    
-    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum), [1,2]), [0 1], ...
+
+    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
                                          head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
                                          sInputs.iStudy, sStudy,  ...
-                                        'sensitivity imported from MCXlab');
-    
+                                         'sensitivity imported from MCXlab');
+        
     OutputFiles{end+1} = ResultFile;
 
-end
 
-if nb_dets < 100
-    time = 1:(nb_sources*100 + nb_dets + 1);
-    for iwl=1:size(sensitivity_surf, 2)
-        %sens_tmp = zeros(nb_nodes, length(time)) - 1;
-        sens_tmp = zeros(nb_nodes, length(time));
-        for ipair=1:size(sensitivity_surf, 1)
-            [src_id, det_id] = nst_unformat_channel([pair_names{ipair} 'WL0']);
-            if sProcess.options.normalize.Value
-                if sProcess.options.normalize_type.Value == 1 % channel wise 
-                    k = max(sensitivity_surf(ipair, iwl, :));
-                    
-                else % Global normalisation 
-                    k = max(max(sensitivity_surf(:, iwl, :)));  
-                end    
-                tmp = log10( sensitivity_surf(ipair, iwl, :) / k);
-                tmp(tmp < -2) = 0;
-                
-                sens_tmp(:, det_id + src_id*100) = squeeze(tmp);
-             else
-                sens_tmp(:, det_id + src_id*100) = squeeze(sensitivity_surf(ipair, iwl, :)); %source id will be minutes, det_it will be seconds
-             end
-        end       
-        
-        [sStudy, ResultFile] = add_surf_data(sens_tmp, time, ...
+        [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
             head_model, ['Sensitivities - WL' num2str(iwl)], ...
-            sInputs.iStudy, sStudy, 'Sensitivity import from template'); %TODO better denomitation
+            sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
         OutputFiles{end+1} = ResultFile;
-    end
 end
 
-% for iwl=1:size(sensitivity_surf, 2)
-%     for ipair=1:size(sensitivity_surf, 1)
-%         [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf(ipair, iwl, :)), [1,2]), [0 1], ...
-%                                              newHeadModel, ['Sensitivity - WL' num2str(iwl) ' ' pair_names{ipair}], ...
-%                                              iStudy, sStudy, 'pair sensitivity imported from MCXlab');
-%         OutputFiles{end+1} = ResultFile;
-%     end
-% end
 
 end
 
