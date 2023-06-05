@@ -1,4 +1,4 @@
-function valid_nodes = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag)
+function [valid_nodes,dis2cortex] = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag)
     %% define the reconstruction FOV
     
     if nargin < 4
@@ -18,6 +18,7 @@ function valid_nodes = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cort
     Vertices_sm = cortex.Vertices;
     Vertices_sm(iVertices,:) = tess_smooth(cortex.Vertices(iVertices,:), 1, SurfSmoothIterations, cortex.VertConn(iVertices,iVertices), 1);
     dis2cortex = pdist2(Vertices_sm,optodes_pos);
+    dis2cortex = min(dis2cortex,[],2);
 
-    valid_nodes = find(min(dis2cortex,[],2)<thresh_dis2cortex);
+    valid_nodes = find(dis2cortex < thresh_dis2cortex);
 end

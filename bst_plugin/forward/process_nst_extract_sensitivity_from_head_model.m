@@ -39,17 +39,33 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nMinFiles   = 1;
     sProcess.isSeparator = 1;
 
-    sProcess.options.normalize.Type     = 'checkbox';
-    sProcess.options.normalize.Comment  = 'Normalize sensitivity map';
-    sProcess.options.normalize.Controller = 'normalise';
-    sProcess.options.normalize.Value    = 0;
-    
 
-        
-    sProcess.options.normalize_type.Type     = 'radio';
-    sProcess.options.normalize_type.Comment  = {'Channel-wise normalisation','Global normalisation'};
-    sProcess.options.normalize_type.Class = 'normalise';
-    sProcess.options.normalize_type.Value    = 1;
+        % === Process description
+
+    sProcess.options.label1.Comment = ['<b>Light sensitivity scale.</b> <BR>' ...
+                                        'Export the nirs global and channel specific sensitivity based on the head model<BR>', ...
+                                       'Note: if the sensitivity is exported in the log scale (db), the map is thresholded at -2db.'];
+    sProcess.options.label1.Type = 'label';
+    % Common options
+        % === Method
+    sProcess.options.method.Comment = {['Linear'], ...
+                                       ['Scale with the global max (dB): <FONT color=#7F7F7F>&nbsp;&nbsp;&nbsp;' ...
+                                            'sensitivity = log10(x / max(sensitivity))'],... 
+                                       ['Scale with the local max (dB) (only for channel specific sensitivity map): <FONT color=#7F7F7F>&nbsp;&nbsp;&nbsp;' ...
+                                            'For each channel, sensitivity = log10(x / max(sensitivity))</FONT>'] ;...
+                                       'linear', 'db_global','db_local'};
+    sProcess.options.method.Type    = 'radio_label';
+    sProcess.options.method.Value   = 'linear';
+
+    
+    sProcess.options.label2.Comment = ['<b>NIRS field of view (FOV)</b> <BR>' ...
+                                       'Export the FOV used for source reconstruction'];
+    sProcess.options.label2.Type = 'label';
+
+    % Definition of the options
+    sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
+    sProcess.options.thresh_dis2cortex.Type    = 'value';
+    sProcess.options.thresh_dis2cortex.Value   = {3, 'cm',2};
 end
 
 %% ===== FORMAT COMMENT =====
@@ -76,6 +92,7 @@ ChannelFlag = bst_chan_data.ChannelFlag;
 
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
+cortex = in_tess_bst(head_model.SurfaceFile);
 
 
 
@@ -83,6 +100,7 @@ if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
 end
+
 
 if ndims(head_model.Gain) ~= 3
    bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
@@ -129,7 +147,7 @@ end
 
 
 %% Normalize values and threshold 
-if sProcess.options.normalize.Value
+if contains(sProcess.options.method.Value,'db')
     for iwl=1:nb_Wavelengths
         sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ max(sensitivity_surf_sum(:,iwl)));
         mask = zeros(size(sensitivity_surf_sum));
@@ -138,7 +156,7 @@ if sProcess.options.normalize.Value
 
         k = zeros(1,  size(sensitivity_surf,3));
 
-        if sProcess.options.normalize_type.Value == 1 % channel wise 
+        if strcmp(sProcess.options.method.Value,'db_local') % channel wise 
             k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :)));     
         else % Global normalisation 
             k(1,:) = max(max(sensitivity_surf(:, iwl, :)));  
@@ -152,9 +170,32 @@ if sProcess.options.normalize.Value
     end
 end   
 
+%% define the reconstruction FOV
+thresh_dis2cortex       = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
+[valid_nodes,dis2cortex]             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag);
+
+if any(strcmp({cortex.Atlas.Name},'NIRS-FOV'))
+    iAtlas = find(strcmp({cortex.Atlas.Name},'NIRS-FOV'));
+else
+    cortex.Atlas(end+1).Name = 'NIRS-FOV';
+    iAtlas = length( cortex.Atlas);
+end
+
+
+cortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
+cortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
+cortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
+cortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
+cortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',cortex.Atlas(iAtlas).Scouts(end), length(cortex.Atlas(iAtlas).Scouts));
+
+bst_save(file_fullpath(head_model.SurfaceFile), cortex)
+
+[sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
+                                 head_model, 'Distance to cortex', ...
+                                 sInputs.iStudy, sStudy,  ...
+                                 'sensitivity imported from MCXlab');
 
 %% Save sensitivity 
-
 for iwl=1:size(sensitivity_surf, 2)
 
     [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
