@@ -149,7 +149,7 @@ end
 %% Normalize values and threshold 
 if contains(sProcess.options.method.Value,'db')
     for iwl=1:nb_Wavelengths
-        sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ max(sensitivity_surf_sum(:,iwl)));
+        sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ ( eps + max(sensitivity_surf_sum(:,iwl))));
         mask = zeros(size(sensitivity_surf_sum));
         mask(:,iwl) = sensitivity_surf_sum(:,iwl) < -2;
         sensitivity_surf_sum(mask == 1) = 0;
@@ -157,9 +157,9 @@ if contains(sProcess.options.method.Value,'db')
         k = zeros(1,  size(sensitivity_surf,3));
 
         if strcmp(sProcess.options.method.Value,'db_local') % channel wise 
-            k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :)));     
+            k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :))) + eps;     
         else % Global normalisation 
-            k(1,:) = max(max(sensitivity_surf(:, iwl, :)));  
+            k(1,:) = max(max(sensitivity_surf(:, iwl, :))) + eps;   
         end    
         
         sensitivity_surf(:,iwl,isUsedTime == 1) = log10( squeeze(sensitivity_surf(:, iwl, isUsedTime == 1)) ./ repmat(k(isUsedTime == 1),nb_nodes,1));
@@ -169,6 +169,40 @@ if contains(sProcess.options.method.Value,'db')
         sensitivity_surf(mask == 1 ) = 0;
     end
 end   
+
+%% Save sensitivity 
+for iwl=1:size(sensitivity_surf, 2)
+
+    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
+                                         head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
+                                         sInputs.iStudy, sStudy,  ...
+                                         'sensitivity imported from MCXlab');
+        
+    OutputFiles{end+1} = ResultFile;
+
+
+        [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
+            head_model, ['Sensitivities - WL' num2str(iwl)], ...
+            sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
+        OutputFiles{end+1} = ResultFile;
+end
+
+
+%% Estimate overlaps
+for iwl=1:size(sensitivity_surf, 2)
+    tmp = squeeze(sensitivity_surf(:,iwl,isUsedTime == 1));     
+    [tmp_sort, I] = sort(tmp,2,'ascend');
+
+
+    [sStudy, ResultFile] = add_surf_data(tmp_sort, 1:size(tmp,2), ...
+                                         head_model, ['Overlap ' num2str(iwl)], ...
+                                         sInputs.iStudy, sStudy,  ...
+                                         'sensitivity imported from MCXlab');
+
+
+
+end
+
 
 %% define the reconstruction FOV
 thresh_dis2cortex       = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
@@ -195,22 +229,7 @@ bst_save(file_fullpath(head_model.SurfaceFile), cortex)
                                  sInputs.iStudy, sStudy,  ...
                                  'sensitivity imported from MCXlab');
 
-%% Save sensitivity 
-for iwl=1:size(sensitivity_surf, 2)
 
-    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
-                                         head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
-                                         sInputs.iStudy, sStudy,  ...
-                                         'sensitivity imported from MCXlab');
-        
-    OutputFiles{end+1} = ResultFile;
-
-
-        [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
-            head_model, ['Sensitivities - WL' num2str(iwl)], ...
-            sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
-        OutputFiles{end+1} = ResultFile;
-end
 
 
 end
