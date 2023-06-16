@@ -147,11 +147,13 @@ end
 
 
 %% Normalize values and threshold 
+threshold_value = -2; % in db
+
 if contains(sProcess.options.method.Value,'db')
     for iwl=1:nb_Wavelengths
         sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ ( eps + max(sensitivity_surf_sum(:,iwl))));
         mask = zeros(size(sensitivity_surf_sum));
-        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < -2;
+        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < threshold_value;
         sensitivity_surf_sum(mask == 1) = 0;
 
         k = zeros(1,  size(sensitivity_surf,3));
@@ -165,9 +167,17 @@ if contains(sProcess.options.method.Value,'db')
         sensitivity_surf(:,iwl,isUsedTime == 1) = log10( squeeze(sensitivity_surf(:, iwl, isUsedTime == 1)) ./ repmat(k(isUsedTime == 1),nb_nodes,1));
         
         mask = zeros(size(sensitivity_surf));
-        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) < -2;
+        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) < threshold_value;
         sensitivity_surf(mask == 1 ) = 0;
     end
+else
+        mask = zeros(size(sensitivity_surf_sum));
+        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < 10^(threshold_value)*max(sensitivity_surf_sum(:,iwl));
+        sensitivity_surf_sum(mask == 1) = 0;
+
+        mask = zeros(size(sensitivity_surf));
+        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) <  10^(threshold_value)*max(sensitivity_surf(:,iwl,:),[],'all');
+        sensitivity_surf(mask == 1 ) = 0;
 end   
 
 %% Save sensitivity 
@@ -188,20 +198,49 @@ for iwl=1:size(sensitivity_surf, 2)
 end
 
 
-%% Estimate overlaps
+%% Estimate overlaps - Display sensitivity as function of number of overlap
+
+thresholds = linspace(min(sensitivity_surf,[],'all'), max(sensitivity_surf,[],'all'), 10);
+
+
 for iwl=1:size(sensitivity_surf, 2)
-    tmp = squeeze(sensitivity_surf(:,iwl,isUsedTime == 1));     
-    [tmp_sort, I] = sort(tmp,2,'ascend');
+    tmp = squeeze(sensitivity_surf(:,iwl,isUsedTime == 1));
 
+    overlaps = zeros(size(tmp));
+    for iVertex = 1:size(tmp, 1)
+        a  = sort(tmp(iVertex,:)  ,2,'descend');
 
-    [sStudy, ResultFile] = add_surf_data(tmp_sort, 1:size(tmp,2), ...
-                                         head_model, ['Overlap ' num2str(iwl)], ...
+        if contains(sProcess.options.method.Value,'db')
+            overlaps(iVertex,1:length(find(a<0)))  = a(a < 0); 
+        else
+            overlaps(iVertex,1:length(find(a>0)))  = a(a > 0); 
+        end
+    end
+    
+    overlaps_number = zeros(size(tmp,1), length(thresholds));
+    for iThreshold = 1:length(thresholds)
+        if contains(sProcess.options.method.Value,'db')
+            overlaps_number(:, iThreshold) = sum( tmp > thresholds(iThreshold)  & tmp < 0  ,2 );
+        else
+            overlaps_number(:, iThreshold) = sum( tmp > thresholds(iThreshold)  & tmp > 0  ,2 );
+        end
+    end
+
+    [sStudy, ResultFile] = add_surf_data(overlaps, 1:size(tmp,2), ...
+                                         head_model, sprintf('Overlap WL %d (sensitivity)',iwl), ...
                                          sInputs.iStudy, sStudy,  ...
                                          'sensitivity imported from MCXlab');
 
+    [sStudy, ResultFile] = add_surf_data(overlaps_number, thresholds, ...
+                                     head_model, sprintf('Overlap WL %d (#overlaps)',iwl), ...
+                                     sInputs.iStudy, sStudy,  ...
+                                     'sensitivity imported from MCXlab');
 
 
 end
+
+
+
 
 
 %% define the reconstruction FOV
