@@ -37,6 +37,7 @@ sProcess.InputTypes  = {'import'};
 sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
+sProcess.isSeparator = 1;
 
 
 sProcess.options.subjectname.Comment = 'Subject name';
@@ -68,15 +69,20 @@ sProcess.options.label.Comment = ['<b>Projection Function; </b> <BR>' ...
                                    'Function to apply within each Voronoi cell'];
 sProcess.options.label.Type = 'label';
 
-sProcess.options.method.Comment = {'mean','mediam', 'mode', 'min','max'; ...
-                                   'mean','mediam', 'mode','min' 'max'};
+sProcess.options.method.Comment = {'mean','median', 'mode', 'min','max'; ...
+                                   'mean','median', 'mode','min' 'max'};
 sProcess.options.method.Type    = 'radio_label';
 sProcess.options.method.Value   = 'mean';
     
 % Smoothing options
-sProcess.options.do_smoothing.Comment = 'Smooth the surface based sensitivity map';
+sProcess.options.label2.Comment = ['<b>Smoothing: </b> <BR>'];
+sProcess.options.label2.Type = 'label';
+
+sProcess.options.do_smoothing.Comment = 'Apply smoothing after the projection';
 sProcess.options.do_smoothing.Type    = 'checkbox';
 sProcess.options.do_smoothing.Value   = 1;
+sProcess.options.do_smoothing.Controller = 'smoothing';
+
 % === DESCRIPTION   copied from process_ssmooth_surfstat
 sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
     'The smoothing is based only on the surface topography, <BR>' ...
@@ -84,10 +90,14 @@ sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ
     'The input in mm is converted to a number of edges based<BR>', ...
     'on the average distance between two vertices in the surface.<BR><BR>'];
 sProcess.options.help.Type    = 'label';
+sProcess.options.help.Class = 'smoothing';
+
 % === FWHM (kernel size)
 sProcess.options.fwhm.Comment = '<B>FWHM</B> (Full width at half maximum):  ';
 sProcess.options.fwhm.Type    = 'value';
 sProcess.options.fwhm.Value   = {5, 'mm', 2};
+sProcess.options.do_smoothing.Class = 'smoothing';
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -143,9 +153,13 @@ if ndims(fMRI_map) == 4
 
         surf_maps(:,iTime) = surf_maps_tmp;
     end
+
+    TR = fMRI_vol.Header.dim.pixdim(4); % to check
+    time = TR*(0:size(fMRI_map,4));
 else
     surf_maps = accumarray(voronoi(voronoi_mask), fMRI_map(voronoi_mask), [nb_nodes+1 1],func); 
     surf_maps(end)=[]; % trash last column
+    time = [1];
 end
 
 [sSubject, iSubject] = bst_get('Subject', subjectName);
@@ -160,9 +174,7 @@ else
 end
 
 [A,B] = fileparts(sProcess.options.fMRI.Value{1});
-
-% sensitivity_surf_sum = sum(fMRI_surf(:, iwl, :),  1) ;
-[sStudy, ResultFile] = add_surf_data_fMRI(surf_maps, [0 1], ...
+[sStudy, ResultFile] = add_surf_data_fMRI(surf_maps, time, ...
     SurfaceFile, sprintf('Projection %s (%s)', B, sProcess.options.method.Value), ...
     iStudy, sStudy,  ...
     sprintf('Projection %s (%s - FWHM %d)', B, sProcess.options.method.Value,FWHM));
