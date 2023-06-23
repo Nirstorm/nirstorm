@@ -18,7 +18,8 @@ function varargout = process_nst_extract_sensitivity_from_head_model( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent, ZhengChen Cai (2017)
+% Authors: Edouard Delaire (2023) 
+%          Thomas Vincent, ZhengChen Cai (2017)
 
 eval(macro_method);
 end
@@ -40,14 +41,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.isSeparator = 1;
 
 
-        % === Process description
-
+    % === Process description
     sProcess.options.label1.Comment = ['<b>Light sensitivity scale.</b> <BR>' ...
                                         'Export the nirs global and channel specific sensitivity based on the head model<BR>', ...
                                        'Note: if the sensitivity is exported in the log scale (db), the map is thresholded at -2db.'];
     sProcess.options.label1.Type = 'label';
-    % Common options
-        % === Method
+
+
     sProcess.options.method.Comment = {['Linear'], ...
                                        ['Scale with the global max (dB): <FONT color=#7F7F7F>&nbsp;&nbsp;&nbsp;' ...
                                             'sensitivity = log10(x / max(sensitivity))'],... 
@@ -57,15 +57,32 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.method.Type    = 'radio_label';
     sProcess.options.method.Value   = 'linear';
 
-    
-    sProcess.options.label2.Comment = ['<b>NIRS field of view (FOV)</b> <BR>' ...
-                                       'Export the FOV used for source reconstruction'];
+
+    sProcess.options.label2.Comment = ['<b>Measure of overlap</b> <BR>'];
     sProcess.options.label2.Type = 'label';
+
+    sProcess.options.export_overlap.Comment = 'Export measure of overlap';
+    sProcess.options.export_overlap.Type    = 'checkbox';
+    sProcess.options.export_overlap.Value   = 1;    
+
+
+    
+    sProcess.options.label3.Comment = ['<b>NIRS field of view (FOV)</b> <BR>' ...
+                                       'Export the FOV used for source reconstruction as new atlas'];
+    sProcess.options.label3.Type = 'label';
+
+    sProcess.options.export_FOV.Comment = 'Export NIRS FOV';
+    sProcess.options.export_FOV.Type    = 'checkbox';
+    sProcess.options.export_FOV.Value   = 1;    
+    sProcess.options.export_FOV.Controller = 'FOV';
 
     % Definition of the options
     sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
     sProcess.options.thresh_dis2cortex.Type    = 'value';
     sProcess.options.thresh_dis2cortex.Value   = {3, 'cm',2};
+    sProcess.options.thresh_dis2cortex.Class   = 'FOV';
+
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -114,16 +131,15 @@ det_coords = montage_info.det_pos;
 
 nb_sources          = size(src_coords, 1);
 nb_dets             = size(det_coords, 1);
-pair_names          = head_model.pair_names;
 
 nb_nodes            = size(head_model.Gain   , 3);
 nb_Wavelengths      = size(head_model.Gain   , 2);
 
-time = 1:(nb_sources*100 + nb_dets + 1);
-isUsedTime = zeros(1, length(time));
+time        = 1:(nb_sources*100 + nb_dets + 1);
+isUsedTime  = zeros(1, length(time));
 
-sensitivity_surf = zeros(nb_nodes, nb_Wavelengths, length(time));
-sensitivity_surf_sum = zeros(nb_nodes, nb_Wavelengths);
+sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
+sensitivity_surf_sum    = zeros(nb_nodes, nb_Wavelengths);
 
 %% Compute sensitivity
 for iwl=1:nb_Wavelengths
@@ -226,26 +242,25 @@ for iwl=1:size(sensitivity_surf, 2)
         end
     end
 
-    [sStudy, ResultFile] = add_surf_data(overlaps, 1:size(tmp,2), ...
-                                         head_model, sprintf('Overlap WL %d (sensitivity)',iwl), ...
+    if sProcess.options.export_overlap.Value 
+
+        [sStudy, ResultFile] = add_surf_data(overlaps, 1:size(tmp,2), ...
+                                             head_model, sprintf('Overlap WL %d (sensitivity)',iwl), ...
+                                             sInputs.iStudy, sStudy,  ...
+                                             'sensitivity imported from MCXlab');
+    
+        [sStudy, ResultFile] = add_surf_data(overlaps_number, thresholds, ...
+                                         head_model, sprintf('Overlap WL %d (#overlaps)',iwl), ...
                                          sInputs.iStudy, sStudy,  ...
                                          'sensitivity imported from MCXlab');
 
-    [sStudy, ResultFile] = add_surf_data(overlaps_number, thresholds, ...
-                                     head_model, sprintf('Overlap WL %d (#overlaps)',iwl), ...
-                                     sInputs.iStudy, sStudy,  ...
-                                     'sensitivity imported from MCXlab');
-
-
+    end
 end
 
 
-
-
-
 %% define the reconstruction FOV
-thresh_dis2cortex       = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
-[valid_nodes,dis2cortex]             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag);
+thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
+[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag);
 
 if any(strcmp({cortex.Atlas.Name},'NIRS-FOV'))
     iAtlas = find(strcmp({cortex.Atlas.Name},'NIRS-FOV'));
@@ -263,12 +278,10 @@ cortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',cor
 
 bst_save(file_fullpath(head_model.SurfaceFile), cortex)
 
-[sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
-                                 head_model, 'Distance to cortex', ...
-                                 sInputs.iStudy, sStudy,  ...
-                                 'sensitivity imported from MCXlab');
-
-
+% [sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
+%                                  head_model, 'Distance to cortex', ...
+%                                  sInputs.iStudy, sStudy,  ...
+%                                  'sensitivity imported from MCXlab');
 
 
 end
