@@ -81,7 +81,6 @@ sProcess.options.label2.Type = 'label';
 sProcess.options.do_smoothing.Comment = 'Apply smoothing after the projection';
 sProcess.options.do_smoothing.Type    = 'checkbox';
 sProcess.options.do_smoothing.Value   = 1;
-sProcess.options.do_smoothing.Controller = 'smoothing';
 
 % === DESCRIPTION   copied from process_ssmooth_surfstat
 sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
@@ -90,13 +89,11 @@ sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ
     'The input in mm is converted to a number of edges based<BR>', ...
     'on the average distance between two vertices in the surface.<BR><BR>'];
 sProcess.options.help.Type    = 'label';
-sProcess.options.help.Class = 'smoothing';
 
 % === FWHM (kernel size)
 sProcess.options.fwhm.Comment = '<B>FWHM</B> (Full width at half maximum):  ';
 sProcess.options.fwhm.Type    = 'value';
 sProcess.options.fwhm.Value   = {5, 'mm', 2};
-sProcess.options.do_smoothing.Class = 'smoothing';
 
 end
 
@@ -144,8 +141,8 @@ end
 
 func = str2func(sProcess.options.method.Value);
 if ndims(fMRI_map) == 4
-    surf_maps = zeros(size(nb_nodes),size(fMRI_map,4));
-    for iTime = 1:length(size(fMRI_map,4))
+    surf_maps = zeros(nb_nodes,size(fMRI_map,4));
+    for iTime = 1:size(fMRI_map,4)
         fmri_tmp = fMRI_map(:,:,:, iTime);
 
         surf_maps_tmp = accumarray(voronoi(voronoi_mask), fmri_tmp(voronoi_mask), [nb_nodes+1 1],func); 
@@ -155,7 +152,7 @@ if ndims(fMRI_map) == 4
     end
 
     TR = fMRI_vol.Header.dim.pixdim(4); % to check
-    time = TR*(0:size(fMRI_map,4));
+    time = TR*(0:(size(fMRI_map,4)-1));
 else
     surf_maps = accumarray(voronoi(voronoi_mask), fMRI_map(voronoi_mask), [nb_nodes+1 1],func); 
     surf_maps(end)=[]; % trash last column
@@ -228,7 +225,7 @@ end
 
 function voronoi = get_voronoi(SubjectName)
 [sSubject, iSubject] = bst_get('Subject', SubjectName);
-voronoi_fn = process_mfip_compute_voronoi('get_voronoi_fn', sSubject);
+voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 
 voronoi_bst = in_mri_bst(voronoi_fn);
 voronoi = voronoi_bst.Cube;
