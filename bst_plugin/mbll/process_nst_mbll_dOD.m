@@ -107,6 +107,23 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Re-add other channels that were not changed during MBLL
     [final_nirs, ChannelMat] = process_nst_mbll('concatenate_data',nirs_hb, channels_hb, nirs_other, channel_def_other);
 
+    if ~isempty(sDataIn.Std)
+         % Remove bad channels: they won't enter MBLL computation so no need to keep them 
+        [good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels',sDataIn.Std', ChanneMat, sDataIn.ChannelFlag);
+        
+        % Separate NIRS channels from others (NIRS_AUX etc.)                                                
+        [fnirs, fchannel_def, nirs_other, channel_def_other] = process_nst_mbll('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
+        
+    
+        % Apply MBLL
+        % TODO: add baseline window and expose it
+        [nirs_hb, channels_hb] = process_nst_mbll('Compute',fnirs, fchannel_def, age, [], do_plp_corr, pvf, dpf_method); 
+        
+        % Re-add other channels that were not changed during MBLL
+        [final_nirs_std, ~] = process_nst_mbll('concatenate_data',nirs_hb, channels_hb, nirs_other, channel_def_other);
+    
+    end
+
     % Create new condition because channel definition is different from original one
     cond_name = sInputs.Condition;
     if length(cond_name)>=4 && strcmp(cond_name(1:4), '@raw')
@@ -122,11 +139,15 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Save time-series data
     sDataOut = db_template('data');
     sDataOut.F            = final_nirs'; % TOCHECK brainstorm expects MILLIMOL!!
+    if ~isempty(sDataIn.Std)
+        sDataOut.Std          = final_nirs_std';
+    end
     sDataOut.Comment      = sDataIn.Comment;
     sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
     sDataOut.Time         = sDataIn.Time;
     sDataOut.DataType     = 'recordings'; 
-    sDataOut.nAvg         = 1;
+    sDataOut.nAvg         = sDataIn.nAvg;
+    sDataOut.Leff         = sDataIn.Leff;
     sDataOut.Events       = events;
     sDataOut.History      = sDataIn.History;
     sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
