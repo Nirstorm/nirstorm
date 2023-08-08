@@ -212,8 +212,9 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
-        [Results, O_updated] = be_main_call_NIRS(HM, OPTIONS);
-        
+        %[Results, O_updated] = be_main_call_NIRS(HM, OPTIONS);
+         [Results, O_updated] = be_main_call(HM, OPTIONS);
+
         %cMEM results
         grid_amp = zeros(nb_nodes, nb_samples); 
         grid_amp(valid_nodes,:) = Results.ImageGridAmp;
@@ -263,8 +264,8 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.DataTypes = {'NIRS'};
     OPTIONS.NoiseCov = [];
     OPTIONS.MEMpaneloptions.solver.NoiseCov_recompute   = 1;
-    OPTIONS.MEMpaneloptions.model.depth_weigth_MNE      = sProcess.options.depth_weightingMNE.Value{1};
-    OPTIONS.MEMpaneloptions.model.depth_weigth_MEM      = sProcess.options.depth_weightingMEM.Value{1};
+    %OPTIONS.MEMpaneloptions.model.depth_weigth_MNE      = sProcess.options.depth_weightingMNE.Value{1};
+    %OPTIONS.MEMpaneloptions.model.depth_weigth_MEM      = sProcess.options.depth_weightingMEM.Value{1};
     OPTIONS.MEMpaneloptions.model.NoiseCov_recompute    = sProcess.options.NoiseCov_recompute.Value;
 
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
