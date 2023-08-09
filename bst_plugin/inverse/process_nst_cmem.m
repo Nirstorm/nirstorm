@@ -95,6 +95,14 @@ end
 % Install/load brainentropy plugin
 [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
 if ~isInstalled
+    bst_error('The Brainentropy toolbox is required to use MEM');
+    return;
+end
+
+% Get plugin information
+PluginDescription  = bst_plugin('GetInstalled', 'brainentropy'); 
+if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', PluginDescription.GetVersionFcn(), '2.7.4')  < 1
+    bst_error('Please update the BrainEntropy toolbox to the verson 2.7.4 or higher');
     return;
 end
 
