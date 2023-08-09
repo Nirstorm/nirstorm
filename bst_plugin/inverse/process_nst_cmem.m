@@ -51,14 +51,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.thresh_dis2cortex.Type    = 'value';
     sProcess.options.thresh_dis2cortex.Value   = {3, 'cm',2};
     
-    sProcess.options.depth_weightingMNE.Comment = 'Depth weighting factor for <B>MNE</B>';
-    sProcess.options.depth_weightingMNE.Type    = 'value';
-    sProcess.options.depth_weightingMNE.Value   = {0.5, '', 1};
-    
-    sProcess.options.depth_weightingMEM.Comment = 'Depth weighting factor for <B>MEM</B>';
-    sProcess.options.depth_weightingMEM.Type    = 'value';
-    sProcess.options.depth_weightingMEM.Value   = {0.3, '', 1};
-
     sProcess.options.NoiseCov_recompute.Comment = 'Compute noise convariance for MNE';
     sProcess.options.NoiseCov_recompute.Type    = 'checkbox';
     sProcess.options.NoiseCov_recompute.Value   = 1;
