@@ -5,9 +5,9 @@ major=0;
 minor=0;
 patches=0;
 
-path = fileparts(which('nst_install'));
+path = fileparts(which('process_nst_mbll.m'));
 
-id = fopen(fullfile(path, 'bst_plugin','VERSION'));
+id = fopen(fullfile(path, '..','VERSION'));
 str=fread(id,'*char' )';
 
 version = str(9:end-1);
