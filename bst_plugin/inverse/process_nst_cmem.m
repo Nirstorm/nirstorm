@@ -93,11 +93,17 @@ end
 
 % Get plugin information
 PluginDescription  = bst_plugin('GetInstalled', 'brainentropy'); 
-if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', PluginDescription.GetVersionFcn(), '2.7.4')  < 1
-    bst_error('Please update the BrainEntropy toolbox to the verson 2.7.4 or higher');
-    return;
+if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', PluginDescription.GetVersionFcn(), '2.7.4') < 0
+   bst_error('Please update the BrainEntropy toolbox to the verson 2.7.4 or higher');
+   return;
 end
 
+%% backward compatibility
+if isfield(sProcess.options, 'depth_weightingMNE') && isfield(sProcess.options, 'depth_weightingMEM')
+    bst_report('Warning', sProcess, sInputs, 'Options for depth-weighting was moved to MEM panel. Please update your script')
+    sProcess.options.mem.Value.MEMpaneloptions.model.depth_weigth_MNE      = sProcess.options.depth_weightingMNE.Value{1};
+    sProcess.options.mem.Value.MEMpaneloptions.model.depth_weigth_MEM      = sProcess.options.depth_weightingMEM.Value{1};
+end
 %% Load head model
 sStudy = bst_get('Study', sInputs.iStudy);
 if isempty(sStudy.iHeadModel)
@@ -212,7 +218,6 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
-        %[Results, O_updated] = be_main_call_NIRS(HM, OPTIONS);
          [Results, O_updated] = be_main_call(HM, OPTIONS);
 
         %cMEM results
@@ -264,8 +269,6 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.DataTypes = {'NIRS'};
     OPTIONS.NoiseCov = [];
     OPTIONS.MEMpaneloptions.solver.NoiseCov_recompute   = 1;
-    %OPTIONS.MEMpaneloptions.model.depth_weigth_MNE      = sProcess.options.depth_weightingMNE.Value{1};
-    %OPTIONS.MEMpaneloptions.model.depth_weigth_MEM      = sProcess.options.depth_weightingMEM.Value{1};
     OPTIONS.MEMpaneloptions.model.NoiseCov_recompute    = sProcess.options.NoiseCov_recompute.Value;
 
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
