@@ -64,6 +64,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.store_sparse_results.Comment = 'Store sparse results';
     sProcess.options.store_sparse_results.Type    = 'checkbox';
     sProcess.options.store_sparse_results.Value   = 0;
+    sProcess.options.store_sparse_results.Group   = 'output';
+
    
 end
 
@@ -98,12 +100,13 @@ if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', Plu
    return;
 end
 
-%% backward compatibility
+%% Backward compatibility
 if isfield(sProcess.options, 'depth_weightingMNE') && isfield(sProcess.options, 'depth_weightingMEM')
     bst_report('Warning', sProcess, sInputs, 'Options for depth-weighting was moved to MEM panel. Please update your script')
     sProcess.options.mem.Value.MEMpaneloptions.model.depth_weigth_MNE      = sProcess.options.depth_weightingMNE.Value{1};
     sProcess.options.mem.Value.MEMpaneloptions.model.depth_weigth_MEM      = sProcess.options.depth_weightingMEM.Value{1};
 end
+
 %% Load head model
 sStudy = bst_get('Study', sInputs.iStudy);
 if isempty(sStudy.iHeadModel)
@@ -120,7 +123,6 @@ if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
     sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
-    sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
 end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -130,19 +132,25 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
+OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
 nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 measure_tag     = 'WL';
-OPTIONS = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
+pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
-%% Run cMEM
-bst_progress('start', 'Reconstruction by cMEM', 'Launching cMEM...');
+if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
+    bst_report('Warning', sProcess, sInputs, sprintf('%s was not tested for fNIRS data, proceed with caution',pipeline ))
+end
+
+%% Run MEM
+bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...', pipeline));
 [dOD_sources_cMEM,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn );
+
 %% Save results
 bst_progress('text', 'Saving Results...');
 for iwl=1:nb_wavelengths
      swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
      [sStudy, ResultFile] = add_surf_data(squeeze(dOD_sources_cMEM(:,iwl,:)), sDataIn.Time, nirs_head_model, ...
-         [OPTIONS.Comment     ' sources - ' swl 'nm'], ...
+         [diagnosis(iwl).Comment     ' | ' swl 'nm'], ...
          sInputs, sStudy, diagnosis(iwl).Comment, ...
          'OD', store_sparse_results,1,diagnosis(iwl));
      OutputFiles{end+1} = ResultFile;
@@ -154,13 +162,13 @@ hb_types = {'HbO', 'HbR','HbT'};
 for ihb=1:3
     [sStudy, ResultFile] = add_surf_data(squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, nirs_head_model, ...
-                                         [OPTIONS.Comment  ' sources - ' hb_types{ihb}], ...
+                                         [diagnosis(iwl).Comment     ' | ' hb_types{ihb}], ...
                                          sInputs, sStudy, diagnosis(iwl).Comment, ...
                                          hb_unit, store_sparse_results);    
     OutputFiles{end+1} = ResultFile;
 end
 
-bst_progress('stop', 'Reconstruction by cMEM', 'Finishing...');
+bst_progress('stop', ['Reconstruction by ' pipeline], 'Finishing...');
 % Update Brainstorm database
 bst_set('Study', sInputs.iStudy, sStudy);
 end
@@ -276,7 +284,7 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
 
     %% Run cMEM
     
-    OPTIONS.Comment         = 'cMEM';
+    OPTIONS.Comment         = 'MEM';
     OPTIONS.DataFile        = DataFile;
     OPTIONS.ResultFile      = [];
     OPTIONS.HeadModelFile   =  HeadModel.FileName;
