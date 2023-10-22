@@ -115,10 +115,12 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     if strcmp(sInputs.FileType, 'data')     % Imported data structure
         sDataIn = in_bst_data(sInputs(1).FileName);
         events = sDataIn.Events;
+        isRaw  = 0;
     elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
         sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
         sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
         events = sDataRaw.F.events;
+        isRaw  = 1;
     end
     
     parameters = parse_options(sProcess, sDataIn);
@@ -149,35 +151,61 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      if strcmp(cond_name(1:4), '@raw')
         cond_name = cond_name(5:end);
      end
-     iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_dOD']);
+
+     if isRaw
+        iStudy = db_add_condition(sInputs.SubjectName, ['@raw', cond_name, '_dOD']);
+     else
+         iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_dOD']);
+     end
      sStudy = bst_get('Study', iStudy);
-%     
+     
 %     % Save channel definition
      [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
      db_set_channel(iChannelStudy, ChannelMat, 0, 0);
         
-    % Save time-series data
-%     final_nirs = sDataIn.F;
-%     final_nirs(to_keep, :) = final_nirs';
-    sDataOut = db_template('data');
-    sDataOut.F            = final_dOD';
-    sDataOut.Comment      = sDataIn.Comment;
-    %sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.ChannelFlag  = ones(size(final_dOD, 2), 1);
-    sDataOut.Time         = sDataIn.Time;
-    sDataOut.DataType     = 'recordings'; 
-    sDataOut.nAvg         = 1;
-    sDataOut.Events       = events;
-    sDataOut.History      = sDataIn.History;
-    sDataOut              = bst_history('add', sDataOut, 'process', sProcess.Comment);
-    sDataOut.DisplayUnits = 'delta OD';
+     if ~isRaw
+        % Save time-series data
+        sDataOut = db_template('data');
+        sDataOut.F            = final_dOD';
+        sDataOut.Comment      = sDataIn.Comment;
+        %sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.ChannelFlag  = ones(size(final_dOD, 2), 1);
+        sDataOut.Time         = sDataIn.Time;
+        sDataOut.DataType     = 'recordings'; 
+        sDataOut.nAvg          = 1;
+        sDataOut.Events       = events;
+        sDataOut.History      = sDataIn.History;
+        sDataOut              = bst_history('add', sDataOut, 'process', sProcess.Comment);
+        sDataOut.DisplayUnits = 'delta OD';
+        
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+         % Register in database
+        db_add_data(iStudy, OutputFile, sDataOut);
 
-    % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_OD');
-    sDataOut.FileName = file_short(OutputFile);
-    bst_save(OutputFile, sDataOut, 'v7');
-    % Register in database
-    db_add_data(iStudy, OutputFile, sDataOut);
+     else
+
+        % Generate a new file name in the same folder
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
+
+        sFileIn = sDataRaw.F;
+        sFileOut = out_fopen(OutputFile, 'BST-BIN',sFileIn , ChannelMat);
+         % Set Output sFile structure
+        sOutMat.F = sFileOut;
+        % Save new link to raw .mat file
+        bst_save(OutputFile, sOutMat, 'v6');
+        % Create new channel file
+        db_set_channel(iStudy, ChannelMat, 2, 0);
+        % Write block
+        out_fwrite(sFileOut, ChannelMat, 1, [], [], final_dOD');
+        % Register in BST database
+        sFileOut.Comment      = sDataIn.Comment;
+        db_add_data(iStudy, OutputFile, sFileOut);
+        OutputFile={};
+        OutputFile{1} = OutputFile;    
+     end
+
+     
 end
 
 
