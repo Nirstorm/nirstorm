@@ -192,6 +192,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sFileOut = out_fopen(OutputFile, 'BST-BIN',sFileIn , ChannelMat);
          % Set Output sFile structure
         sOutMat.F = sFileOut;
+        sOutMat.Comment = sDataIn.Comment;
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');
         % Create new channel file
@@ -199,10 +200,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Write block
         out_fwrite(sFileOut, ChannelMat, 1, [], [], final_dOD');
         % Register in BST database
-        sFileOut.Comment      = sDataIn.Comment;
-        db_add_data(iStudy, OutputFile, sFileOut);
-        OutputFile={};
-        OutputFile{1} = OutputFile;    
+        db_add_data(iStudy, OutputFile, sOutMat);
      end
 
      
