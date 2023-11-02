@@ -163,6 +163,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
      db_set_channel(iChannelStudy, ChannelMat, 0, 0);
         
+     % Generate a new file name in the same folder
+     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
+
      if ~isRaw
         % Save time-series data
         sDataOut = db_template('data');
@@ -185,12 +188,10 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
      else
 
-        % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
-
         sFileIn = sDataRaw.F;
         sFileOut = out_fopen(OutputFile, 'BST-BIN',sFileIn , ChannelMat);
          % Set Output sFile structure
+        sOutMat.format = 'BST-BIN';
         sOutMat.F = sFileOut;
         sOutMat.Comment = sDataIn.Comment;
         % Save new link to raw .mat file
@@ -202,8 +203,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Register in BST database
         db_add_data(iStudy, OutputFile, sOutMat);
      end
-
-     
 end
 
 
