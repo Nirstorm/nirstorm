@@ -29,8 +29,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 %TOCHECK: how do we limit the input file types (only NIRS data)?
 sProcess.Comment     = 'Motion correction';
-sProcess.FileTag     = 'mvt corr';
-sProcess.Category    = 'File';
+sProcess.FileTag     = 'mvt_corr';
+sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1305; %0: not shown, >0: defines place in the list of processes
 sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
@@ -86,8 +86,7 @@ Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
-OutputFile = {};
+function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
 
 if strcmp(sProcess.options.method.Value,'spline')
     if ~license('test', 'Curve_Fitting_Toolbox')
@@ -157,33 +156,10 @@ if any(new_negs)
 
 end
 
-data_corr_full = sDataIn.F';
-data_corr_full(:, nirs_ichans) = data_corr;
-data_corr = data_corr_full;
+% Export 
+sInputs.A(nirs_ichans,:) = data_corr';
+sInputs.Comment      = [sInputs.Comment '| Motion-corrected'];
 
-% Save time-series data
-sDataOut = db_template('data');
-sDataOut.F            = data_corr';
-sDataOut.Comment      = [sInputs.Comment '| Motion-corrected'];
-sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-sDataOut.Time         = sDataIn.Time;
-sDataOut.DataType     = 'recordings';
-sDataOut.History      = sDataIn.History;
-sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
-
-sDataOut.nAvg         = 1;
-sDataOut.Events       = events;
-
-    
-sDataOut.DisplayUnits = sDataIn.DisplayUnits;
-    
-% Generate a new file name in the same folder
-sStudy = bst_get('Study', sInputs.iStudy);
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_motion_corr');
-sDataOut.FileName = file_short(OutputFile);
-bst_save(OutputFile, sDataOut, 'v7');
-% Register in database
-db_add_data(sInputs.iStudy, OutputFile, sDataOut);
 end
 
 
