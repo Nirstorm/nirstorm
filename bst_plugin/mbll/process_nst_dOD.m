@@ -174,7 +174,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut = db_template('data');
         sDataOut.F            = final_dOD';
         sDataOut.Comment      = [sDataIn.Comment ' | OD '];
-        %sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
         sDataOut.ChannelFlag  = ones(size(final_dOD, 2), 1);
         sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings'; 
@@ -201,6 +200,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
         sFileIn = sDataRaw.F;
         sFileIn.channelflag  = ones(size(final_dOD, 2), 1);
+        sFileIn.ChannelFlag  = ones(size(final_dOD, 2), 1);
 
         [sFileOut, errMsg] = out_fopen(RawFileOut, 'BST-BIN', sFileIn, ChannelMat);
 
@@ -210,6 +210,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat.DataType     = 'raw'; 
         sOutMat.History      = sDataIn.History;
         sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
+        sOutMat.ChannelFlag  = ones(size(final_dOD, 2), 1);
         sOutMat.DisplayUnits = 'delta OD';
 
         sOutMat.Comment = [sDataIn.Comment ' | OD ']; 

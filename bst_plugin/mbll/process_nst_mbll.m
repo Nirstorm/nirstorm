@@ -146,7 +146,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_nirs'; 
-        sDataOut.Comment      = [sInputs(1).Comment ' | Hb '];
+        sDataOut.Comment      = [sInputs(1).Comment ' | Hb [Topo]'];
         sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
         sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings'; 
@@ -181,8 +181,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat.DataType     = 'raw'; 
         sOutMat.History      = sDataIn.History;
         sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
+        sOutMat.ChannelFlag  = ones(size(final_nirs, 2), 1);
         sOutMat.DisplayUnits = 'mol.l-1';
-        sOutMat.Comment = [sInputs(1).Comment ' | Hb '];
+        sOutMat.Comment = [sInputs(1).Comment ' | Hb [Topo]'];
 
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');

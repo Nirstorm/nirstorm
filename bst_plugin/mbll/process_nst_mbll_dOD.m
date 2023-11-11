@@ -18,7 +18,7 @@ function varargout = process_nst_mbll_dOD( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire(2020)
+% Authors: Edouard Delaire(2020-2023)
 
 eval(macro_method);
 end
@@ -36,7 +36,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
-    sProcess.OutputTypes = {'data', 'data'}; %TODO: 'raw' -> 'raw' or 'raw' -> 'data'?
+    sProcess.OutputTypes = {'data', 'raw'}; 
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     % Definition of the options
@@ -70,13 +70,11 @@ end
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFile = {};
     
-    % TODO: check for negative values
-    % Get option values   
-    age             = sProcess.options.option_age.Value{1};
 
+    age             = sProcess.options.option_age.Value{1};
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
-    pvf = sProcess.options.option_pvf.Value{1};
-    dpf_method = sProcess.options.option_dpf_method.Value{1};
+    pvf             = sProcess.options.option_pvf.Value{1};
+    dpf_method      = sProcess.options.option_dpf_method.Value{1};
 
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -85,13 +83,13 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     if strcmp(sInputs.FileType, 'data')     % Imported data structure
         sDataIn = in_bst_data(sInputs(1).FileName);
         events = sDataIn.Events;
+        isRaw  = 0;
     elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
         sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
         sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
         events = sDataRaw.F.events;
+        isRaw  = 1;
     end
-    
-
     
     % Remove bad channels: they won't enter MBLL computation so no need to keep them 
     [good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels',sDataIn.F', ChanneMat, sDataIn.ChannelFlag);
@@ -101,7 +99,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
 
     % Apply MBLL
-    % TODO: add baseline window and expose it
     [nirs_hb, channels_hb] = process_nst_mbll('Compute',fnirs, fchannel_def, age, [], do_plp_corr, pvf, dpf_method); 
     
     % Re-add other channels that were not changed during MBLL
@@ -116,7 +113,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         
     
         % Apply MBLL
-        % TODO: add baseline window and expose it
         [nirs_hb, channels_hb] = process_nst_mbll('Compute',fnirs, fchannel_def, age, [], do_plp_corr, pvf, dpf_method); 
         
         % Re-add other channels that were not changed during MBLL
@@ -129,35 +125,78 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     if length(cond_name)>=4 && strcmp(cond_name(1:4), '@raw')
         cond_name = cond_name(5:end);
     end
-    iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_Hb']);
+
+    if isRaw
+        newCondition = ['@raw', cond_name, '_Hb'];
+    else
+        newCondition =  [cond_name, '_Hb'];
+    end
+
+    iStudy = db_add_condition(sInputs.SubjectName, newCondition);
     sStudy = bst_get('Study', iStudy);
     
     % Save channel definition
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
     db_set_channel(iChannelStudy, ChannelMat, 0, 0);
-    
-    % Save time-series data
-    sDataOut = db_template('data');
-    sDataOut.F            = final_nirs'; % TOCHECK brainstorm expects MILLIMOL!!
-    if ~isempty(sDataIn.Std)
-        sDataOut.Std          = final_nirs_std';
-    end
-    sDataOut.Comment      = sDataIn.Comment;
-    sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
-    sDataOut.Time         = sDataIn.Time;
-    sDataOut.DataType     = 'recordings'; 
-    sDataOut.nAvg         = sDataIn.nAvg;
-    sDataOut.Leff         = sDataIn.Leff;
-    sDataOut.Events       = events;
-    sDataOut.History      = sDataIn.History;
-    sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
-    sDataOut.DisplayUnits = 'mol.l-1';
 
     % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_hb');
-    sDataOut.FileName = file_short(OutputFile);
-    bst_save(OutputFile, sDataOut, 'v7');
-    % Register in database
-    db_add_data(iStudy, OutputFile, sDataOut);
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_hb');
+
+     if ~isRaw
+        % Save time-series data
+        sDataOut = db_template('data');
+        sDataOut.F            = final_nirs'; 
+        if ~isempty(sDataIn.Std)
+            sDataOut.Std          = final_nirs_std';
+        end
+        sDataOut.Comment      = [sInputs(1).Comment ' | Hb [Topo]'];
+        sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
+        sDataOut.Time         = sDataIn.Time;
+        sDataOut.DataType     = 'recordings'; 
+        sDataOut.nAvg         = sDataIn.nAvg;
+        sDataOut.Leff         = sDataIn.Leff;
+        sDataOut.Events       = events;
+        sDataOut.History      = sDataIn.History;
+        sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
+        sDataOut.DisplayUnits = 'mol.l-1';
+    
+        % Generate a new file name in the same folder
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_hb');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(iStudy, OutputFile, sDataOut);
+     else
+        ProtocolInfo = bst_get('ProtocolInfo');
+        newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
+
+        [tmp, rawBaseOut, rawBaseExt] = bst_fileparts(newStudyPath);
+        rawBaseOut = strrep([rawBaseOut rawBaseExt], '@raw', '');
+        % Full output filename
+        RawFileOut = bst_fullfile(newStudyPath, [rawBaseOut '.bst']);
+
+        sFileIn = sDataRaw.F;
+        sFileIn.channelflag  = ones(size(final_nirs, 2), 1);
+        [sFileOut, errMsg] = out_fopen(RawFileOut, 'BST-BIN', sFileIn, ChannelMat);
+
+         % Set Output sFile structure
+        sOutMat.format = 'BST-BIN';
+        sOutMat.F = sFileOut;
+        sOutMat.DataType     = 'raw'; 
+        sOutMat.History      = sDataIn.History;
+        sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
+        sOutMat.ChannelFlag  = ones(size(final_nirs, 2), 1);
+        sOutMat.DisplayUnits = 'mol.l-1';
+        sOutMat.Comment = [sInputs(1).Comment ' | Hb [Topo]'];
+
+        % Save new link to raw .mat file
+        bst_save(OutputFile, sOutMat, 'v6');
+        % Create new channel file
+        db_set_channel(iStudy, ChannelMat, 2, 0);
+        % Write block
+        out_fwrite(sFileOut, ChannelMat, 1, [], [], final_nirs');
+        % Register in BST database
+        db_add_data(iStudy, OutputFile, sOutMat);
+     end
 end
 
