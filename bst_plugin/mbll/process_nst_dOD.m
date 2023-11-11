@@ -153,10 +153,12 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      end
 
      if isRaw
-        iStudy = db_add_condition(sInputs.SubjectName, ['@raw', cond_name, '_dOD']);
+         newCondition = ['@raw', cond_name, '_dOD'];
      else
-         iStudy = db_add_condition(sInputs.SubjectName, [cond_name, '_dOD']);
+         newCondition =  [cond_name, '_dOD'];
      end
+
+     iStudy = db_add_condition(sInputs.SubjectName, newCondition);
      sStudy = bst_get('Study', iStudy);
      
 %     % Save channel definition
@@ -164,9 +166,13 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      db_set_channel(iChannelStudy, ChannelMat, 0, 0);
         
      % Generate a new file name in the same folder
+
+     newStudyPath = bst_fileparts(sStudy.FileName);
+
      OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
 
      if ~isRaw
+
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_dOD';
@@ -187,9 +193,19 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         db_add_data(iStudy, OutputFile, sDataOut);
 
      else
+        ProtocolInfo = bst_get('ProtocolInfo');
+
+        newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
+
+        [tmp, rawBaseOut, rawBaseExt] = bst_fileparts(newStudyPath);
+        rawBaseOut = strrep([rawBaseOut rawBaseExt], '@raw', '');
+        % Full output filename
+        RawFileOut = bst_fullfile(newStudyPath, [rawBaseOut '.bst']);
 
         sFileIn = sDataRaw.F;
-        sFileOut = out_fopen(OutputFile, 'BST-BIN',sFileIn , ChannelMat);
+        
+        [sFileOut, errMsg] = out_fopen(RawFileOut, 'BST-BIN', sFileIn, ChannelMat);
+
          % Set Output sFile structure
         sOutMat.format = 'BST-BIN';
         sOutMat.F = sFileOut;
