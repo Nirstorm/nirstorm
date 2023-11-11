@@ -210,6 +210,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat.format = 'BST-BIN';
         sOutMat.F = sFileOut;
         sOutMat.DataType     = 'raw'; 
+        sOutMat.History      = sDataIn.History;
+        sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
+        sOutMat.DisplayUnits = 'delta OD';
 
         sOutMat.Comment = sDataIn.Comment;
         % Save new link to raw .mat file
