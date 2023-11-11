@@ -29,7 +29,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 %TOCHECK: how do we limit the input file types (only NIRS data)?
 sProcess.Comment     = 'Motion correction';
-sProcess.FileTag     = 'mvt_corr';
+sProcess.FileTag     = @GetFileTag;
 sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1305; %0: not shown, >0: defines place in the list of processes
@@ -81,9 +81,24 @@ sProcess.options.citation_tddr.Class    = 'tddr';
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
-Comment = sProcess.Comment;
+function [Comment, fileTag] = FormatComment(sProcess)
+    % Get options
+
+    % Format comment
+     if strcmp(sProcess.options.method.Value,'spline')
+        Comment = 'Motion Corrected (spline)';
+        fileTag = 'motion';
+     else
+        Comment = 'Motion Corrected (TDDR)';
+        fileTag = 'motion';
+    end
 end
+
+%% ===== GET FILE TAG =====
+function fileTag = GetFileTag(sProcess)
+    [Comment, fileTag] = FormatComment(sProcess);
+end
+
 
 %% ===== RUN =====
 function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
@@ -100,18 +115,19 @@ if strcmp(sProcess.options.method.Value,'spline')
 end
 
 % Get selected events
-event_name =  strtrim(sProcess.options.option_event_name.Value);
+event_name  =  strtrim(sProcess.options.option_event_name.Value);
+events      = sInputs.Events;
 
 % Load recordings
-if strcmp(sInputs.FileType, 'data')     % Imported data structure
-    sDataIn = in_bst_data(sInputs.FileName);
-    events = sDataIn.Events;
-elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
-    sDataRaw = in_bst_data(sInputs.FileName, 'F');
-    events = sDataRaw.F.events;
-end
-    
+% if strcmp(sInputs.FileType, 'data')     % Imported data structure
+%     sDataIn = in_bst_data(sInputs.FileName);
+%     events = sDataIn.Events;
+% elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
+%     sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
+%     sDataRaw = in_bst_data(sInputs.FileName, 'F');
+%     events = sDataRaw.F.events;
+% end
+   
 event = [];
 if strcmp(sProcess.options.method.Value,'spline')
     ievt_mvt = [];
@@ -127,14 +143,16 @@ if strcmp(sProcess.options.method.Value,'spline')
     end
 end
 
+
+
 % Process only NIRS channels
 channels = in_bst_channel(sInputs.ChannelFile);
 nirs_ichans = channel_find(channels.Channel, 'NIRS');
-data_nirs = sDataIn.F(nirs_ichans, :)';
+data_nirs = sInputs.A(nirs_ichans, :)';
 
 prev_negs = any(data_nirs <= 0, 1);
 
-data_corr = Compute(data_nirs, sDataIn.Time', event,sProcess.options.method.Value,sProcess.options.option_smoothing.Value{1});
+data_corr = Compute(data_nirs, sInputs.TimeVector', event,sProcess.options.method.Value,sProcess.options.option_smoothing.Value{1});
 
 new_negs = any(data_corr <= 0, 1) & ~prev_negs;
 negative_chan=find(new_negs);
@@ -158,7 +176,7 @@ end
 
 % Export 
 sInputs.A(nirs_ichans,:) = data_corr';
-sInputs.Comment      = [sInputs.Comment '| Motion-corrected'];
+sInputs.CommentTag       = FormatComment(sProcess);
 
 end
 
