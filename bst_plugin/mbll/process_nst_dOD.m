@@ -36,7 +36,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
-    sProcess.OutputTypes = {'data', 'data'}; 
+    sProcess.OutputTypes = {'data', 'raw'}; 
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
 
@@ -166,9 +166,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      db_set_channel(iChannelStudy, ChannelMat, 0, 0);
         
      % Generate a new file name in the same folder
-
-     newStudyPath = bst_fileparts(sStudy.FileName);
-
      OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
 
      if ~isRaw
@@ -203,7 +200,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         RawFileOut = bst_fullfile(newStudyPath, [rawBaseOut '.bst']);
 
         sFileIn = sDataRaw.F;
-        
+        sFileIn.channelflag  = ones(size(final_dOD, 2), 1);
+
         [sFileOut, errMsg] = out_fopen(RawFileOut, 'BST-BIN', sFileIn, ChannelMat);
 
          % Set Output sFile structure
