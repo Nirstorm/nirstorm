@@ -209,6 +209,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
          % Set Output sFile structure
         sOutMat.format = 'BST-BIN';
         sOutMat.F = sFileOut;
+        sOutMat.DataType     = 'raw'; 
+
         sOutMat.Comment = sDataIn.Comment;
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');
