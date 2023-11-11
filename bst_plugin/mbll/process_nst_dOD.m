@@ -18,7 +18,7 @@ function varargout = process_nst_dOD( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2016)
+% Authors: Thomas Vincent (2015-2016), Edouard Delaire (2023)
 
 eval(macro_method);
 end
@@ -173,7 +173,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_dOD';
-        sDataOut.Comment      = sDataIn.Comment;
+        sDataOut.Comment      = [sDataIn.Comment ' | OD '];
         %sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
         sDataOut.ChannelFlag  = ones(size(final_dOD, 2), 1);
         sDataOut.Time         = sDataIn.Time;
@@ -212,7 +212,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
         sOutMat.DisplayUnits = 'delta OD';
 
-        sOutMat.Comment = sDataIn.Comment;
+        sOutMat.Comment = [sDataIn.Comment ' | OD ']; 
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');
         % Create new channel file

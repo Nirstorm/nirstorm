@@ -18,7 +18,7 @@ function varargout = process_nst_mbll( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2020)
+% Authors: Thomas Vincent (2015-2020), Edouard Delaire (2023)
 
 eval(macro_method);
 end
@@ -72,10 +72,8 @@ end
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFile = {};
     
-    % TODO: check for negative values
     % Get option values   
     age             = sProcess.options.option_age.Value{1};
-
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
     pvf = sProcess.options.option_pvf.Value{1};
     dpf_method = sProcess.options.option_dpf_method.Value{1};
@@ -83,7 +81,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
     
-        % Load recordings
+    % Load recordings
     if strcmp(sInputs.FileType, 'data')     % Imported data structure
         sDataIn = in_bst_data(sInputs(1).FileName);
         events = sDataIn.Events;
@@ -148,7 +146,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_nirs'; 
-        sDataOut.Comment      = [sInputs(1).Comment ' | Hb [Topo]'];
+        sDataOut.Comment      = [sInputs(1).Comment ' | Hb '];
         sDataOut.ChannelFlag  = ones(size(final_nirs, 2), 1);
         sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings'; 
@@ -184,7 +182,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat.History      = sDataIn.History;
         sOutMat              = bst_history('add', sOutMat, 'process', sProcess.Comment);
         sOutMat.DisplayUnits = 'mol.l-1';
-        sOutMat.Comment = [sInputs(1).Comment ' | Hb [Topo]'];
+        sOutMat.Comment = [sInputs(1).Comment ' | Hb '];
 
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');
