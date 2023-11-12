@@ -18,7 +18,7 @@ function varargout = process_nst_motion_correction( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2018)
+% Authors: Thomas Vincent (2015-2018), Edouard Delaire (2023)
 
 eval(macro_method);
 end

@@ -203,7 +203,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
     if strcmp(sFile.FileType, 'data')     % Imported data structure
         sDataIn = in_bst_data(sFile.FileName);
     elseif strcmp(sFile.FileType, 'raw')  % Continuous data file
-        sDataIn = in_bst(sFileFileName, [], 1, 1, 'no');
+        sDataIn = in_bst(sFile.FileName, [], 1, 1, 'no');
     end
     
     ChannelMat = in_bst_channel(sFile.ChannelFile);

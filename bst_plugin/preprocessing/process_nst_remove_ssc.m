@@ -18,7 +18,7 @@ function varargout = process_nst_remove_ssc( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Delaire Edouard (2020)
+% Authors: Delaire Edouard (2020-2023)
 %
 %
 eval(macro_method);
@@ -28,7 +28,8 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Remove superficial noise';
-sProcess.Category    = 'File';
+sProcess.Category    = 'Filter';
+sProcess.FileTag     = @GetFileTag;
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1308;
 sProcess.isSeparator = 0;
@@ -36,7 +37,7 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
-sProcess.OutputTypes = {'data'};
+sProcess.OutputTypes = {'data','raw'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
@@ -72,23 +73,19 @@ function s = str_pad(s,padsize)
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)
-Comment = sProcess.Comment;
+function [Comment, fileTag] = FormatComment(sProcess)
+    Comment = 'SSC (mean)';
+    fileTag = 'scr';
 end
 
-function [OutputFiles_SSC] = Run(sProcess, sInput)
-
-OutputFiles_SSC = {};
-
-
-    
-% Load recordings
-if strcmp(sInput.FileType, 'data')     % Imported data structure
-    sDataIn = in_bst_data(sInput.FileName);
-elseif strcmp(sInput.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInput.FileName, [], 1, 1, 'no');
+%% ===== GET FILE TAG =====
+function fileTag = GetFileTag(sProcess)
+    [Comment, fileTag] = FormatComment(sProcess);
 end
-    
+
+function sInput = Run(sProcess, sInput)
+
+
 ChannelMat = in_bst_channel(sInput.ChannelFile);
 [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
 
@@ -98,19 +95,19 @@ types=unique({ChannelMat.Channel(nirs_ichans).Group});
 % Get time window
 if isfield(sProcess.options, 'baseline') && isfield(sProcess.options.baseline, 'Value') && iscell(sProcess.options.baseline.Value) && ~isempty(sProcess.options.baseline.Value) && ~isempty(sProcess.options.baseline.Value{1})
     Time = sProcess.options.baseline.Value{1};
-    iBaseline = panel_time('GetTimeIndices', sDataIn.Time, Time);
+    iBaseline = panel_time('GetTimeIndices', sInput.TimeVector, Time);
 else
     Time = [];
-    iBaseline = 1:length(sDataIn.Time);
+    iBaseline = 1:length(sInput.TimeVector);
 end
 
 
-F= sDataIn.F;
-F_resudial= sDataIn.F;
+F= sInput.A;
+F_resudial= sInput.A;
 
 for itype = 1 :length(types)
     nirs_ichans = strcmp( {ChannelMat.Channel.Type},'NIRS') & strcmp( {ChannelMat.Channel.Group},types{itype});
-    model       = nst_glm_initialize_model(sDataIn.Time);
+    model       = nst_glm_initialize_model(sInput.TimeVector);
     
     % Include short-seperation channel
     if strcmp(sProcess.options.SS_chan.Value,'distance') % based on distance
@@ -127,7 +124,7 @@ for itype = 1 :length(types)
     
     if code < 0 
         bst_report('Error',   sProcess, sInput, message)
-        Y= sDataIn.F(nirs_ichans,:)';
+        Y = sInput.A(nirs_ichans,:)';
         F(nirs_ichans,:) = Y';
         continue;
     else
@@ -142,61 +139,26 @@ for itype = 1 :length(types)
 
 
 
-    Y_baseline = sDataIn.F(nirs_ichans,iBaseline)';
+    Y_baseline = sInput.A(nirs_ichans,iBaseline)';
     [B,proj_X] = nst_glm_fit_B(model_fit,Y_baseline, 'SVD');
     
 
-    Y = sDataIn.F(nirs_ichans,:)';
+    Y = sInput.A(nirs_ichans,:)';
     Y = Y - model.X*B;
     F(nirs_ichans,:) = Y';
     F_resudial(nirs_ichans,:) = (model.X*B)';
 end    
 
 
-
-sDataOut                    = sDataIn;
-sDataOut.F                  = F;
+sInput.A  = F;
 % Add time window to the comment
-strMethod = '| SSC (mean)';
+strMethod = 'SSC (mean)';
 if isempty(Time)
     Comment = [strMethod, ': [All file]'];
 else 
     Comment = [strMethod, sprintf(': [%1.3fs,%1.3fs]', Time(1), Time(2))];
 end
-sDataOut.Comment            = [sInput.Comment Comment];
-sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
-
-% Generate a new file name in the same folder
-sStudy = bst_get('Study', sInput.iStudy);
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_lsc');
-sDataOut.FileName = file_short(OutputFile);
-bst_save(OutputFile, sDataOut, 'v7');
-% Register in database
-db_add_data(sInput.iStudy, OutputFile, sDataOut);
-OutputFiles_SSC{1} = OutputFile;
-
-
-
-sDataOut                    = sDataIn;
-sDataOut.F                  = F_resudial;
-% Add time window to the comment
-strMethod = '| SSC(residual)';
-if isempty(Time)
-    Comment = [strMethod, ': [All file]'];
-else 
-    Comment = [strMethod, sprintf(': [%1.3fs,%1.3fs]', Time(1), Time(2))];
-end
-sDataOut.Comment            = [sInput.Comment Comment];
-sDataOut                    = bst_history('add', sDataOut, 'process_nst_remove_ssc','Remove superficial noise'); 
-
-% % Generate a new file name in the same folder
-% sStudy = bst_get('Study', sInput.iStudy);
-% OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_lsc2');
-% sDataOut.FileName = file_short(OutputFile);
-% bst_save(OutputFile, sDataOut, 'v7');
-% % Register in database
-% db_add_data(sInput.iStudy, OutputFile, sDataOut);
-% OutputFiles_SSC{2} = OutputFile;
-
+sInput.CommentTag         = Comment;
+sInput                    = bst_history('add', sInput, 'process_nst_remove_ssc','Remove superficial noise'); 
 
 end    
