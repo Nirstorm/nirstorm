@@ -27,8 +27,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
     % Description the process
-    %TOCHECK: how do we limit the input file types (only NIRS data)?
-    sProcess.Comment     = 'Band-pass filter';
+    sProcess.Comment     = 'Band-pass filter (IIR)';
     sProcess.FileTag     = @GetFileTag; 
     sProcess.Category    = 'Filter';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
@@ -36,9 +35,9 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.isSeparator = 0;
     sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSDataProcess';
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'data', 'raw'}; %TODO: check processing of link to raw data
+    sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
-    sProcess.OutputTypes = {'data', 'data'}; %TODO: 'raw' -> 'raw' or 'raw' -> 'data'?
+    sProcess.OutputTypes = {'data', 'raw'}; 
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     % Definition of the options
@@ -136,14 +135,10 @@ end
 %% ===== RUN =====
 function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
 
-    warning('Deprecated process: use Pre-process > Band-pass filter instead');
-
     % Get option values
-    
     [low_cutoff, high_cutoff,filter_type,order,keep_mean] = GetOptions(sProcess);
     fs = 1 / diff(sInputs.TimeVector(1:2)); 
     
-    %TOCHECK: take care of bad channels here?
     % channels = in_bst_channel(sInputs.ChannelFile);
     [nirs_filtered, transient] = Compute(sInputs.A', fs, filter_type, low_cutoff, ...
                             high_cutoff, order, keep_mean);
@@ -179,7 +174,7 @@ function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
     if isfield(sInputs, 'Std') && ~isempty(sInputs.Std)
         sInputs.Std = [];
     end
-    
+
 end
 
 
