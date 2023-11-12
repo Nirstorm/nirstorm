@@ -28,7 +28,8 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Remove slow fluctuations';
-sProcess.Category    = 'File';
+sProcess.FileTag     = @GetFileTag; 
+sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1309;
 sProcess.isSeparator = 0;
@@ -68,73 +69,56 @@ sProcess.nOutputs    = 1;
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)
-Comment = sProcess.Comment;
+function [Comment, fileTag] = FormatComment(sProcess)
+    if strcmp(sProcess.options.filter_model.Type, 'legendre')
+        Comment = 'Detend (polynoial)';
+    elseif strcmp(sProcess.options.filter_model.Type, 'DCT')
+        Comment = 'Detend (DCT)';
+    else
+        Comment = 'Detend';
+    end
+
+    fileTag = 'detrend';
+end
+%% ===== GET FILE TAG =====
+function fileTag = GetFileTag(sProcess)
+    [Comment, fileTag] = FormatComment(sProcess);
 end
 
-function OutputFiles = Run(sProcess, sInput)
+function sInput = Run(sProcess, sInput)
 
-OutputFiles = {};
-keep_mean = sProcess.options.option_keep_mean.Value;
+    keep_mean = sProcess.options.option_keep_mean.Value;
+    ChannelMat = in_bst_channel(sInput.ChannelFile);
+    nirs_ichans = sInput.ChannelFlag ~= -1 & strcmpi({ChannelMat.Channel.Type}, 'NIRS')';
     
-% Load recordings
-if strcmp(sInput.FileType, 'data')     % Imported data structure
-    sDataIn = in_bst_data(sInput.FileName);
-elseif strcmp(sInput.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInput.FileName, [], 1, 1, 'no');
-end
     
-ChannelMat = in_bst_channel(sInput.ChannelFile);
-nirs_ichans = sDataIn.ChannelFlag ~= -1 & strcmpi({ChannelMat.Channel.Type}, 'NIRS')';
-
-
-Y= sDataIn.F(nirs_ichans,:)';
-
-model= nst_glm_initialize_model(sDataIn.Time);
-model= nst_glm_add_regressors(model,'constant');
-
-switch sProcess.options.filter_model.Value
-    case 'DCT'
-        model=nst_glm_add_regressors(model,'linear');  
-        if sProcess.options.option_period.Value{1} > 0
-           period=sProcess.options.option_period.Value{1};
-           model=nst_glm_add_regressors(model,'DCT',[1/sDataIn.Time(end) 1/period],{'LFO'});  
-        end
-    case 'legendre'
-        model=nst_glm_add_regressors(model,'legendre', sProcess.options.poly_order.Value{1} );  
-end
-
-
-[B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
-
-if keep_mean
-    Y = Y - model.X(:,2:end)*B(2:end,:);
-else    
-    Y = Y - model.X*B;
-end
-
-%disp(sprintf('Rank X: %d, dim X: %d',rank(model.X),size(model.X,2)))
-%nst_glm_display_model(model,'timecourse')
-
-sDataOut                    = sDataIn;
-sDataOut.F(nirs_ichans,:)   = Y';
-sDataOut.Comment            = [sInput.Comment '| detrend'];
-History                     = 'Remove Linear trend';
-if strcmp(sProcess.options.filter_model.Value,'DCT') && sProcess.options.option_period.Value{1}
-    History                 = [History sprintf(', uses DCT of period > %ds)',period)];
-end    
-if strcmp(sProcess.options.filter_model.Value,'legendre') && sProcess.options.option_period.Value{1}
-    History                 = [History sprintf('(order %d)',sProcess.options.poly_order.Value{1})];
-end    
-sDataOut                    = bst_history('add', sDataOut, 'process_nst_detrend',History);
-
-% Generate a new file name in the same folder
-sStudy = bst_get('Study', sInput.iStudy);
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_detrend');
-sDataOut.FileName = file_short(OutputFile);
-bst_save(OutputFile, sDataOut, 'v7');
-% Register in database
-db_add_data(sInput.iStudy, OutputFile, sDataOut);
-OutputFiles{1} = OutputFile;
+    Y =  sInput.A(nirs_ichans,:)';
+    
+    model = nst_glm_initialize_model(sInput.TimeVector);
+    model = nst_glm_add_regressors(model,'constant');
+    
+    switch sProcess.options.filter_model.Value
+        case 'DCT'
+            model = nst_glm_add_regressors(model,'linear');  
+            if sProcess.options.option_period.Value{1} > 0
+               period   = sProcess.options.option_period.Value{1};
+               model    = nst_glm_add_regressors(model,'DCT',[1/sInput.TimeVector(end) 1/period],{'LFO'});  
+            end
+        case 'legendre'
+            model = nst_glm_add_regressors(model,'legendre', sProcess.options.poly_order.Value{1} );  
+    end
+    
+    
+    [B,proj_X] = nst_glm_fit_B(model,Y, 'SVD');
+    
+    if keep_mean
+        Y = Y - model.X(:,2:end)*B(2:end,:);
+    else    
+        Y = Y - model.X*B;
+    end
+    
+    
+    sInput.A(nirs_ichans,:)   = Y';
+    sInput.CommentTag         = 'detrend';
 
 end    
