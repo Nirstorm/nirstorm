@@ -118,7 +118,16 @@ function sInput = Run(sProcess, sInput)
     end
     
     
-    sInput.A(nirs_ichans,:)   = Y';
-    sInput.CommentTag         = 'detrend';
+    sInput.A(nirs_ichans,:)     = Y';
+    sInput.CommentTag           = FormatComment(sProcess);
+
+    History                     = 'Remove Linear trend';
+    if strcmp(sProcess.options.filter_model.Value,'DCT') && sProcess.options.option_period.Value{1}
+        History                 = [History sprintf('(using DCT of period > %ds)',period)];
+      
+    elseif strcmp(sProcess.options.filter_model.Value,'legendre') && sProcess.options.option_period.Value{1}
+        History                 = [History sprintf('(using %d order polynomial)',sProcess.options.poly_order.Value{1})];
+    end    
+    sInput.HistoryComment = History;
 
 end    
