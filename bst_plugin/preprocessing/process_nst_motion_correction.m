@@ -116,17 +116,15 @@ end
 
 % Get selected events
 event_name  =  strtrim(sProcess.options.option_event_name.Value);
-events      = sInputs.Events;
 
-% Load recordings
-% if strcmp(sInputs.FileType, 'data')     % Imported data structure
-%     sDataIn = in_bst_data(sInputs.FileName);
-%     events = sDataIn.Events;
-% elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-%     sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
-%     sDataRaw = in_bst_data(sInputs.FileName, 'F');
-%     events = sDataRaw.F.events;
-% end
+% Load Events
+if strcmp(sInputs.FileType, 'data')     % Imported data structure
+    sDataIn = in_bst_data(sInputs.FileName, 'Events');
+    events = sDataIn.Events;
+elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
+    sDataRaw = in_bst_data(sInputs.FileName, 'F');
+    events = sDataRaw.F.events;
+end
    
 event = [];
 if strcmp(sProcess.options.method.Value,'spline')
