@@ -158,7 +158,8 @@ if isempty(Time)
 else 
     Comment = [strMethod, sprintf(': [%1.3fs,%1.3fs]', Time(1), Time(2))];
 end
+
 sInput.CommentTag         = Comment;
-sInput                    = bst_history('add', sInput, 'process_nst_remove_ssc','Remove superficial noise'); 
+sInput.HistoryComment     = ['Remove superficial noise : ' strMethod]; 
 
 end    
