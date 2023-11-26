@@ -65,8 +65,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
    sources_pos  = [];
    det_pos      = [];
    
-   modalities   = {};
-
    for iFile = 1:length(sInputs)
 
         % Load channel file
