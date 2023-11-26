@@ -58,16 +58,16 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
    OutputFiles = {};
    
-   n_source = 1;
-   n_det = 1;
+   n_source     = 1;
+   n_det        = 1;
    new_channels = []; 
    
-   sources_pos = [];
-   det_pos = [];
+   sources_pos  = [];
+   det_pos      = [];
    
    for iFile = 1:length(sInputs)
+       
         % Load channel file
-        
         mapSources = containers.Map();
         mapDet     = containers.Map();
 
@@ -75,21 +75,25 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         ChanneMat = in_bst_channel(sInputs(iFile).ChannelFile);
         channels = ChanneMat.Channel;
         for i_chan = 1:length(channels)
-            [isrcs, idets, measures, channel_type] = nst_unformat_channel(channels(i_chan).Name);
-            if ~mapSources.isKey(num2str(isrcs))
-                mapSources(num2str(isrcs)) = n_source;
-                sources_pos = [sources_pos channels(i_chan).Loc(:,1) ];
-                n_source = n_source +1;
-            end   
-            if ~mapDet.isKey(num2str(idets))
-                mapDet(num2str(idets)) = n_det;
-                det_pos = [det_pos channels(i_chan).Loc(:,2) ];
-                n_det = n_det +1;
-            end   
-            tmp = sprintf('S%dD%dWL%d', mapSources(num2str(isrcs)), mapDet(num2str(idets)),measures);
-            %disp(sprintf('%s => %s', channels(i_chan).Name, tmp));
-            channels(i_chan).Name = tmp;
             
+            if strcmp(channels(i_chan).Type,'NIRS')
+                [isrcs, idets, measures, channel_type] = nst_unformat_channel(channels(i_chan).Name);
+                if ~mapSources.isKey(num2str(isrcs))
+                    mapSources(num2str(isrcs)) = n_source;
+                    sources_pos = [sources_pos channels(i_chan).Loc(:,1) ];
+                    n_source = n_source +1;
+                end   
+                if ~mapDet.isKey(num2str(idets))
+                    mapDet(num2str(idets)) = n_det;
+                    det_pos = [det_pos channels(i_chan).Loc(:,2) ];
+                    n_det = n_det +1;
+                end   
+                tmp = sprintf('S%dD%dWL%d', mapSources(num2str(isrcs)), mapDet(num2str(idets)),measures);
+                %disp(sprintf('%s => %s', channels(i_chan).Name, tmp));
+                channels(i_chan).Name = tmp;
+            end
+
+
             if isempty(new_channels)
                 new_channels = channels(i_chan);
             else
