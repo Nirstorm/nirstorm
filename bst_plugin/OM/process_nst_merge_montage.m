@@ -65,15 +65,20 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
    sources_pos  = [];
    det_pos      = [];
    
+   modalities   = {};
+
    for iFile = 1:length(sInputs)
-       
+
         % Load channel file
         mapSources = containers.Map();
         mapDet     = containers.Map();
 
         
-        ChanneMat = in_bst_channel(sInputs(iFile).ChannelFile);
-        channels = ChanneMat.Channel;
+        ChannelMat = in_bst_channel(sInputs(iFile).ChannelFile);
+        channels = ChannelMat.Channel;
+
+
+
         for i_chan = 1:length(channels)
             
             if strcmp(channels(i_chan).Type,'NIRS')
@@ -114,14 +119,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     iStudy = db_add_condition(sInputs(1).SubjectName, [sInputs(1).Condition, '_merge2']);
     sStudy = bst_get('Study', iStudy);
     
-    
-    ChanneMat.Channel = new_channels;
-    ChanneMat.Comment = sprintf('NIRS-BRS channels (%d)', length(new_channels));
+    ChannelMat         = db_template('channel');
+    ChannelMat.Channel = new_channels;
+    ChannelMat.Comment = sprintf('NIRS-BRS channels (%d)', length(new_channels));
+    for iFile = 1:length(sInputs)
+        ChannelMat = bst_history('add', ChannelMat, 'merge', ['Merged file: ' file_short(sInputs(iFile).FileName)]);
+        tmp =  in_bst_channel(sInputs(iFile).ChannelFile);
+        ChannelMat = bst_history('add', ChannelMat, tmp.History,[ 'From' file_short(sInputs(iFile).FileName) ': ' ] );
+        if isfield(tmp,'Nirs') && ~isfield(ChannelMat,'Nirs')
+            ChannelMat.Nirs = tmp.Nirs;
+        end
+    end
+
     % Save channel definition
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-    db_set_channel(iChannelStudy, ChanneMat, 0, 0);
+    db_set_channel(iChannelStudy, ChannelMat, 2, 0);
     
-    separations = process_nst_separations('Compute',ChanneMat.Channel) * 100; %convert to cm
+    separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
     % Save time-series data
     sDataOut              = db_template('data');
     sDataOut.F            = separations;
