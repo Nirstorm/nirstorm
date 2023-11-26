@@ -58,38 +58,45 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
    OutputFiles = {};
    
-   n_source = 1;
-   n_det = 1;
+   n_source     = 1;
+   n_det        = 1;
    new_channels = []; 
    
-   sources_pos = [];
-   det_pos = [];
+   sources_pos  = [];
+   det_pos      = [];
    
    for iFile = 1:length(sInputs)
+
         % Load channel file
-        
         mapSources = containers.Map();
         mapDet     = containers.Map();
 
         
-        ChanneMat = in_bst_channel(sInputs(iFile).ChannelFile);
-        channels = ChanneMat.Channel;
+        ChannelMat = in_bst_channel(sInputs(iFile).ChannelFile);
+        channels = ChannelMat.Channel;
+
+
+
         for i_chan = 1:length(channels)
-            [isrcs, idets, measures, channel_type] = nst_unformat_channel(channels(i_chan).Name);
-            if ~mapSources.isKey(num2str(isrcs))
-                mapSources(num2str(isrcs)) = n_source;
-                sources_pos = [sources_pos channels(i_chan).Loc(:,1) ];
-                n_source = n_source +1;
-            end   
-            if ~mapDet.isKey(num2str(idets))
-                mapDet(num2str(idets)) = n_det;
-                det_pos = [det_pos channels(i_chan).Loc(:,2) ];
-                n_det = n_det +1;
-            end   
-            tmp = sprintf('S%dD%dWL%d', mapSources(num2str(isrcs)), mapDet(num2str(idets)),measures);
-            %disp(sprintf('%s => %s', channels(i_chan).Name, tmp));
-            channels(i_chan).Name = tmp;
             
+            if strcmp(channels(i_chan).Type,'NIRS')
+                [isrcs, idets, measures, channel_type] = nst_unformat_channel(channels(i_chan).Name);
+                if ~mapSources.isKey(num2str(isrcs))
+                    mapSources(num2str(isrcs)) = n_source;
+                    sources_pos = [sources_pos channels(i_chan).Loc(:,1) ];
+                    n_source = n_source +1;
+                end   
+                if ~mapDet.isKey(num2str(idets))
+                    mapDet(num2str(idets)) = n_det;
+                    det_pos = [det_pos channels(i_chan).Loc(:,2) ];
+                    n_det = n_det +1;
+                end   
+                tmp = sprintf('S%dD%dWL%d', mapSources(num2str(isrcs)), mapDet(num2str(idets)),measures);
+                %disp(sprintf('%s => %s', channels(i_chan).Name, tmp));
+                channels(i_chan).Name = tmp;
+            end
+
+
             if isempty(new_channels)
                 new_channels = channels(i_chan);
             else
@@ -110,14 +117,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     iStudy = db_add_condition(sInputs(1).SubjectName, [sInputs(1).Condition, '_merge2']);
     sStudy = bst_get('Study', iStudy);
     
-    
-    ChanneMat.Channel = new_channels;
-    ChanneMat.Comment = sprintf('NIRS-BRS channels (%d)', length(new_channels));
+    ChannelMat         = db_template('channel');
+    ChannelMat.Channel = new_channels;
+    ChannelMat.Comment = sprintf('NIRS-BRS channels (%d)', length(new_channels));
+    for iFile = 1:length(sInputs)
+        ChannelMat = bst_history('add', ChannelMat, 'merge', ['Merged file: ' file_short(sInputs(iFile).FileName)]);
+        tmp =  in_bst_channel(sInputs(iFile).ChannelFile);
+        ChannelMat = bst_history('add', ChannelMat, tmp.History,[ 'From' file_short(sInputs(iFile).FileName) ': ' ] );
+        if isfield(tmp,'Nirs') && ~isfield(ChannelMat,'Nirs')
+            ChannelMat.Nirs = tmp.Nirs;
+        end
+    end
+
     % Save channel definition
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-    db_set_channel(iChannelStudy, ChanneMat, 0, 0);
+    db_set_channel(iChannelStudy, ChannelMat, 2, 0);
     
-    separations = process_nst_separations('Compute',ChanneMat.Channel) * 100; %convert to cm
+    separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
     % Save time-series data
     sDataOut              = db_template('data');
     sDataOut.F            = separations;
