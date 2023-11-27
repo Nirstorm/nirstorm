@@ -78,30 +78,40 @@ if isempty(iSubject)
 end
 
 % Get given data information
-voronoi_fn = get_voronoi_fn(sSubject);
-
-seg_label ='segmentation_5tissues';% 'segmentation_5tissues';
+voronoi_fn      = get_voronoi_fn(sSubject);
+seg_label       = 'segmentation_5tissues';
 segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
+
+
+bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
+
 if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value              
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
 elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value 
-    msg = ['MRI segmentation (' seg_label ') not found. ' ...
-           'Interpolator cannot be constrained to grey matter, so expect PVE.'];
-    disp(['BST Warning> ' msg]);
+    
+    msg = '';
+    if sProcess.options.do_grey_mask.Value
+        msg = sprintf('MRI segmentation (%s) not found. \n', seg_label);
+    end
+    msg = [ msg, 'Interpolator is not constrained to grey matter. Expect partial volume effect.'];
+    
     bst_report('Warning', sProcess, sInputs, msg);
+
     voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName);
-    if isempty(voronoi)
-       return;
-    end
 end
+bst_progress('inc',1);
+bst_progress('text', 'Saving results');
 
 add_vol_data(voronoi, voronoi_fn, ...
              ['Voronoi interpolator for ' sSubject.Anatomy(sSubject.iAnatomy).Comment ...
               ' onto ' sSubject.Surface(sSubject.iCortex).Comment], iSubject);
 OutputFiles = {'import'};
+
+bst_progress('stop');
+
 end
 
 function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
@@ -112,13 +122,11 @@ sCortex = in_tess_bst(cortex_file);
 
 % Obtain the anatomical MRI
 sMri = in_mri_bst(anatomy_file);
-[dimx, dimy, dimz] = size(sMri.Cube);
-
 
 % Obtain the binary mask around the cortical surface
-tess2mri_interp = tess_interp_mri(cortex_file, sMri);
-index_binary_mask = (sum(tess2mri_interp,2) >0);
-binary_volume = zeros(dimx, dimy, dimz);
+tess2mri_interp     = tess_interp_mri(cortex_file, sMri);
+index_binary_mask   = (sum(tess2mri_interp,2) >0);
+binary_volume       = zeros(size(sMri.Cube));
 binary_volume(index_binary_mask) = 1;
 
 % Dilate the mask of the WG interface surface to obtain the gray matter
@@ -135,17 +143,13 @@ Vertices = cs_convert(sMri, 'scs', 'mri', Vertices) * 1000;
 
 % Vertices: MRI(MM)->MRI(Voxels)
 Vertices = bst_bsxfun(@rdivide, Vertices, sMri.Voxsize);
-
-% Generate the seed volume 
-[ Xmax, Ymax, Zmax ] = size(sMri.Cube);
-
-A_nodes = [Vertices' ] ;
+A_nodes = Vertices'  ;
 
 N1 = [];
 
 % Regeneration of a volume with only the seed points 
-vol_seeds = zeros( size(sMri.Cube)  ) ;
-Duplicates = {};
+vol_seeds   = zeros( size(sMri.Cube)  ) ;
+Duplicates  = {};
 
 % Position the seeds of the Mesh in the MRI voxel grid  : N
 for i=1:size(A_nodes,2)
@@ -164,12 +168,11 @@ end
 vol_seeds( vol_seeds==0 ) = -1 ;
 
 % Compute Voronoi Diagram for interpolation 
-xt=N1';
-List = floor(xt+0.5);
-ListRes = List;
-distance='d8';
-vox_size = sMri.Voxsize ;
-bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning (~3min) ...', 1, 2);
+xt          = N1';
+ListRes     = floor(xt+0.5);
+distance    = 'd8';
+vox_size    = sMri.Voxsize ;
+
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 
 if nargin > 2
@@ -194,9 +197,6 @@ if nargin > 2
     end
     vol_voro = tmp;
 end
-
-bst_progress('inc',1);
-bst_progress('stop');
 end
 
 
