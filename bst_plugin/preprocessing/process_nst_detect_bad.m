@@ -562,9 +562,9 @@ tot_rejection = sum( diag( confmat(selection,selection)));
 confpercent = 100*confmat ./tot_rejection;
 
 selection = any( confmat > 0, 1) & ~contains(labels,'Cardiac');
-if all(confmat(contains(labels,'power'),:) == 0)  &&  any(confmat(contains(labels,'SCI'),:)) > 0
+if all(confmat(contains(labels,'power'),:) == 0)  &&  any(confmat(contains(labels,'SCI'),:) > 0)
     selection( find(contains(labels,'power'))) = 1;
-elseif all(confmat(contains(labels,'SCI'),:) == 0)  &&  any(confmat(contains(labels,'power'),:)) > 0
+elseif all(confmat(contains(labels,'SCI'),:) == 0)  &&  any(confmat(contains(labels,'power'),:) > 0)
     selection( find(contains(labels,'SCI'))) = 1;
 end    
 confpercent=confpercent(selection,selection);

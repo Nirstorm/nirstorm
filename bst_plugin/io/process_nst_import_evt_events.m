@@ -386,7 +386,7 @@ function preview_importation(iProcess,sfreq)
             clf(hFig);
             figure(hFig);
         end
-        [path name ext]=fileparts(file{1});    
+        [path, name, ext]=fileparts(file{1});    
         message = ['<html> ' num2str( numel(newEvents))  ' events have been detected in  : ' name  ext  '<br />' ];
         for ievt=length(newEvents):-1:1
             tmp= sprintf(' - %s : %d trials. 1st trial at %1.3f sec , avg duration=%1.3f sec. <br />', ...

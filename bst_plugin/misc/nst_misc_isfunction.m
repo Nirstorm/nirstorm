@@ -1,4 +1,4 @@
-function [TF, ID] = isfunction(FUN)
+function [TF, ID] = nst_misc_isfunction(FUN)
 % ISFUNCTION - true for valid matlab functions
 %
 %   TF = ISFUNCTION(FUN) returns 1 if FUN is a valid matlab function, and 0
