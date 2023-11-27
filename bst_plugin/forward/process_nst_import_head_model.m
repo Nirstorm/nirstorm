@@ -179,7 +179,7 @@ sHead = in_tess_bst(head_mesh_fn);
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
 anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
         
-[all_fluences_flat_sparse all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], anat_name, ...
+[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], anat_name, ...
                                                                          ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
                                                                          use_closest_wl);
 if isempty(all_fluences_flat_sparse)
@@ -692,7 +692,7 @@ if ~isempty(strfind(data_source, 'http'))
         % Process downloads
         msg = sprintf('Downloading %d fluence files (%s)...', ...
                       length(to_download_urls), ...
-                      format_file_size(total_download_size))
+                      format_file_size(total_download_size));
         bst_progress('start', 'Downloading fluences', msg, 1, length(to_download_urls));
         for idownload=1:length(to_download_urls)
             vertex_id = to_download_spec{idownload}(1);

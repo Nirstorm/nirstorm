@@ -444,7 +444,7 @@ end
 % if the specified optode position is outside the domain, move the optode
 % along the initial vector until it hits the domain
 %==========================================================================
-[dim1 dim2 dim3]=size(vol);
+[dim1, dim2, dim3]=size(vol);
 
 
 pos=round(pos); % if the voxel coordinates are not integers change them for the nearest integer
