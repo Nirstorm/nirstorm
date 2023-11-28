@@ -10,8 +10,6 @@ geometric constraints during the front propagation :
  - impose a seed to be at a certain place
 
 */
-#define _DG_DEBUG 0
-#undef _DG_DEBUG1
 #define MAGIC_NUMBER 1
 
 /* --- GEODESIC VORONOI SUBROUTINE --- */
@@ -102,7 +100,7 @@ void geodesic_voronoi(double *img,         /* domain image mask */
 	
 	/* --- BUCKET SORTING --- */
 	while (notempty) {
-#if _DG_DEBUG
+#ifdef _DG_DEBUG
 		mexPrintf("\r%d",current_buck);fflush(NULL);
 #endif
 		/* loop over the not empty bucket with the smallest value */
@@ -121,7 +119,7 @@ void geodesic_voronoi(double *img,         /* domain image mask */
 					/* point inside domain ? */
 					if (dmap[x+m*y+m*n*z] > 0.0) {
 #ifdef _DG_DEBUG
-						mexPrintf("%d %d %d  ",x,y,z);
+						mexPrintf("%d %d %d  \n",x,y,z);
 #endif
 						/* Weighted distances */
 						if (aniso) {
