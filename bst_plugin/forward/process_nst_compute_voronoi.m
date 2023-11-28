@@ -79,6 +79,12 @@ end
 
 % Get given data information
 voronoi_fn      = get_voronoi_fn(sSubject);
+if exist(voronoi_fn,'file')
+    if ~java_dialog('confirm', sprintf('File already exist.\nDo you want to overwrite it?'), 'Computing Voronoi...')
+        return;
+    end
+end
+
 seg_label       = 'segmentation_5tissues';
 segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 
@@ -231,12 +237,17 @@ else % Normal subject
     end 
 end
 
-sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-assert(all(size(sMri.Cube) == size(data)));
+if ~exist(vol_fn,'file')
+    sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    is_new = 1;
+else
+    sMri = in_mri_bst(vol_fn);
+    is_new = 0;
+end
 
-sMri.Cube = data;
+sMri.Cube       = data;
+sMri.Comment    = vol_comment;
 sMri = rmfield(sMri, 'Histogram');
-sMri.Comment = vol_comment;
 
 if nargin > 4
     sMri = bst_history('add', sMri, 'import', history_comment);
@@ -245,6 +256,10 @@ end
 % Save new MRI in Brainstorm format
 sMri_out = out_mri_bst(sMri, vol_fn);
 
+% If the MRI already exist, no need to go further.
+if ~is_new 
+    return;
+end
 %% ===== STORE NEW MRI IN DATABASE ======
 % New anatomy structure
 iAnatomy = find(cell2mat(cellfun(@(a) ~isempty(a), ...
