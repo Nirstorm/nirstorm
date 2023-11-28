@@ -129,10 +129,10 @@ sCortex = in_tess_bst(cortex_file);
 sMri = in_mri_bst(anatomy_file);
 
 % Obtain the binary mask around the cortical surface
-if ~isfield(sCortex,'tess2mri_interp') && ~isempty(sCortex.tess2mri_interp)
-    tess2mri_interp     = tess_interp_mri(cortex_file, sMri);
-else
+if isfield(sCortex,'tess2mri_interp') && ~isempty(sCortex.tess2mri_interp)
     tess2mri_interp     = sCortex.tess2mri_interp;
+else
+    tess2mri_interp     = tess_interp_mri(cortex_file, sMri);
 end
 
 index_binary_mask   = (sum(tess2mri_interp,2) >0);
