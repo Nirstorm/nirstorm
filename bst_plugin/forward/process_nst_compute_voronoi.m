@@ -92,7 +92,7 @@ segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
 
 if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value              
-    voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
+    [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
 elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value 
@@ -105,13 +105,13 @@ elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value
     
     bst_report('Warning', sProcess, sInputs, msg);
 
-    voronoi = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
+    [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName);
 end
 bst_progress('inc',1);
 bst_progress('text', 'Saving results');
 
-add_vol_data(voronoi, voronoi_fn, ...
+add_vol_data(sMRI,voronoi, voronoi_fn, ...
              ['Voronoi interpolator for ' sSubject.Anatomy(sSubject.iAnatomy).Comment ...
               ' onto ' sSubject.Surface(sSubject.iCortex).Comment], iSubject);
 OutputFiles = {'import'};
@@ -120,7 +120,7 @@ bst_progress('stop');
 
 end
 
-function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
+function [vol_voro, sMri] = Compute(cortex_file, anatomy_file, segmentation_file)
 
 % Obtain the cortical surface
 sCortex = in_tess_bst(cortex_file);
@@ -223,7 +223,7 @@ function voronoi_fn = get_voronoi_fn(sSubject)
 end
 
 
-function sSubject = add_vol_data(data, vol_fn, vol_comment, iSubject, history_comment)
+function sSubject = add_vol_data(sMri, data, vol_fn, vol_comment, iSubject, history_comment)
 %% Save a volume map to brainstorm with given data
 
 ProtocolSubjects = bst_get('ProtocolSubjects');
@@ -239,23 +239,21 @@ else % Normal subject
 end
 
 if ~exist(vol_fn,'file')
-    sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     is_new = 1;
 else
-    sMri = in_mri_bst(vol_fn);
     is_new = 0;
 end
 
 sMri.Cube       = data;
 sMri.Comment    = vol_comment;
-sMri = rmfield(sMri, 'Histogram');
+sMri.Histogram  = mri_histogram(sMri.Cube);
 
-if nargin > 4
+if nargin > 5
     sMri = bst_history('add', sMri, 'import', history_comment);
 end
 
 % Save new MRI in Brainstorm format
-sMri_out = out_mri_bst(sMri, vol_fn);
+out_mri_bst(sMri, vol_fn);
 
 % If the MRI already exist, no need to go further.
 if ~is_new 
