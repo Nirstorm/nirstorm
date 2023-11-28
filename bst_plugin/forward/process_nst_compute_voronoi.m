@@ -122,7 +122,6 @@ end
 
 function vol_voro = Compute(cortex_file, anatomy_file, segmentation_file)
 
-
 % Obtain the cortical surface
 sCortex = in_tess_bst(cortex_file);
 
@@ -130,7 +129,12 @@ sCortex = in_tess_bst(cortex_file);
 sMri = in_mri_bst(anatomy_file);
 
 % Obtain the binary mask around the cortical surface
-tess2mri_interp     = tess_interp_mri(cortex_file, sMri);
+if ~isfield(sCortex,'tess2mri_interp') && ~isempty(sCortex.tess2mri_interp)
+    tess2mri_interp     = tess_interp_mri(cortex_file, sMri);
+else
+    tess2mri_interp     = sCortex.tess2mri_interp;
+end
+
 index_binary_mask   = (sum(tess2mri_interp,2) >0);
 binary_volume       = zeros(size(sMri.Cube));
 binary_volume(index_binary_mask) = 1;
@@ -148,16 +152,16 @@ Vertices = sCortex.Vertices;
 Vertices = cs_convert(sMri, 'scs', 'mri', Vertices) * 1000;
 
 % Vertices: MRI(MM)->MRI(Voxels)
-Vertices = bst_bsxfun(@rdivide, Vertices, sMri.Voxsize);
-A_nodes = Vertices'  ;
-
-N1 = [];
+Vertices    = bst_bsxfun(@rdivide, Vertices, sMri.Voxsize);
+A_nodes     = Vertices'  ;
 
 % Regeneration of a volume with only the seed points 
 vol_seeds   = zeros( size(sMri.Cube)  ) ;
-Duplicates  = {};
 
 % Position the seeds of the Mesh in the MRI voxel grid  : N
+N   = zeros(3,size(A_nodes,2));
+N1  = zeros(3,size(A_nodes,2));
+
 for i=1:size(A_nodes,2)
     N( :, i ) = A_nodes( :, i ) ; %inv( mat( 1:3, 1:3 ) ) * A_nodes( :, i ) ;
     
@@ -165,13 +169,10 @@ for i=1:size(A_nodes,2)
     N1(2,i) = round(N(2,i));%round( (Ymax-N( 2, i )) / vox_size(2) );
     N1(3,i) = round(N(3,i));%round( (Zmax-N( 3, i )) / vox_size(3) );
     
-    if vol_seeds( N1(1,i), N1( 2,i) , N1(3,i) ) ~= 0
-        Duplicates{end+1} = {vol_seeds( N1(1,i), N1(2,i) , N1(3,i) ), i};
-    else
+    if vol_seeds( N1(1,i), N1( 2,i) , N1(3,i) ) == 0
         vol_seeds(N1(1,i), N1(2,i), N1(3,i)) = i  ;
     end
 end
-vol_seeds( vol_seeds==0 ) = -1 ;
 
 % Compute Voronoi Diagram for interpolation 
 xt          = N1';
