@@ -253,7 +253,7 @@ if nargin > 5
 end
 
 % Save new MRI in Brainstorm format
-out_mri_bst(sMri, vol_fn);
+out_mri_bst(sMri, vol_fn,'v6');
 
 % If the MRI already exist, no need to go further.
 if ~is_new 
