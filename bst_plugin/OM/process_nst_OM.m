@@ -291,7 +291,7 @@ for ipair=1:size(montage_pairs, 1)
     end
     
     disp(['Channel S', num2str(idx_src), 'D' num2str(idx_det) ' >>> Distance: ',...
-        num2str(round(pdist2(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', 'Weight: ',...
+        num2str(round(nst_pdist(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', 'Weight: ',...
         num2str(round(montage_weight(ipair,:),3))]);
     
     for iwl=1:length(wavelengths)
@@ -342,7 +342,7 @@ db_add_data(iStudy, OutputFile{1} , sDataOut);
 end
 
 function weight_tables = compute_weights(fluence_volumes,head_vertices_coords,reference, options)
-    holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
+    holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
 
@@ -420,7 +420,7 @@ if ~isfield(options, 'weight_tables')
     bst_error('Weight_tables is required');
 end
 
-holder_distances = pdist2(head_vertices_coords, head_vertices_coords).*1000; % mm
+holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
 nHolders = size(head_vertices_coords, 1);
 
 weight_table = options.weight_tables;
@@ -757,7 +757,7 @@ end
 sSubject = cortex_scout.sSubject;
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
 sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
-dis2head = pdist2(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
 head_vertices = find(min(dis2head,[],2) < extent_m); 
 
 % TODO: properly select atlas
