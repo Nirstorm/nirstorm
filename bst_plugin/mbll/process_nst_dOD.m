@@ -161,9 +161,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
      iStudy = db_add_condition(sInputs.SubjectName, newCondition);
      sStudy = bst_get('Study', iStudy);
      
-%     % Save channel definition
+     % Save channel definition
      [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-     db_set_channel(iChannelStudy, ChannelMat, 0, 0);
+     db_set_channel(iChannelStudy, ChannelMat, 2, 0);
         
      % Generate a new file name in the same folder
      OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
@@ -216,8 +216,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sOutMat.Comment = [sDataIn.Comment ' | OD ']; 
         % Save new link to raw .mat file
         bst_save(OutputFile, sOutMat, 'v6');
-        % Create new channel file
-        db_set_channel(iStudy, ChannelMat, 2, 0);
         % Write block
         out_fwrite(sFileOut, ChannelMat, 1, [], [], final_dOD');
         % Register in BST database
