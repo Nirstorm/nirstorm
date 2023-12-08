@@ -143,33 +143,30 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     
     % Re-add other channels that were not changed during MBLL
     [final_dOD, ChannelMat] = process_nst_mbll('concatenate_data',nirs_dOD', fchannel_def, nirs_other, channel_def_other);
-
     
-    sStudy = bst_get('Study', sInputs.iStudy);
     % Create new condition because channel definition is different from original one
-     cond_name = sInputs.Condition;
-     if strcmp(cond_name(1:4), '@raw')
+    cond_name = sInputs.Condition;
+    if strcmp(cond_name(1:4), '@raw')
         cond_name = cond_name(5:end);
-     end
+    end
 
-     if isRaw
-         newCondition = ['@raw', cond_name, '_dOD'];
-     else
-         newCondition =  [cond_name, '_dOD'];
-     end
+    if isRaw
+        newCondition = ['@raw', cond_name, '_dOD'];
+    else
+        newCondition =  [cond_name, '_dOD'];
+    end
 
-     iStudy = db_add_condition(sInputs.SubjectName, newCondition);
-     sStudy = bst_get('Study', iStudy);
+    iStudy = db_add_condition(sInputs.SubjectName, newCondition);
+    sStudy = bst_get('Study', iStudy);
      
-     % Save channel definition
-     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-     db_set_channel(iChannelStudy, ChannelMat, 2, 0);
+    % Save channel definition
+    [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+    db_set_channel(iChannelStudy, ChannelMat, 2, 0);
         
-     % Generate a new file name in the same folder
-     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
+    % Generate a new file name in the same folder
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
 
-     if ~isRaw
-
+    if ~isRaw
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_dOD';
@@ -187,10 +184,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         bst_save(OutputFile, sDataOut, 'v7');
          % Register in database
         db_add_data(iStudy, OutputFile, sDataOut);
-
-     else
+    else
         ProtocolInfo = bst_get('ProtocolInfo');
-
         newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
 
         [tmp, rawBaseOut, rawBaseExt] = bst_fileparts(newStudyPath);
@@ -220,7 +215,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         out_fwrite(sFileOut, ChannelMat, 1, [], [], final_dOD');
         % Register in BST database
         db_add_data(iStudy, OutputFile, sOutMat);
-     end
+    end
 end
 
 

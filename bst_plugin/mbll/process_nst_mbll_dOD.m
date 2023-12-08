@@ -70,7 +70,6 @@ end
 function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     OutputFile = {};
     
-
     age             = sProcess.options.option_age.Value{1};
     do_plp_corr     = sProcess.options.option_do_plp_corr.Value;
     pvf             = sProcess.options.option_pvf.Value{1};
@@ -97,7 +96,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Separate NIRS channels from others (NIRS_AUX etc.)                                                
     [fnirs, fchannel_def, nirs_other, channel_def_other] = process_nst_mbll('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
     
-
     % Apply MBLL
     [nirs_hb, channels_hb] = process_nst_mbll('Compute',fnirs, fchannel_def, age, [], do_plp_corr, pvf, dpf_method); 
     
@@ -105,13 +103,12 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     [final_nirs, ChannelMat] = process_nst_mbll('concatenate_data',nirs_hb, channels_hb, nirs_other, channel_def_other);
 
     if ~isempty(sDataIn.Std)
-         % Remove bad channels: they won't enter MBLL computation so no need to keep them 
+        % Remove bad channels: they won't enter MBLL computation so no need to keep them 
         [good_nirs, good_channel_def] = process_nst_mbll('filter_bad_channels',sDataIn.Std', ChanneMat, sDataIn.ChannelFlag);
         
         % Separate NIRS channels from others (NIRS_AUX etc.)                                                
         [fnirs, fchannel_def, nirs_other, channel_def_other] = process_nst_mbll('filter_data_by_channel_type',good_nirs, good_channel_def, 'NIRS');
         
-    
         % Apply MBLL
         [nirs_hb, channels_hb] = process_nst_mbll('Compute',fnirs, fchannel_def, age, [], do_plp_corr, pvf, dpf_method); 
         
@@ -142,7 +139,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     % Generate a new file name in the same folder
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_hb');
 
-     if ~isRaw
+    if ~isRaw
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_nirs'; 
@@ -166,7 +163,7 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
         db_add_data(iStudy, OutputFile, sDataOut);
-     else
+    else
         ProtocolInfo = bst_get('ProtocolInfo');
         newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
 

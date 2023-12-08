@@ -28,7 +28,7 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Remove slow fluctuations';
-sProcess.FileTag     = @GetFileTag; 
+sProcess.FileTag     = '_detrend'; 
 sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1309;
@@ -37,7 +37,7 @@ sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separat
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
-sProcess.OutputTypes = {'data','data'};
+sProcess.OutputTypes = {'data','raw'};
 
 
 sProcess.options.filter_model.Comment = {'Polynome', 'DCT', 'Trend modelisation: '; ...
@@ -79,10 +79,6 @@ function [Comment, fileTag] = FormatComment(sProcess)
     end
 
     fileTag = 'detrend';
-end
-%% ===== GET FILE TAG =====
-function fileTag = GetFileTag(sProcess)
-    [Comment, fileTag] = FormatComment(sProcess);
 end
 
 function sInput = Run(sProcess, sInput)
