@@ -195,8 +195,6 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
         sFileIn = sDataRaw.F;
         sFileIn.channelflag  = ones(size(final_dOD, 2), 1);
-        sFileIn.ChannelFlag  = ones(size(final_dOD, 2), 1);
-
         [sFileOut, errMsg] = out_fopen(RawFileOut, 'BST-BIN', sFileIn, ChannelMat);
 
          % Set Output sFile structure
