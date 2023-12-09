@@ -112,7 +112,7 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
-OutputFiles = {};
+OutputFiles = {sInputs.FileName};
 
 do_export_fluences  = sProcess.options.do_export_fluence_vol.Value;
 use_closest_wl      = sProcess.options.use_closest_wl.Value;
