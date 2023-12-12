@@ -103,7 +103,9 @@ ResultsMat.SurfaceFile   = sSubject.Surface(sSubject.iCortex).FileName;
 ResultsMat = bst_history('add', ResultsMat, 'compute', 'Compute distance fron cortex to head');
 % Save new file structure
 bst_save(OutputFile, ResultsMat, 'v6');
-
+% Update database
+db_add_data(iStudy, OutputFile, ResultsMat);
+OutputFiles = {OutputFile};
 
 end
 
