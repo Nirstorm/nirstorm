@@ -167,7 +167,7 @@ end
 sSubject = cortex_scout.sSubject;
 sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
 sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
-dis2head = pdist2(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
 head_vertices = find(min(dis2head,[],2) < extent_m); 
 
 % TODO: properly select atlas
@@ -444,7 +444,7 @@ end
 % if the specified optode position is outside the domain, move the optode
 % along the initial vector until it hits the domain
 %==========================================================================
-[dim1 dim2 dim3]=size(vol);
+[dim1, dim2, dim3]=size(vol);
 
 
 pos=round(pos); % if the voxel coordinates are not integers change them for the nearest integer

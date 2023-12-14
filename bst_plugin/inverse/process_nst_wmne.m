@@ -67,6 +67,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.store_sparse_results.Comment = 'Store sparse results';
     sProcess.options.store_sparse_results.Type    = 'checkbox';
     sProcess.options.store_sparse_results.Value   = 0;
+    sProcess.options.store_sparse_results.Group   = 'output';
+
 end
 
 function s = str_pad(s,padsize)

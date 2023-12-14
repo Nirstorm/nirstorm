@@ -1,4 +1,4 @@
-function [vor dist] = dg_voronoi(img, voxsize, seeds, distance, aniso)
+function [vor, dist] = dg_voronoi(img, voxsize, seeds, distance, aniso)
 % Geodesic Discrete Voronoi Diagram
 % FORMAT [vor dist] = dg_voronoi(img, voxsize, seeds, distance, aniso)
 %

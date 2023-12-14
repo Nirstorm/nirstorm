@@ -18,7 +18,7 @@ function varargout = process_nst_motion_correction( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent (2015-2018)
+% Authors: Thomas Vincent (2015-2018), Edouard Delaire (2023)
 
 eval(macro_method);
 end
@@ -27,18 +27,16 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-%TOCHECK: how do we limit the input file types (only NIRS data)?
 sProcess.Comment     = 'Motion correction';
-sProcess.FileTag     = 'mvt corr';
-sProcess.Category    = 'File';
+sProcess.FileTag     = '_motioncorr';
+sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1305; %0: not shown, >0: defines place in the list of processes
+sProcess.Index       = 1305; 
 sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
-sProcess.isSeparator = 0; % add a horizontal bar after the process in
-%                             the list
+sProcess.isSeparator = 0; 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};
-sProcess.OutputTypes = {'data', 'data'};
+sProcess.OutputTypes = {'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 % Definition of the options
@@ -81,13 +79,21 @@ sProcess.options.citation_tddr.Class    = 'tddr';
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
-Comment = sProcess.Comment;
+function [Comment, fileTag] = FormatComment(sProcess)
+    % Get options
+
+    % Format comment
+     if strcmp(sProcess.options.method.Value,'spline')
+        Comment = 'Motion Corrected (spline)';
+        fileTag = 'motion';
+     else
+        Comment = 'Motion Corrected (TDDR)';
+        fileTag = 'motion';
+    end
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
-OutputFile = {};
+function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
 
 if strcmp(sProcess.options.method.Value,'spline')
     if ~license('test', 'Curve_Fitting_Toolbox')
@@ -101,18 +107,17 @@ if strcmp(sProcess.options.method.Value,'spline')
 end
 
 % Get selected events
-event_name =  strtrim(sProcess.options.option_event_name.Value);
+event_name  =  strtrim(sProcess.options.option_event_name.Value);
 
-% Load recordings
+% Load Events
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
-    sDataIn = in_bst_data(sInputs.FileName);
+    sDataIn = in_bst_data(sInputs.FileName, 'Events');
     events = sDataIn.Events;
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
     sDataRaw = in_bst_data(sInputs.FileName, 'F');
     events = sDataRaw.F.events;
 end
-    
+   
 event = [];
 if strcmp(sProcess.options.method.Value,'spline')
     ievt_mvt = [];
@@ -128,14 +133,16 @@ if strcmp(sProcess.options.method.Value,'spline')
     end
 end
 
+
+
 % Process only NIRS channels
 channels = in_bst_channel(sInputs.ChannelFile);
 nirs_ichans = channel_find(channels.Channel, 'NIRS');
-data_nirs = sDataIn.F(nirs_ichans, :)';
+data_nirs = sInputs.A(nirs_ichans, :)';
 
 prev_negs = any(data_nirs <= 0, 1);
 
-data_corr = Compute(data_nirs, sDataIn.Time', event,sProcess.options.method.Value,sProcess.options.option_smoothing.Value{1});
+data_corr = Compute(data_nirs, sInputs.TimeVector', event,sProcess.options.method.Value,sProcess.options.option_smoothing.Value{1});
 
 new_negs = any(data_corr <= 0, 1) & ~prev_negs;
 negative_chan=find(new_negs);
@@ -157,33 +164,10 @@ if any(new_negs)
 
 end
 
-data_corr_full = sDataIn.F';
-data_corr_full(:, nirs_ichans) = data_corr;
-data_corr = data_corr_full;
+% Export 
+sInputs.A(nirs_ichans,:) = data_corr';
+sInputs.CommentTag       = FormatComment(sProcess);
 
-% Save time-series data
-sDataOut = db_template('data');
-sDataOut.F            = data_corr';
-sDataOut.Comment      = [sInputs.Comment '| Motion-corrected'];
-sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-sDataOut.Time         = sDataIn.Time;
-sDataOut.DataType     = 'recordings';
-sDataOut.History      = sDataIn.History;
-sDataOut = bst_history('add', sDataOut, 'process', sProcess.Comment);
-
-sDataOut.nAvg         = 1;
-sDataOut.Events       = events;
-
-    
-sDataOut.DisplayUnits = sDataIn.DisplayUnits;
-    
-% Generate a new file name in the same folder
-sStudy = bst_get('Study', sInputs.iStudy);
-OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_motion_corr');
-sDataOut.FileName = file_short(OutputFile);
-bst_save(OutputFile, sDataOut, 'v7');
-% Register in database
-db_add_data(sInputs.iStudy, OutputFile, sDataOut);
 end
 
 
