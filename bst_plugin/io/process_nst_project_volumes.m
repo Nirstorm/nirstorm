@@ -85,11 +85,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {};
 
-do_smoothing    = sProcess.options.do_smoothing.Value;
-subjectName     = sProcess.options.subjectname.Value;
-
-% Load head mesh
-[sSubject, iSubject] = bst_get('Subject', subjectName);
+% Load subject
+subjectName = sProcess.options.subjectname.Value;
+sSubject    = bst_get('Subject', subjectName);
 
 iStudy = db_add_condition(subjectName, sProcess.options.out_name.Value);
 sStudy = bst_get('Study', iStudy);
@@ -105,7 +103,7 @@ SurfaceFile = sSubject.Surface(sSubject.iCortex).FileName;
 sCortex     = in_tess_bst(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes    = size(sCortex.Vertices, 1);
 
-voronoi         = get_voronoi(subjectName);
+voronoi         = process_nst_import_head_model('get_voronoi',subjectName);
 voronoi_mask    = (voronoi > -1) & ~isnan(voronoi);
 
 if ~( size(fMRI_map,1) == size(voronoi,1) &&...
@@ -136,74 +134,24 @@ else
     time = [1];
 end
 
-[sSubject, iSubject] = bst_get('Subject', subjectName);
-
-
-[A,B] = fileparts(sProcess.options.fMRI.Value{1});
-[sStudy, ResultFile] = add_surf_data_fMRI(surf_maps, time, ...
-    SurfaceFile, sprintf('Projection %s (%s)', B, sProcess.options.method.Value), ...
-    iStudy, sStudy,  ...
-    sprintf('Projection %s (%s)', B, sProcess.options.method.Value));
-
-OutputFiles{end+1} = ResultFile;
-bst_progress('stop');
-
-end
-
-function [sStudy, ResultFile] = add_surf_data_fMRI(data, time, SurfaceFile, name, ...
-    iStudy, sStudy, history_comment)
-
-%% Save a cortical map to brainstorm with given data
-
-ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-    ['results_' protect_fn_str(name)]);
+OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
+                                           'results_volume_projection');
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
-ResultsMat.Comment       = name;
-ResultsMat.Function      = '';
-ResultsMat.ImageGridAmp = data;
+ResultsMat.Comment       = sprintf('Projection %s (%s)', B, sProcess.options.method.Value);
+ResultsMat.Function      = sProcess.options.method.Value;
 ResultsMat.Time          = time;
-ResultsMat.DataFile      = [];
-% ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-% ResultsMat.HeadModelType = head_model.HeadModelType;
-ResultsMat.ChannelFlag   = [];
-ResultsMat.GoodChannel   = [];
-ResultsMat.SurfaceFile   = file_short(SurfaceFile);
-ResultsMat.GridLoc    = [];
-ResultsMat.GridOrient = [];
-ResultsMat.nAvg      = 1;
+ResultsMat.ImageGridAmp  = surf_maps;
+ResultsMat.DisplayUnits  = 'BOLD';
+ResultsMat.SurfaceFile   = SurfaceFile;
 % History
-ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
+ResultsMat = bst_history('add', ResultsMat, 'compute', sprintf('Projection %s (%s)', B, sProcess.options.method.Value));
 % Save new file structure
-bst_save(ResultFile, ResultsMat, 'v6');
-% ===== REGISTER NEW FILE =====
-% Create new results structure
-newResult = db_template('results');
-newResult.Comment       = name;
-newResult.FileName      = file_short(ResultFile);
-newResult.DataFile      = ''; %sInputs.FileName;
-newResult.isLink        = 0;
-% newResult.HeadModelType = ResultsMat.HeadModelType;
-% Add new entry to the database
-iResult = length(sStudy.Result) + 1;
-sStudy.Result(iResult) = newResult;
-% Update Brainstorm database
-bst_set('Study', iStudy, sStudy);
-end
+bst_save(OutputFile, ResultsMat, 'v6');
+% Update database
+db_add_data(iStudy, OutputFile, ResultsMat);
+OutputFiles = {OutputFile};
 
-function voronoi = get_voronoi(SubjectName)
-[sSubject, iSubject] = bst_get('Subject', SubjectName);
-voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-
-voronoi_bst = in_mri_bst(voronoi_fn);
-voronoi = voronoi_bst.Cube;
-end
-
-function fn = protect_fn_str(sfn)
-fn = strrep(sfn, ' ', '_');
-fn = strrep(fn, '"', '');
-fn = strrep(fn, ':', '_');
-fn = strrep(fn, '(', '_');
-fn = strrep(fn, ')', '_');
+bst_progress('stop');
 end
