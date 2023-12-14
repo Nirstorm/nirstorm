@@ -57,9 +57,8 @@ SelectOptions = {...
         'single', ...                      % Selection mode: {single,multiple}
         'files', ...                       % Selection mode: {files,dirs,files_and_dirs}
         bst_get('FileFilters', 'mri'), ... % Get all the available file formats
-        'MriIn'};                        % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-    % Option definition
-    % TODO: add flag to enable ouput
+        'MriIn'};                          % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
+
 sProcess.options.fMRI.Comment = 'Select Volume:';
 sProcess.options.fMRI.Type    = 'filename';
 sProcess.options.fMRI.Value   = SelectOptions;
@@ -73,28 +72,6 @@ sProcess.options.method.Comment = {'mean','median', 'mode', 'min','max'; ...
                                    'mean','median', 'mode','min' 'max'};
 sProcess.options.method.Type    = 'radio_label';
 sProcess.options.method.Value   = 'mean';
-    
-% Smoothing options
-sProcess.options.label2.Comment = ['<b>Smoothing: </b> <BR>'];
-sProcess.options.label2.Type = 'label';
-
-sProcess.options.do_smoothing.Comment = 'Apply smoothing after the projection';
-sProcess.options.do_smoothing.Type    = 'checkbox';
-sProcess.options.do_smoothing.Value   = 1;
-
-% === DESCRIPTION   copied from process_ssmooth_surfstat
-sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
-    'The smoothing is based only on the surface topography, <BR>' ...
-    'not the real geodesic distance between two vertices.<BR>', ...
-    'The input in mm is converted to a number of edges based<BR>', ...
-    'on the average distance between two vertices in the surface.<BR><BR>'];
-sProcess.options.help.Type    = 'label';
-
-% === FWHM (kernel size)
-sProcess.options.fwhm.Comment = '<B>FWHM</B> (Full width at half maximum):  ';
-sProcess.options.fwhm.Type    = 'value';
-sProcess.options.fwhm.Value   = {5, 'mm', 2};
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -125,7 +102,7 @@ fMRI_map = fMRI_vol.Cube;
 bst_progress('start', 'Volume projection','projecting...');
 
 SurfaceFile = sSubject.Surface(sSubject.iCortex).FileName;
-sCortex     = load(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
+sCortex     = in_tess_bst(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes    = size(sCortex.Vertices, 1);
 
 voronoi         = get_voronoi(subjectName);
@@ -161,20 +138,12 @@ end
 
 [sSubject, iSubject] = bst_get('Subject', subjectName);
 
-if do_smoothing
-    FWHM = sProcess.options.fwhm.Value{1} / 1000;
-    cortex_mesh = sSubject.Surface(sSubject.iCortex).FileName;
-    sCortex = in_tess_bst(cortex_mesh);
-    surf_maps = surface_smooth(FWHM, sCortex, surf_maps,1);
-else
-    FWHM = 0;
-end
 
 [A,B] = fileparts(sProcess.options.fMRI.Value{1});
 [sStudy, ResultFile] = add_surf_data_fMRI(surf_maps, time, ...
     SurfaceFile, sprintf('Projection %s (%s)', B, sProcess.options.method.Value), ...
     iStudy, sStudy,  ...
-    sprintf('Projection %s (%s - FWHM %d)', B, sProcess.options.method.Value,FWHM));
+    sprintf('Projection %s (%s)', B, sProcess.options.method.Value));
 
 OutputFiles{end+1} = ResultFile;
 bst_progress('stop');
@@ -237,37 +206,4 @@ fn = strrep(fn, '"', '');
 fn = strrep(fn, ':', '_');
 fn = strrep(fn, '(', '_');
 fn = strrep(fn, ')', '_');
-end
-
-%% ===== surface smoothing  =====
-function sens_smoothed = surface_smooth(FWHM, SurfaceMat, sens_temp, dispInfo)
-% ===== PROCESS =====
-% Convert surface to SurfStat format
-cortS.tri = SurfaceMat.Faces;
-cortS.coord = SurfaceMat.Vertices';
-
-% Get the average edge length
-[vi,vj] = find(SurfaceMat.VertConn);
-Vertices = SurfaceMat.VertConn;
-meanDist = mean(sqrt((Vertices(vi,1) - Vertices(vj,1)).^2 + (Vertices(vi,2) - Vertices(vj,2)).^2 + (Vertices(vi,3) - Vertices(vj,3)).^2));
-% FWHM in surfstat is in mesh units: Convert from millimeters to "edges"
-FWHMedge = FWHM ./ meanDist;
-
-% Display the result of this conversion
-msgInfo = ['Average distance between two vertices: ' num2str(round(meanDist*10000)/10) ' mm' 10 ...
-    'SurfStatSmooth called with FWHM=' num2str(round(FWHMedge * 1000)/1000) ' edges'];
-
-%bst_report('Info', sProcess, sInput, msgInfo);
-if dispInfo
-    disp(msgInfo);
-    disp(['SMOOTH> ' strrep(msgInfo, char(10), [10 'SMOOTH> '])]);
-end
-
-if round(FWHMedge * 1000)/1000 ==0
-    disp('WARNING: FWHM too small, smoothing will not be performed.')
-end
-% Smooth surface
-
-sens_smoothed = SurfStatSmooth(sens_temp', cortS, FWHMedge)';
-
 end
