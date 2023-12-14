@@ -36,7 +36,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.OutputTypes = {'import'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 0;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     
     % Option: Subject name
     sProcess.options.subjectname.Comment = 'Subject name:';
