@@ -34,7 +34,7 @@ sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process
-sProcess.OutputTypes = {'data', 'raw'};
+sProcess.OutputTypes = {'results'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 sProcess.isSeparator = 1;
@@ -87,6 +87,7 @@ OutputFiles = {};
 
 % Load subject
 subjectName = sProcess.options.subjectname.Value;
+sInputs.SubjectName = subjectName;
 sSubject    = bst_get('Subject', subjectName);
 
 iStudy = db_add_condition(subjectName, sProcess.options.out_name.Value);
@@ -103,7 +104,7 @@ SurfaceFile = sSubject.Surface(sSubject.iCortex).FileName;
 sCortex     = in_tess_bst(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes    = size(sCortex.Vertices, 1);
 
-voronoi         = process_nst_import_head_model('get_voronoi',subjectName);
+voronoi         = process_nst_import_head_model('get_voronoi',sProcess, sInputs);
 voronoi_mask    = (voronoi > -1) & ~isnan(voronoi);
 
 if ~( size(fMRI_map,1) == size(voronoi,1) &&...
@@ -136,17 +137,18 @@ end
 
 OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
                                            'results_volume_projection');
+[A,volName,ext] = fileparts(sProcess.options.fMRI.Value{1});
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
-ResultsMat.Comment       = sprintf('Projection %s (%s)', B, sProcess.options.method.Value);
+ResultsMat.Comment       = volName;
 ResultsMat.Function      = sProcess.options.method.Value;
 ResultsMat.Time          = time;
 ResultsMat.ImageGridAmp  = surf_maps;
 ResultsMat.DisplayUnits  = 'BOLD';
 ResultsMat.SurfaceFile   = SurfaceFile;
 % History
-ResultsMat = bst_history('add', ResultsMat, 'compute', sprintf('Projection %s (%s)', B, sProcess.options.method.Value));
+ResultsMat = bst_history('add', ResultsMat, 'compute', sprintf('Projection of %s onto %s (%s)', volName,sCortex.Comment, sProcess.options.method.Value));
 % Save new file structure
 bst_save(OutputFile, ResultsMat, 'v6');
 % Update database
