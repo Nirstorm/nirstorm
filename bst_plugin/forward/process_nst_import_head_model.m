@@ -211,55 +211,14 @@ end
 src_reference_voxels_index = all_reference_voxels_index(1:nb_sources);
 det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
 
+% Compute sensitivity matrix (volume) and interpolate on cortical surface
+% using Voronoi partitionning
 
-%% Export fluences
-if do_export_fluences
-    output_dir = sProcess.options.outputdir.Value;
-    assert(exist(output_dir,'dir')~=0);
-    sVol = sMri;
-    bst_progress('start', 'Export fluences','Exporting volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
-    for isrc=1:nb_sources
-        for iwl=1:nb_wavelengths
-            wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Fluence for S%02d and %dnm ', ...
-                                    src_ids(isrc), wl) ...
-                            'aligned to ' sMri.Comment];
-            sVol.Cube = src_fluences{isrc}{iwl};
-            sVol.Histogram = [];
-            out_bfn = sprintf('fluence_S%02d_%dnm_%s.nii', src_ids(isrc), wl, ...
-                              protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-            bst_progress('inc',1);
-        end
-    end
-    for idet=1:nb_dets
-        for iwl=1:nb_wavelengths
-            wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Fluence for D%02d and %dnm, aligned to ', ...
-                                    det_ids(idet), wl) ...
-                            'aligned to ' sMri.Comment];
-            sVol.Cube = det_fluences{idet}{iwl};
-            sVol.Histogram = [];
-            out_bfn = sprintf('fluence_D%02d_%dnm_%s.nii', det_ids(idet), wl, ...
-                              protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-            bst_progress('inc',1);
-        end
-    end
-    bst_progress('stop');
-end
-
-%% Compute sensitivity matrix (volume) and interpolate on cortical surface
-%% using Voronoi partitionning
 bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
-% [vol_size_x, vol_size_y, vol_size_z] = size(src_fluences{1}{1}.fluence.data);
-% sensitivity = zeros(nb_pairs, nb_wavelengths, vol_size_x, vol_size_y, vol_size_z);
 
 cortex_data         = load(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes            = size(cortex_data.Vertices, 1);
-sensitivity_surf    = zeros(nb_pairs, nb_wavelengths, nb_nodes);
+sensitivity_surf    = zeros(nb_nodes,nb_pairs, nb_wavelengths);
 
 voronoi = get_voronoi(sProcess, sInputs);
 voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
@@ -285,7 +244,6 @@ for ipair=1:nb_pairs
     isrc = pair_sd_idx(ipair, 1);
     idet = pair_sd_idx(ipair, 2);
     separation = separations_by_pairs(ipair);
-    
     for iwl=1:nb_wavelengths
         if normalize_fluence
             ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
@@ -316,19 +274,23 @@ for ipair=1:nb_pairs
         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
         sens_tmp(end)=[]; % trash last column
 
-        if sProcess.options.smoothing_fwhm.Value{1} > 0
-            FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
-            [sens_tmp, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
-                                            sSubject.Surface(sSubject.iCortex).FileName, ...
-                                            sens_tmp, FWHM, 'before_2023');
 
-            bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
-
-        end
-        sensitivity_surf(ipair,iwl,:) = sens_tmp;
+        sensitivity_surf(:,ipair,iwl) = sens_tmp;
     end
     bst_progress('inc',1);
 end
+
+if sProcess.options.smoothing_fwhm.Value{1} > 0
+    FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
+    [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
+                                    sSubject.Surface(sSubject.iCortex).FileName, ...
+                                    sensitivity_surf, FWHM, 'before_2023');
+
+    bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+end
+
+sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
+
 bst_progress('stop');
 
 %% Sensitivity thresholding
