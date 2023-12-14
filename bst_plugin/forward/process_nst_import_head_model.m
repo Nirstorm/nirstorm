@@ -47,14 +47,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.use_closest_wl.Type    = 'checkbox';
     sProcess.options.use_closest_wl.Value   = 0;
 
-    % Smoothing options
-    % === DESCRIPTION   copied from process_ssmooth_surfstat
-%     sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
-%                                      'The smoothing is based only on the surface topography, <BR>' ...
-%                                      'not the real geodesic distance between two vertices.<BR>', ...
-%                                      'The input in mm is converted to a number of edges based<BR>', ...
-%                                      'on the average distance between two vertices in the surface.<BR><BR>'];
-%     sProcess.options.help.Type    = 'label';
+
     % === FWHM (kernel size)
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
@@ -75,32 +68,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
     sProcess.options.use_all_pairs.Type    = 'checkbox';
     sProcess.options.use_all_pairs.Value   = 0;
-
-    sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
-    sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
-    sProcess.options.do_export_fluence_vol.Hidden = 1;
-    sProcess.options.do_export_fluence_vol.Value   = 0;    
-%     SelectOptions = {...
-%         '', ...                            % Filename
-%         '', ...                            % FileFormat
-%         'save', ...                        % Dialog type: {open,save}
-%         'Select output folder...', ...     % Window title
-%         'ExportAnat', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-%         'single', ...                      % Selection mode: {single,multiple}
-%         'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-%         {{'.folder'}, '*.*'}, ... % Available file formats
-%         'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-%     % Option definition
-%     % TODO: add flag to enable ouput
-%     sProcess.options.outputdir.Comment = 'Output folder for fluence nifti volumes:';
-%     sProcess.options.outputdir.Type    = 'filename';
-%     sProcess.options.outputdir.Value   = SelectOptions;
     
-      sProcess.options.outputdir.Comment = 'Output folder for fluence nifti volumes';
-      sProcess.options.outputdir.Type = 'text';
-      sProcess.options.outputdir.Hidden = 1;
-      sProcess.options.outputdir.Value = '';
-      
 end
 
 %% ===== FORMAT COMMENT =====
@@ -114,11 +82,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {sInputs.FileName};
 
-do_export_fluences  = sProcess.options.do_export_fluence_vol.Value;
 use_closest_wl      = sProcess.options.use_closest_wl.Value;
 use_all_pairs       = sProcess.options.use_all_pairs.Value;
 sens_thresh_pct     = sProcess.options.sensitivity_threshold_pct.Value{1};
 normalize_fluence   = sProcess.options.normalize_fluence.Value;
+data_source         = sProcess.options.data_source.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -127,20 +95,22 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
-data_source = sProcess.options.data_source.Value;
 
 %% Retrieve list of vertex indexes corresponding to current montage
 % Load channel file
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
-% Load head mesh
+% Load subject
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
 
-% Load anat mri
+% Load MRI, Head and Cortex. 
 if isempty(sSubject.iAnatomy)
     bst_error(['No anatomical data found for ' sInputs.SubjectName]);
 end
-sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+
+sMri    = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
+sHead   = in_tess_bst(sSubject.Surface(sSubject.iScalp  ).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex ).FileName);
 
 % Retrieve optode coordinates
 % Load channel file
@@ -151,7 +121,7 @@ src_locs        = montage_info.src_pos;
 src_ids         = montage_info.src_ids;
 det_locs        = montage_info.det_pos;
 det_ids         = montage_info.det_ids;
-pair_sd_idx     =  montage_info.pair_sd_indexes;
+pair_sd_idx     = montage_info.pair_sd_indexes;
 
 nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
@@ -169,16 +139,12 @@ end
 nb_pairs = length(pair_names);
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
-sHead = in_tess_bst(head_mesh_fn);
 
 [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
 
 %% Load fluence data from local .brainstorm folder (download if not available)
-[sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
         
-[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], anat_name, ...
+[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
                                                                          ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
                                                                          use_closest_wl);
 if isempty(all_fluences_flat_sparse)
@@ -187,9 +153,9 @@ end
 
 bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
 
-mri_zeros = zeros(size(sMri.Cube));
-src_fluences = cell(1, nb_sources);
-det_fluences = cell(1, nb_dets);
+mri_zeros       = zeros(size(sMri.Cube));
+src_fluences    = cell(1, nb_sources);
+det_fluences    = cell(1, nb_dets);
 
 for iwl = 1:nb_wavelengths
     src_iv = 1;
@@ -208,7 +174,6 @@ for iwl = 1:nb_wavelengths
     end
 end
 
-src_reference_voxels_index = all_reference_voxels_index(1:nb_sources);
 det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
 
 % Compute sensitivity matrix (volume) and interpolate on cortical surface
@@ -216,8 +181,7 @@ det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sourc
 
 bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
 
-cortex_data         = load(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
-nb_nodes            = size(cortex_data.Vertices, 1);
+nb_nodes            = size(sCortex.Vertices, 1);
 sensitivity_surf    = zeros(nb_nodes,nb_pairs, nb_wavelengths);
 
 voronoi = get_voronoi(sProcess, sInputs);
@@ -305,8 +269,7 @@ if sens_thresh_pct > 0
 end
 
 if sProcess.options.force_median_spread.Value
-    if ~exist('sCortex', 'var')
-        sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+    if ~isfield(sCortex, 'VertArea') || isempty(sCortex.VertArea)
         [tmp, sCortex.VertArea] = tess_area(sCortex.Vertices, sCortex.Faces);
     end
     
@@ -372,7 +335,7 @@ HeadModelMat = db_template('headmodelmat');
 HeadModelMat.Gain           = sensitivity_surf;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
-HeadModelMat.Comment       = 'NIRS head model';
+HeadModelMat.Comment        = 'NIRS head model';
 if use_all_pairs
     HeadModelMat.Comment = [HeadModelMat.Comment ' [all pairs]'];
 end
