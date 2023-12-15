@@ -38,6 +38,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     sProcess.isSeparator = 0;
+
+
+    sProcess.options.label.Comment = '<B>Fluences:</B>';
+    sProcess.options.label.Type    = 'label';
+
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
@@ -49,25 +54,38 @@ function sProcess = GetDescription() %#ok<DEFNU>
 
 
     % === FWHM (kernel size)
+
+    sProcess.options.label1.Comment = '<B>Smoothing Method:</B>';
+    sProcess.options.label1.Type    = 'label';
+
+    sProcess.options.method.Comment = {'<FONT color="#777777">Before 2023 (not recommended)</FONT>', ...
+                                       '<B> Geodesic</B> <FONT color="#777777">(recommended)</FONT>'; ...
+                                       'surfstat_before_2023', 'geodesic_dist'};
+    sProcess.options.method.Type    = 'radio_label';
+    sProcess.options.method.Value   = 'surfstat_before_2023';
+
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
     sProcess.options.smoothing_fwhm.Value   = {0, 'mm', 2};
     
-    sProcess.options.force_median_spread.Comment = 'Force median spread';
-    sProcess.options.force_median_spread.Type    = 'checkbox';
-    sProcess.options.force_median_spread.Value   = 0; 
-    
+    sProcess.options.label2.Comment = '<B>Extra options:</B>';
+    sProcess.options.label2.Type    = 'label';
+
+    sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
+    sProcess.options.use_all_pairs.Type    = 'checkbox';
+    sProcess.options.use_all_pairs.Value   = 0;
+
     sProcess.options.normalize_fluence.Comment = 'Normalize by source fluence at detector position';
     sProcess.options.normalize_fluence.Type    = 'checkbox';
     sProcess.options.normalize_fluence.Value   = 1;
 
+    sProcess.options.force_median_spread.Comment = 'Force median spread<FONT color="#777777">(not recommended)</FONT>';
+    sProcess.options.force_median_spread.Type    = 'checkbox';
+    sProcess.options.force_median_spread.Value   = 0; 
+    
     sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
     sProcess.options.sensitivity_threshold_pct.Type    = 'value';
     sProcess.options.sensitivity_threshold_pct.Value   = {0, '%', 2};
-    
-    sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
-    sProcess.options.use_all_pairs.Type    = 'checkbox';
-    sProcess.options.use_all_pairs.Value   = 0;
     
 end
 
@@ -192,16 +210,16 @@ voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
 
 if length(src_ids) == 1
-    tmp  = [ src_ids(pair_sd_idx(:, 1))]; 
+    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
 else 
-    tmp  = [ src_ids(pair_sd_idx(:, 1))]'; 
+    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]'; 
 end    
 if length(det_ids) == 1
-    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))];
+    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))];
 else 
-    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))'];
+    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
 end    
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,tmp);
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,pair_ids);
 
 
 for ipair=1:nb_pairs
@@ -246,11 +264,17 @@ end
 
 if sProcess.options.smoothing_fwhm.Value{1} > 0
     FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
-    [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
-                                    sSubject.Surface(sSubject.iCortex).FileName, ...
-                                    sensitivity_surf, FWHM, 'before_2023');
 
-    bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+    if ~isfield(sProcess.options, 'method') || strcmp(sProcess.options.method.Value, 'surfstat_before_2023')
+        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
+                                        sSubject.Surface(sSubject.iCortex).FileName, ...
+                                        sensitivity_surf, FWHM, 'before_2023');
+    elseif strcmp(sProcess.options.method.Value, 'geodesic_dist')
+        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute', ... 
+                                        sSubject.Surface(sSubject.iCortex).FileName, ...
+                                        sensitivity_surf, FWHM, 'geodesic_dist');
+         bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+    end
 end
 
 sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
