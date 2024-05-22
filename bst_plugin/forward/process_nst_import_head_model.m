@@ -38,6 +38,11 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     sProcess.isSeparator = 0;
+
+
+    sProcess.options.label.Comment = '<B>Fluences:</B>';
+    sProcess.options.label.Type    = 'label';
+
     % Definition of the options    
     sProcess.options.data_source.Comment = 'Fluence Data Source (URL or path)';
     sProcess.options.data_source.Type    = 'text';
@@ -47,60 +52,41 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.use_closest_wl.Type    = 'checkbox';
     sProcess.options.use_closest_wl.Value   = 0;
 
-    % Smoothing options
-    % === DESCRIPTION   copied from process_ssmooth_surfstat
-%     sProcess.options.help.Comment = ['This process uses SurfStatSmooth (SurfStat, KJ Worsley).<BR><BR>' ...
-%                                      'The smoothing is based only on the surface topography, <BR>' ...
-%                                      'not the real geodesic distance between two vertices.<BR>', ...
-%                                      'The input in mm is converted to a number of edges based<BR>', ...
-%                                      'on the average distance between two vertices in the surface.<BR><BR>'];
-%     sProcess.options.help.Type    = 'label';
+
     % === FWHM (kernel size)
+
+    sProcess.options.label1.Comment = '<B>Smoothing Method:</B>';
+    sProcess.options.label1.Type    = 'label';
+
+    sProcess.options.method.Comment = {'<FONT color="#777777">Before 2023 (not recommended)</FONT>', ...
+                                       '<B> Geodesic</B> <FONT color="#777777">(recommended)</FONT>'; ...
+                                       'surfstat_before_2023', 'geodesic_dist'};
+    sProcess.options.method.Type    = 'radio_label';
+    sProcess.options.method.Value   = 'surfstat_before_2023';
+
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
     sProcess.options.smoothing_fwhm.Value   = {0, 'mm', 2};
     
-    sProcess.options.force_median_spread.Comment = 'Force median spread';
-    sProcess.options.force_median_spread.Type    = 'checkbox';
-    sProcess.options.force_median_spread.Value   = 0; 
-    
-    sProcess.options.normalize_fluence.Comment = 'Normalize by source fluence at detector position';
-    sProcess.options.normalize_fluence.Type    = 'checkbox';
-    sProcess.options.normalize_fluence.Value   = 1;
+    sProcess.options.label2.Comment = '<B>Extra options:</B>';
+    sProcess.options.label2.Type    = 'label';
 
-    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
-    sProcess.options.sensitivity_threshold_pct.Type    = 'value';
-    sProcess.options.sensitivity_threshold_pct.Value   = {0, '%', 2};
-    
     sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
     sProcess.options.use_all_pairs.Type    = 'checkbox';
     sProcess.options.use_all_pairs.Value   = 0;
 
-    sProcess.options.do_export_fluence_vol.Comment = 'Export fluence volumes';
-    sProcess.options.do_export_fluence_vol.Type    = 'checkbox';
-    sProcess.options.do_export_fluence_vol.Hidden = 1;
-    sProcess.options.do_export_fluence_vol.Value   = 0;    
-%     SelectOptions = {...
-%         '', ...                            % Filename
-%         '', ...                            % FileFormat
-%         'save', ...                        % Dialog type: {open,save}
-%         'Select output folder...', ...     % Window title
-%         'ExportAnat', ...                  % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
-%         'single', ...                      % Selection mode: {single,multiple}
-%         'dirs', ...                        % Selection mode: {files,dirs,files_and_dirs}
-%         {{'.folder'}, '*.*'}, ... % Available file formats
-%         'MriOut'};                         % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,AnatIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn}
-%     % Option definition
-%     % TODO: add flag to enable ouput
-%     sProcess.options.outputdir.Comment = 'Output folder for fluence nifti volumes:';
-%     sProcess.options.outputdir.Type    = 'filename';
-%     sProcess.options.outputdir.Value   = SelectOptions;
+    sProcess.options.normalize_fluence.Comment = 'Normalize by source fluence at detector position';
+    sProcess.options.normalize_fluence.Type    = 'checkbox';
+    sProcess.options.normalize_fluence.Value   = 1;
+
+    sProcess.options.force_median_spread.Comment = 'Force median spread<FONT color="#777777">(not recommended)</FONT>';
+    sProcess.options.force_median_spread.Type    = 'checkbox';
+    sProcess.options.force_median_spread.Value   = 0; 
     
-      sProcess.options.outputdir.Comment = 'Output folder for fluence nifti volumes';
-      sProcess.options.outputdir.Type = 'text';
-      sProcess.options.outputdir.Hidden = 1;
-      sProcess.options.outputdir.Value = '';
-      
+    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
+    sProcess.options.sensitivity_threshold_pct.Type    = 'value';
+    sProcess.options.sensitivity_threshold_pct.Value   = {0, '%', 2};
+    
 end
 
 %% ===== FORMAT COMMENT =====
@@ -114,11 +100,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {sInputs.FileName};
 
-do_export_fluences  = sProcess.options.do_export_fluence_vol.Value;
 use_closest_wl      = sProcess.options.use_closest_wl.Value;
 use_all_pairs       = sProcess.options.use_all_pairs.Value;
 sens_thresh_pct     = sProcess.options.sensitivity_threshold_pct.Value{1};
 normalize_fluence   = sProcess.options.normalize_fluence.Value;
+data_source         = sProcess.options.data_source.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -127,20 +113,22 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
-data_source = sProcess.options.data_source.Value;
 
 %% Retrieve list of vertex indexes corresponding to current montage
 % Load channel file
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
-% Load head mesh
+% Load subject
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
 
-% Load anat mri
+% Load MRI, Head and Cortex. 
 if isempty(sSubject.iAnatomy)
     bst_error(['No anatomical data found for ' sInputs.SubjectName]);
 end
-sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+
+sMri    = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
+sHead   = in_tess_bst(sSubject.Surface(sSubject.iScalp  ).FileName);
+sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex ).FileName);
 
 % Retrieve optode coordinates
 % Load channel file
@@ -151,7 +139,7 @@ src_locs        = montage_info.src_pos;
 src_ids         = montage_info.src_ids;
 det_locs        = montage_info.det_pos;
 det_ids         = montage_info.det_ids;
-pair_sd_idx     =  montage_info.pair_sd_indexes;
+pair_sd_idx     = montage_info.pair_sd_indexes;
 
 nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
 nb_sources = size(src_locs, 1);
@@ -169,17 +157,12 @@ end
 nb_pairs = length(pair_names);
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_mesh_fn = sSubject.Surface(sSubject.iScalp).FileName;
-sHead = in_tess_bst(head_mesh_fn);
-%TODO: compute projection errors -> if too large, yell at user
 
 [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
 
 %% Load fluence data from local .brainstorm folder (download if not available)
-[sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-anat_name = sSubject.Anatomy(sSubject.iAnatomy).Comment;
         
-[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], anat_name, ...
+[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
                                                                          ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
                                                                          use_closest_wl);
 if isempty(all_fluences_flat_sparse)
@@ -188,9 +171,9 @@ end
 
 bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
 
-mri_zeros = zeros(size(sMri.Cube));
-src_fluences = cell(1, nb_sources);
-det_fluences = cell(1, nb_dets);
+mri_zeros       = zeros(size(sMri.Cube));
+src_fluences    = cell(1, nb_sources);
+det_fluences    = cell(1, nb_dets);
 
 for iwl = 1:nb_wavelengths
     src_iv = 1;
@@ -209,58 +192,15 @@ for iwl = 1:nb_wavelengths
     end
 end
 
-src_reference_voxels_index = all_reference_voxels_index(1:nb_sources);
 det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
 
+% Compute sensitivity matrix (volume) and interpolate on cortical surface
+% using Voronoi partitionning
 
-%% Export fluences
-if do_export_fluences
-    output_dir = sProcess.options.outputdir.Value;
-    assert(exist(output_dir,'dir')~=0);
-    sVol = sMri;
-    bst_progress('start', 'Export fluences','Exporting volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
-    for isrc=1:nb_sources
-        for iwl=1:nb_wavelengths
-            wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Fluence for S%02d and %dnm ', ...
-                                    src_ids(isrc), wl) ...
-                            'aligned to ' sMri.Comment];
-            sVol.Cube = src_fluences{isrc}{iwl};
-            sVol.Histogram = [];
-            out_bfn = sprintf('fluence_S%02d_%dnm_%s.nii', src_ids(isrc), wl, ...
-                              protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-            bst_progress('inc',1);
-        end
-    end
-    for idet=1:nb_dets
-        for iwl=1:nb_wavelengths
-            wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Fluence for D%02d and %dnm, aligned to ', ...
-                                    det_ids(idet), wl) ...
-                            'aligned to ' sMri.Comment];
-            sVol.Cube = det_fluences{idet}{iwl};
-            sVol.Histogram = [];
-            out_bfn = sprintf('fluence_D%02d_%dnm_%s.nii', det_ids(idet), wl, ...
-                              protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-            bst_progress('inc',1);
-        end
-    end
-    bst_progress('stop');
-end
-
-%% Compute sensitivity matrix (volume) and interpolate on cortical surface
-%% using Voronoi partitionning
 bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
-% [vol_size_x, vol_size_y, vol_size_z] = size(src_fluences{1}{1}.fluence.data);
-% sensitivity = zeros(nb_pairs, nb_wavelengths, vol_size_x, vol_size_y, vol_size_z);
 
-cortex_data = load(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
-nb_nodes = size(cortex_data.Vertices, 1);
-sensitivity_surf = zeros(nb_pairs, nb_wavelengths, nb_nodes);
+nb_nodes            = size(sCortex.Vertices, 1);
+sensitivity_surf    = zeros(nb_nodes,nb_pairs, nb_wavelengths);
 
 voronoi = get_voronoi(sProcess, sInputs);
 voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
@@ -270,16 +210,16 @@ voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
 % separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
 
 if length(src_ids) == 1
-    tmp  = [ src_ids(pair_sd_idx(:, 1))]; 
+    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
 else 
-    tmp  = [ src_ids(pair_sd_idx(:, 1))]'; 
+    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]'; 
 end    
 if length(det_ids) == 1
-    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))];
+    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))];
 else 
-    tmp  = [tmp, det_ids(pair_sd_idx(:, 2))'];
+    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
 end    
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,tmp);
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,pair_ids);
 
 
 for ipair=1:nb_pairs
@@ -287,21 +227,6 @@ for ipair=1:nb_pairs
     idet = pair_sd_idx(ipair, 2);
     separation = separations_by_pairs(ipair);
     for iwl=1:nb_wavelengths
-        
-        if do_export_fluences
-            sVol.Comment = '';
-            cube_data = src_fluences{isrc}{iwl};
-            cube_data(det_reference_voxels_index{idet}{iwl}(1),...
-                det_reference_voxels_index{idet}{iwl}(2),...
-                det_reference_voxels_index{idet}{iwl}(3)) = idet+10;
-            sVol.Cube = cube_data;
-            sVol.Histogram = [];
-            out_bfn = sprintf('fluence_sref_%s_%dnm_%s.nii', pair_names{ipair}, ChannelMat.Nirs.Wavelengths(iwl), ...
-                protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-        end
-        
         if normalize_fluence
             ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
                                                   det_reference_voxels_index{idet}{iwl}(2),...
@@ -324,57 +249,36 @@ for ipair=1:nb_pairs
             end
             sensitivity_vol = src_fluences{isrc}{iwl} .* ...
                               det_fluences{idet}{iwl}./normalization_factor ;
-            % fprintf('Maximum Volumetric Sensitivity of %s = %f mm\n',  pair_names{ipair}, max(sensitivity_vol(:)));
         end
         % modified by zhengchen to normalize the sensitivity
         %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
         
-        if do_export_fluences
-            output_dir = sProcess.options.outputdir.Value;
-            sVol = sMri;
-            wl = ChannelMat.Nirs.Wavelengths(iwl);
-            sVol.Comment = [sprintf('Sensitivity for %s and %dnm, aligned to ', ...
-                                    pair_names{ipair}, wl) ...
-                            'aligned to ' sMri.Comment];
-            sVol.Cube = sensitivity_vol;
-            sVol.Histogram = [];
-            out_bfn = sprintf('sensitivity_%s_%dnm_%s.nii', pair_names{ipair}, wl, ...
-                              protect_fn_str(sMri.Comment));
-            out_fn = fullfile(output_dir, out_bfn);
-            out_mri_nii(sVol, out_fn, 'float32');
-        end
-
-         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
-             [nb_nodes+1 1],@(x)sum(x)/numel(x)); % http://www.mathworks.com/help/matlab/ref/accumarray.html#bt40_mn-1 % TODO: maybe not divide by number of voxels in VORO cell
-%         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), ...
-%            [nb_nodes+1 1],@(x)sum(x)); % http://www.mathworks.com/help/matlab/ref/accumarray.html#bt40_mn-1 % TODO: maybe not divide by number of voxels in VORO cell
+        sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
         sens_tmp(end)=[]; % trash last column
-%         if do_export_fluences
-%            out_bfn = sprintf('sensitivity_tex_%s_%dnm_%s.csv', pair_names{ipair}, wl, ...
-%                               protect_fn_str(sSubject.Surface(sSubject.iCortex).Comment));
-%            out_fn = fullfile(output_dir, out_bfn);
-%            fileID = fopen(out_fn,'w');
-%            fprintf(fileID, '%s', num2str(sens_tmp'));
-%            fclose(fileID);
-%         end
-%        assert(~any(isnan(sens_tmp(:))));
- %       bad_nodes = bad_nodes | isinf(sens_tmp) | isnan(sens_tmp) | abs(sens_tmp) <= eps(0);
-        if sProcess.options.smoothing_fwhm.Value{1} > 0
-            FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
-            % Load cortex mesh
-            cortex_mesh = sSubject.Surface(sSubject.iCortex).FileName;
-            sCortex = in_tess_bst(cortex_mesh);
-            if ipair ==1 && iwl ==1
-                dispInfo = 1;
-            else
-                dispInfo = 0;
-            end
-            sens_tmp = surface_smooth(FWHM, sCortex, sens_tmp,dispInfo);
-        end
-        sensitivity_surf(ipair,iwl,:) = sens_tmp;
+
+
+        sensitivity_surf(:,ipair,iwl) = sens_tmp;
     end
     bst_progress('inc',1);
 end
+
+if sProcess.options.smoothing_fwhm.Value{1} > 0
+    FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
+
+    if ~isfield(sProcess.options, 'method') || strcmp(sProcess.options.method.Value, 'surfstat_before_2023')
+        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
+                                        sSubject.Surface(sSubject.iCortex).FileName, ...
+                                        sensitivity_surf, FWHM, 'before_2023');
+    elseif strcmp(sProcess.options.method.Value, 'geodesic_dist')
+        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute', ... 
+                                        sSubject.Surface(sSubject.iCortex).FileName, ...
+                                        sensitivity_surf, FWHM, 'geodesic_dist');
+         bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+    end
+end
+
+sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
+
 bst_progress('stop');
 
 %% Sensitivity thresholding
@@ -385,26 +289,11 @@ if sens_thresh_pct > 0
     max_sens =  max(nz_sensitivity);
     sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
 
-    %  sensivitity_sorted = sort(sensitivity_surf(sensitivity_surf>0));
-    %  thresh_sort_idx = sens_thresh_pct/100 * length(sensivitity_sorted);
-    %  [N,D] = rat(thresh_sort_idx);
-    % if isequal(D,1) % integer
-    %     thresh_sort_idx = thresh_sort_idx+0.5;
-    % else                           
-    %     thresh_sort_idx = round(thresh_sort_idx);
-    % end
-    % [T,R] = strtok(num2str(thresh_sort_idx),'0.5');
-    % if strcmp(R,'.5')
-    %     sens_thresh = mean(sensivitity_sorted((thresh_sort_idx-0.5):(thresh_sort_idx+0.5)));
-    % else
-    %     sens_thresh = sensivitity_sorted(thresh_sort_idx);
-    % end
     sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
 end
 
 if sProcess.options.force_median_spread.Value
-    if ~exist('sCortex', 'var')
-        sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+    if ~isfield(sCortex, 'VertArea') || isempty(sCortex.VertArea)
         [tmp, sCortex.VertArea] = tess_area(sCortex.Vertices, sCortex.Faces);
     end
     
@@ -430,22 +319,6 @@ if sProcess.options.force_median_spread.Value
                     end
                     sensitivity_surf(ipair, iwl, vertex_stack(1:iv)) = 0;
                     
-%                         Geometrical shrinkage:
-%                         % Shrink one vertex at a time
-%                         % Remove a layer of connected vertices
-%                         Expanded = tess_scout_swell(vi, sCortex.VertConn);
-%                         viToRemove = tess_scout_swell(Expanded, sCortex.VertConn);
-%                         viToRemove = intersect(viToRemove, vi);
-%                         % Compute the distance from each point to the seed
-%                         distFromSeed = sqrt(sum(bst_bsxfun(@minus, sCortex.Vertices(viToRemove,:), seedXYZ) .^ 2, 2));
-%                         % Get the maximum distance
-%                         [maxVal, iMax] = max(distFromSeed);
-%                         iMax = iMax(1);
-%                         % Remove the farthest vertex from the scout vertices
-%                         vi = setdiff(vi, viToRemove(iMax));
-%                         area = sum(sCortex.VertArea(vi));
-%                         vi_removed(end+1) = iMax; %#ok<AGROW>
-%                         sensitivity_surf(ipair, iwl, vi_removed) = 0;
                 else
                     seedXYZ = mean(sCortex.Vertices(vi_orig, :));
                     to_add = [];
@@ -486,13 +359,13 @@ HeadModelMat = db_template('headmodelmat');
 HeadModelMat.Gain           = sensitivity_surf;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
-HeadModelMat.Comment       = 'NIRS head model';
+HeadModelMat.Comment        = 'NIRS head model';
 if use_all_pairs
     HeadModelMat.Comment = [HeadModelMat.Comment ' [all pairs]'];
 end
 % newHeadModelMat.VoiNodes = voi_nodes;
 HeadModelMat.pair_names = pair_names;
-HeadModelMat = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
+HeadModelMat  = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
 % Output file name
 HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudy.FileName)), 'headmodel_nirs_mcx_fluence.mat');
 HeadModelFile = file_unique(HeadModelFile);
