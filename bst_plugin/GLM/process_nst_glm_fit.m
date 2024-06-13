@@ -290,14 +290,18 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         filter_type = sProcess.options.filter_model.Value;
         low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
         high_cutoff = sProcess.options.hpf_high_cutoff.Value{1};
-
+        apply_filer = 1; 
         if strcmp(filter_type, 'FIR_bp')
             param = sProcess.options.hpf_transition_band.Value{1};
         elseif strcmp(filter_type, 'IIR_bp')
             param = sProcess.options.hpf_order.Value{1};
+        else
+            apply_filer = 0;
         end
-
-        model = nst_glm_apply_filter(model,filter_type, low_cutoff,high_cutoff,param  );
+        if apply_filer
+            model = nst_glm_apply_filter(model,filter_type, low_cutoff,high_cutoff,param  );
+        end
+        
         if sProcess.options.has_detrending.Value
                 model = nst_glm_apply_filter(model,'DCT_filter', sProcess.options.dct_cutoff.Value{1}  );
         end
@@ -514,7 +518,7 @@ end
 
 function hrf_types = get_hrf_types()
     hrf_types.CANONICAL = 1;
-    hrf_types.GAUSSIAN = 2;
+    hrf_types.GAMMA  = 2;
     hrf_types.DECONV = 3;
 
 end
