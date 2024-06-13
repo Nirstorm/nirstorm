@@ -65,7 +65,7 @@ function model = nst_glm_apply_filter(model,filter_name, varargin )
             ind=find(model.accept_filter == 1 | model.accept_filter == 3);
             
             [x, FiltSpec, Messages] = process_bandpass('Compute', model.X(:,ind)',  model.fs, low_cutoff, high_cutoff, [], 0,is_relax , TranBand);
-            model.X(:,ind)= x;
+            model.X(:,ind)= x';
    
         case 'DCT_filter'
             % Applied the GLM IIR DCT filter;
