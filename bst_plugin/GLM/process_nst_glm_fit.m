@@ -178,7 +178,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
 
     OutputFiles = {};
 
-    DataMat = in_bst_data(sInput.FileName);
     basis_choice = sProcess.options.hrf_model.Value{1};
 
     save_residuals = sProcess.options.extra_output.Value || sProcess.options.save_residuals.Value;
@@ -193,25 +192,45 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     
-    %% Load data and events
+    % Load Channels informations
     ChannelMat = in_bst_channel(sInput.ChannelFile);
-    data_types = {}; % Chromophore present in the data (eg HbO, HbR, or WL860)
-    if isfield(DataMat, 'SurfaceFile')
+
+    % Load recordings
+    surface_data = 0;
+
+    if strcmp(sInput.FileType, 'raw')  % Continuous data file       
+        DataMat = in_bst(sInput.FileName, [], 1, 1, 'no');
+        sDataRaw = in_bst_data(sInput.FileName, 'F');
+        DataMat.Events = sDataRaw.F.events;
+
+    elseif strcmp(sInput.FileType, 'data')     % Imported data structure
+        DataMat = in_bst_data(sInput.FileName);
+
+    elseif strcmp(sInput.FileType, 'results')  % Imported data on the cortex
         surface_data = 1;
+        
+        DataMat = in_bst_data(sInput.FileName);
         channel_data = in_bst_data(DataMat.DataFile);
+
         % Make sure time axis is consistent
         assert(all(channel_data.Time == DataMat.Time));
         if isempty(DataMat.Events) && isfield(channel_data, 'Events')
             DataMat.Events = channel_data.Events;
         end
+    end
+
+    data_types = {}; % Chromophore present in the data (eg HbO, HbR, or WL860)
+    if surface_data
         if ~isempty(channel_data.F) && ~isempty(DataMat.ImageGridAmp) && size(DataMat.ImageGridAmp, 2)==length(DataMat.Time)
             Y = DataMat.ImageGridAmp';
             if issparse(Y)
                 Y = full(Y);
             end
-            n_voxel=size(Y,2);
-            mask=find(~all(Y==0,1)); % Only keep channel in the field of view
-            Y=Y(:,mask);
+
+            n_voxel = size(Y,2);
+            mask    = find(~all(Y==0,1)); % Only keep channel in the field of view
+            Y       = Y(:,mask);
+
         else
             bst_error('Cannot get signals from surface data');
         end
@@ -223,15 +242,15 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         else
             data_types = regexp(lower(sInput.FileName),'wl([0-9]*)','match'); %note: there is probably an easier way but it works :)
         end
+
     else
-        surface_data = 0;
+
         % Get signals of NIRS channels only:
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
-        Y = DataMat.F(nirs_ichans,:)';
-        mask=[];
-        n_voxel=size(Y,2);
+        Y       = DataMat.F(nirs_ichans,:)';
+        mask    = [];
+        n_voxel = size(Y,2);
         data_types = unique({ChannelMat.Channel.Group});
-
     end
     
     % TODO: Check for dOD
