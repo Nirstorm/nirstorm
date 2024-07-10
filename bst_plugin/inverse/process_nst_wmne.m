@@ -390,7 +390,7 @@ function J = nst_mne_lcurve(HM,OPTIONS)
         J =  Kernel * M; 
 
         Fit(iAlpha)     = norm(M-G*J);  % Define Fit as a function of alpha
-        Prior(iAlpha)   = norm(J);      % Define Prior as a function of alpha
+        Prior(iAlpha)   = norm(W*J);      % Define Prior as a function of alpha
     
     end
 
