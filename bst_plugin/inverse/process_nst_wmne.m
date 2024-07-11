@@ -18,7 +18,7 @@ function varargout = process_nst_wmne( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire (2022)
+% Authors: Edouard Delaire (2022-2024)
 % Thomas Vincent, ZhengChen Cai (2015-2016)
 %
 eval(macro_method);

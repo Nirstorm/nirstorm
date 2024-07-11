@@ -1,4 +1,39 @@
 function J = nst_mne_lcurve_MAP(HM,OPTIONS)
+% nst_mne_lcurve - this function solve the inverse probleme using a l-curve
+% approach in the MAP formalism. This approach is inefficient and should
+% not be used. Consider using nst_mne_lcurve instead.
+% Input: HM - struct
+%        | - HM.Gain : Gain matrix 
+%        OPTIONS - struct
+%        | - OPTIONS.Data : data matrix (nChannel x nTimes)
+%        | - OPTIONS.DataTime: Corresponding time (1xnTimes)
+%        | - OPTIONS.BaselineSegment: Segment used for baseline [start,end]
+%        | - OPTIONS.NoiseCov_recompute: true if using the baseline to
+%        estimate the noise covariance, if false, the noise covariance is
+%        identity
+%        | - OPTIONS.depth_weigth_MNE: depth-weighting factor between 0 and 1
+% Output: J - reconstructed time-course on the cortex (nVertex x nTimes)
+
+% @=============================================================================
+% This function is part of the Brainstorm software:
+% https://neuroimage.usc.edu/brainstorm
+% 
+% Copyright (c) University of Southern California & McGill University
+% This software is distributed under the terms of the GNU General Public License
+% as published by the Free Software Foundation. Further details on the GPLv3
+% license can be found at http://www.gnu.org/copyleft/gpl.html.
+% 
+% FOR RESEARCH PURPOSES ONLY. THE SOFTWARE IS PROVIDED "AS IS," AND THE
+% UNIVERSITY OF SOUTHERN CALIFORNIA AND ITS COLLABORATORS DO NOT MAKE ANY
+% WARRANTY, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+% MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, NOR DO THEY ASSUME ANY
+% LIABILITY OR RESPONSIBILITY FOR THE USE OF THIS SOFTWARE.
+%
+% For more information type "brainstorm license" at command prompt.
+% =============================================================================@
+%
+% Authors: Edouard Delaire, 2024
+
     % selection of the data:
     sample_baseline = be_closest(OPTIONS.BaselineSegment([1 end]), OPTIONS.DataTime);
     baseline        = OPTIONS.Data(:,sample_baseline(1):sample_baseline(2));
