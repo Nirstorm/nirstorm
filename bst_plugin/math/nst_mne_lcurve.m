@@ -51,8 +51,9 @@ function J = nst_mne_lcurve(HM,OPTIONS)
 
     bst_progress('start', 'wMNE, solving MNE by L-curve ... ' , 'Solving MNE by L-curve ... ', 1, length(param1));
     for iAlpha = 1:length(alpha)
-
-        J = SG * (( GSG  + alpha(iAlpha) * Sigma_d )\M); 
+        
+        Kermel = SG * inv( GSG  + alpha(iAlpha) * Sigma_d );
+        J = Kermel*M; 
 
         Fit(iAlpha)     = norm(M-G*J);  % Define Fit as a function of alpha
         Prior(iAlpha)   = norm(W*J);      % Define Prior as a function of alpha
@@ -62,7 +63,9 @@ function J = nst_mne_lcurve(HM,OPTIONS)
 
     % Fid alpha optimal based on l-curve
     [~,Index] = min(Fit/max(Fit)+Prior/max(Prior)); 
-    J = SG * ( ( GSG  + alpha(iAlpha) * Sigma_d )\M ); 
+    
+    Kermel = SG * inv( GSG  + alpha(Index) * Sigma_d );
+    J = Kermel*M; 
 
 
     bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
