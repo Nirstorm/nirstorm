@@ -39,15 +39,15 @@ function J = nst_mne_lcurve(HM,OPTIONS)
 
     
     % Parameter for l-curve
-    param1  = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
+    param1  = [0.1:0.1:1 1:5:100 100:100:1000]; 
 
     % Scale alpha using trace(G*G')./trace(W'*W)  
     scale   = trace(G*G')./ trace(Ps) ;       
     alpha   = param1.*scale;
 
 
-    Fit     = zeros(1,length(param1));
-    Prior   = zeros(1,length(param1));
+    Fit     = zeros(1,length(alpha));
+    Prior   = zeros(1,length(alpha));
 
     bst_progress('start', 'wMNE, solving MNE by L-curve ... ' , 'Solving MNE by L-curve ... ', 1, length(param1));
     for iAlpha = 1:length(alpha)
