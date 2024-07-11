@@ -223,9 +223,10 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     
         %% launch dMNE 
         bst_progress('text', ['Running wMNE for wavelength #' num2str(iwl) '...']);
-        Results = nst_mne_lcurve(HM, OPTIONS);
-        %Results = NIRS_wMNE(HM, OPTIONS);
+
         % MNE results
+        Results = nst_mne_lcurve(HM, OPTIONS);
+
         grid_amp = zeros(nb_nodes, nb_samples);
         sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
         grid_amp(valid_nodes,sample(1):sample(2)) = Results;
@@ -254,7 +255,7 @@ function J = NIRS_wMNE(HM,OPTIONS)
 sample_baseline = be_closest(OPTIONS.BaselineSegment([1 end]), OPTIONS.DataTime);
 baseline = OPTIONS.Data(:,sample_baseline(1):sample_baseline(2));
 
-%% Normalization by using the mean standard deviation of baseline for each modalities
+% Normalization by using the mean standard deviation of baseline for each modalities
 
 % Std deviation for every channels on a modality
 SD = std(baseline');
@@ -276,10 +277,6 @@ if OPTIONS.NoiseCov_recompute
 end
 param1 = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
 
-%param1= [ 1/3 ];
-% for i=1:size(M,1)
-%     param1(i)=1/abs(snr(M(i,:))); 
-% end    
 pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... ');
 
 p = OPTIONS.depth_weigth_MNE;
@@ -324,95 +321,7 @@ end
 
 bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
 
-figure()
-plot(Prior, Fit,'b.');
-hold on;plot(Prior(Index), Fit(Index),'ro');
-hold off
-xlabel('Norm |WJ|');
-ylabel('Residual |M-GJ|');
-title('L-curve (old)');
-
 end
-
-function J = nst_mne_lcurve(HM,OPTIONS)
-
-    % selection of the data:
-    sample_baseline = be_closest(OPTIONS.BaselineSegment([1 end]), OPTIONS.DataTime);
-    baseline        = OPTIONS.Data(:,sample_baseline(1):sample_baseline(2));
-    
-    sample_data     = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
-    M               = OPTIONS.Data(:,sample_data(1):sample_data(2));
-
-    % Normalization by using the mean standard deviation of baseline
-    
-    SD = std(baseline,[],2);
-    MSD = mean(SD);
-
-    %Normalize datas, baseline, gain matrix  with the mean std dev
-    M           = M./MSD;
-    baseline    = baseline./MSD;
-    G           = HM.Gain./MSD;
-    
-    % Compute inverse of noise covariance matrices
-    if OPTIONS.NoiseCov_recompute 
-        Sigma_d    =   diag(diag(real(cov(baseline'))));
-    else
-        Sigma_d    =   eye(size(M,1));  
-    end
-
-    p = OPTIONS.depth_weigth_MNE;
-    if OPTIONS.NoiseCov_recompute
-        Sigma_s = diag(power(diag(G'*inv(Sigma_d)*G),p)); 
-    else
-        Sigma_s = diag(power(diag(G'*G),p)); 
-    end
-    W = sqrt(Sigma_s);
-
-    % Pre-compute matrix
-    GSD = G * Sigma_s * G';
-
-    % Parameter for l-curve
-    param1  = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
-
-    % Scale alpha using trace(G*G')./trace(W'*W)  
-    % trace(W'*W) = trace(Sigma_s) since W = sqrt(Sigma_s)
-    scale   = trace(G*G')./ trace(Sigma_s) ;       
-    alpha   = param1.*scale;
-
-
-    Fit     = zeros(1,length(param1));
-    Prior   = zeros(1,length(param1));
-
-    bst_progress('start', 'wMNE, solving MNE by L-curve ... ' , 'Solving MNE by L-curve ... ', 1, length(param1));
-    for iAlpha = 1:length(alpha)
-
-        Kernel = Sigma_s * G' * inv( GSD  + alpha(iAlpha) * Sigma_d ); 
-        J =  Kernel * M; 
-
-        Fit(iAlpha)     = norm(M-G*J);  % Define Fit as a function of alpha
-        Prior(iAlpha)   = norm(W*J);      % Define Prior as a function of alpha
-    
-    end
-
-    % Fid alpha optimal based on l-curve
-    [~,Index] = min(Fit/max(Fit)+Prior/max(Prior)); 
-
-    Kernel = Sigma_s * G' * inv( GSD  + alpha(Index) * Sigma_d ); 
-    J =  Kernel * M; 
-
-    bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
-
-
-    figure()
-    plot(Prior, Fit,'b.');
-    hold on;plot(Prior(Index), Fit(Index),'ro');
-    hold off
-    xlabel('Norm |WJ|');
-    ylabel('Residual |M-GJ|');
-    title('L-curve');
-
-end
-
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
