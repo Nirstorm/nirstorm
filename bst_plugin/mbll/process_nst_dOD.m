@@ -163,10 +163,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
     db_set_channel(iChannelStudy, ChannelMat, 2, 0);
         
-    % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
 
     if ~isRaw
+
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_dOD';
@@ -179,12 +178,16 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut.History      = sDataIn.History;
         sDataOut              = bst_history('add', sDataOut, 'process', sProcess.Comment);
         sDataOut.DisplayUnits = 'delta OD';
-        
+
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_OD');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
          % Register in database
         db_add_data(iStudy, OutputFile, sDataOut);
     else
+
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_OD');
+
         ProtocolInfo = bst_get('ProtocolInfo');
         newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
 

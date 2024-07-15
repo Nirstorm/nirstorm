@@ -136,10 +136,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
     db_set_channel(iChannelStudy, ChannelMat, 2, 0);
 
-    % Generate a new file name in the same folder
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_hb');
 
-    if ~isRaw
+    if ~isRaw        
         % Save time-series data
         sDataOut = db_template('data');
         sDataOut.F            = final_nirs'; 
@@ -164,6 +162,8 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
         % Register in database
         db_add_data(iStudy, OutputFile, sDataOut);
     else
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_0raw_hb');
+
         ProtocolInfo = bst_get('ProtocolInfo');
         newStudyPath = bst_fullfile(ProtocolInfo.STUDIES, sInputs.SubjectName, newCondition);
 
