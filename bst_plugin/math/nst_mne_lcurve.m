@@ -91,8 +91,8 @@ function J = nst_mne_lcurve(HM,OPTIONS)
         residual_kernal = eye(size(M,1)) - GSG * inv_matrix;
         wKernel = wSG*inv_matrix;
 
-        Fit(iAlpha)     = norm(M-G*J);  % Define Fit as a function of alpha
-        Prior(iAlpha)   = norm(W*J);      % Define Prior as a function of alpha
+        Fit(iAlpha)     = normest(residual_kernal*M);  % Define Fit as a function of alpha
+        Prior(iAlpha)   = normest(wKernel*M);      % Define Prior as a function of alpha
     
         bst_progress('inc', 1); 
     end
