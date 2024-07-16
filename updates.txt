@@ -1,3 +1,5 @@
+July 2024
+MNE - Improve implemtation
 June 2022
 GLM - BUGFIX fix a bug where the signal of [HbO] and [HbR] was used for short separation instead of using [HbO] for [Hbo] ... 
 ---

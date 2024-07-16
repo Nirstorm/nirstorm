@@ -18,7 +18,7 @@ function varargout = process_nst_wmne( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire (2022)
+% Authors: Edouard Delaire (2022-2024)
 % Thomas Vincent, ZhengChen Cai (2015-2016)
 %
 eval(macro_method);
@@ -223,9 +223,10 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     
         %% launch dMNE 
         bst_progress('text', ['Running wMNE for wavelength #' num2str(iwl) '...']);
-        Results = NIRS_wMNE(HM, OPTIONS);
-            
+
         % MNE results
+        Results = nst_mne_lcurve(HM, OPTIONS);
+
         grid_amp = zeros(nb_nodes, nb_samples);
         sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
         grid_amp(valid_nodes,sample(1):sample(2)) = Results;
@@ -246,91 +247,6 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     
     end
     Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
-
-end
-
-% depth weighted mne
-function J = NIRS_wMNE(HM,OPTIONS)
-sample_baseline = be_closest(OPTIONS.BaselineSegment([1 end]), OPTIONS.DataTime);
-baseline = OPTIONS.Data(:,sample_baseline(1):sample_baseline(2));
-
-%% Normalization by using the mean standard deviation of baseline for each modalities
-
-% Std deviation for every channels on a modality
-SD = std(baseline');
-% Define the mean standard deviation (MSD) of the present modality
-MSD = mean(SD);
-%Normalize datas, baseline, gain matrix and EmptyRoom_data with the mean std dev
-M = OPTIONS.Data./MSD;
-Baseline = baseline./MSD;
-G = HM.Gain./MSD;
-
-%% solve wMNE
-[n_capt, n_sour] = size(G);
-% selection of the data:
-sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
-M = M(:,sample(1):sample(2));
-
-if OPTIONS.NoiseCov_recompute 
-    Sigma_d    =   inv(diag(diag(real(cov(Baseline')))));
-end
-param1 = [0.1:0.1:1 1:5:100 100:100:1000]; %the param1 list we tested in wMNE_org
-
-%param1= [ 1/3 ];
-% for i=1:size(M,1)
-%     param1(i)=1/abs(snr(M(i,:))); 
-% end    
-pbar = bst_progress('text', 'wMNE, solving MNE by L-curve ... ');
-
-p = OPTIONS.depth_weigth_MNE;
-if OPTIONS.NoiseCov_recompute
-    Sigma_s = diag(power(diag(G'*Sigma_d*G),p)); 
-else
-    Sigma_s = diag(power(diag(G'*G),p)); 
-end
-W = sqrt(Sigma_s);
-scale = trace(G*G')./trace(W'*W);       % Scale alpha using trace(G*G')./trace(W'*W)
-alpha = param1.*scale;
-
-[U,S,V] = svd(G,'econ');
-G2 = U*S;
-Sigma_s2 = V'*Sigma_s*V;
-
-Fit = zeros(1,length(param1));
-Prior = zeros(1,length(param1));
-
-bst_progress('start', 'wMNE, solving MNE by L-curve ... ' , 'Solving MNE by L-curve ... ', 1, length(param1));
-for i = 1:length(param1)
-
-    if OPTIONS.NoiseCov_recompute 
-        J = ((G2'*Sigma_d*G2+alpha(i).*Sigma_s2)^-1)*G2'*Sigma_d*M;
-    else
-        J = ((G2'*G2+alpha(i).*Sigma_s2)^-1)*G2'*M; % Weighted MNE solution
-    end
-
-    Fit(i) = norm(M-G2*J);       % Define Fit as a function of alpha
-    Prior(i) = norm(W*V*J);      % Define Prior as a function of alpha
-    
-    bst_progress('inc', 1); 
-end
-bst_progress('stop');
-
-[~,Index] = min(Fit/max(Fit)+Prior/max(Prior));  % Find the optimal alpha
-if OPTIONS.NoiseCov_recompute
-    J = ((G'*Sigma_d*G+alpha(Index).*Sigma_s)^-1)*G'*Sigma_d*M;
-else
-    J = ((G'*G+alpha(Index).*Sigma_s)^-1)*G'*M;    
-end
-
-bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
-
-% figure()
-% plot(Prior, Fit,'b.');
-% hold on;plot(Prior(Index), Fit(Index),'ro');
-% hold off
-% xlabel('Norm |WJ|');
-% ylabel('Residual |M-GJ|');
-% title('L-curve');
 
 end
 
