@@ -329,18 +329,24 @@ for ivertx = 1:nb_vertex
             else
                 fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
             end
-            fluence.data=fluenceRate.data.*cfg.tstep;  clear fluenceRate
+            fluenceRate.data=fluenceRate.data.*cfg.tstep; 
             
-            if isempty(fluence.data)
+            if isempty(fluenceRate.data) 
                 bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
                 return;
-            end    
+            elseif isinf(fluenceRate.stat.normalizer) && strcmp(bst_get('OsType'),'mac64arm')
+                bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
+                return;
+            elseif isinf(fluenceRate.stat.normalizer)
+                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+                return;
+            end
             
             if flag_thresh_fluences
-                fluence.data(fluence.data<thresh_value) = 0;
+                fluenceRate.data(fluenceRate.data<thresh_value) = 0;
             end
-            volDim=size(fluence.data);
-            fluence_vol = fluence.data;
+
+            fluence_vol = fluenceRate.data;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
             reference_voxel_index = cfg.srcpos;
             %         fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
