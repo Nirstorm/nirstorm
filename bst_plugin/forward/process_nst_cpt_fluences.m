@@ -71,7 +71,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 %isOk = bst_plugin('Load','mcxlab');
 [isOk,] = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
 if ~isOk 
-    bst_error(['Unable to load ' options.software ]);
+    OutputFiles = {};
+    bst_error(['Unable to load ' sProcess.options.fluencesCond.Value.software ]);
     return;
 end
 
