@@ -57,9 +57,9 @@ RawFile     = fullfile(tutorial_dir, SubjectName, 'nirs',sprintf('%s_task-tappin
 FluenceDir  = fullfile(tutorial_dir, 'derivatives','Fluences', SubjectName);
 
 % Check if the folder contains the required files
-% if ~file_exist(RawFile)
-%     error(['The folder ' tutorial_dir ' does not contain the folder from the file sample_epilepsy.zip.']);
-% end
+if ~file_exist(RawFile)
+    error(['The folder ' tutorial_dir ' does not contain the folder from the file nirstorm_tutorial_2024.zip.']);
+end
 
 sParticipant = readtable(participants_file, 'FileType','text');
 
@@ -72,9 +72,9 @@ if ~brainstorm('status')
 end
 
 % Delete existing protocol
-%gui_brainstorm('DeleteProtocol', ProtocolName);
+gui_brainstorm('DeleteProtocol', ProtocolName);
 % Create new protocol
-%gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
+gui_brainstorm('CreateProtocol', ProtocolName, 0, 0);
 
 % Start a new report
 bst_report('Start');
@@ -97,9 +97,7 @@ sFid = process_import_bids('GetFiducials',json, 'voxel');
 [sSubject, iSubject]  = bst_get('Subject', SubjectName);
 
 % Import tissue segmentation
-tissues =  mri_getlabels('tissues5');
-tissues(6) = {1}; tissues(5) = {2}; tissues(4) = {3}; tissues(3) = {4}; tissues(2) = {5};  
-import_mri(iSubject, TissueSegmentationFile, '', 0, 0, 'segmentation_5tissues',tissues);
+import_mri(iSubject, TissueSegmentationFile, '', 0, 0, 'segmentation_5tissues');
 
 % Remesh skin to 10 000 vertices, iso-mesh
 tess_remesh(sSubject.Surface(sSubject.iScalp).FileName ,10000 )
