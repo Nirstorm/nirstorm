@@ -273,6 +273,9 @@ if sProcess.options.smoothing_fwhm.Value{1} > 0
         [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute', ... 
                                         sSubject.Surface(sSubject.iCortex).FileName, ...
                                         sensitivity_surf, FWHM, 'geodesic_dist');
+    end
+    
+    if ~isempty(warmInfo)
          bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
     end
 end
