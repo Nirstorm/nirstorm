@@ -1,6 +1,7 @@
 function  prop = nst_get_tissues_optical_properties(tissues,wavelength)
-
-    txt = fileread("tissues_property.json");
+    
+    
+    txt  = fileread( fullfile(fileparts(which('nst_get_tissues_optical_properties')),  'tissues_property.json'));
     data = jsondecode(txt);
     
     
