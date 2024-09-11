@@ -44,7 +44,7 @@ if ~isempty(strfind(source_fn, 'https:')) || ~isempty(strfind(source_fn, 'ftp:')
     copyfile(tmp_download, dest_fn);
 elseif ~isempty(strfind(source_fn, 'http'))
     [root, basename_fn, ext] = fileparts(dest_fn);
-    errMsg = gui_brainstorm('DownloadFile', source_fn, dest_fn, basename_fn);
+    errMsg = bst_websave(dest_fn, source_fn);
     % Error message
     if ~isempty(errMsg)
         % Try downloading without using bst
