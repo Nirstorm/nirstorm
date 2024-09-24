@@ -356,8 +356,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
                              'mse_residuals', zeros(1,n_voxel) );
         end
         if ~surface_data
-            mask = strcmp({ChannelMat.Channel.Group},data_type);
-            Y_trim = Y(:, mask);
+            mask    = find(strcmp({ChannelMat.Channel.Group},data_type));
+            Y_trim  = Y(:, mask);
         else
             Y_trim = Y;
         end
