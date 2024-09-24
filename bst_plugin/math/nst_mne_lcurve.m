@@ -79,6 +79,9 @@ function J = nst_mne_lcurve(HM,OPTIONS)
     scale   = trace(G*G')./ trace(inv(Sigma_s));       
     alpha   = param1.*scale;
 
+    % Pre-compute data decomposition
+    [U,S]   = svd(M,'econ'); 
+
 
     Fit     = zeros(1,length(alpha));
     Prior   = zeros(1,length(alpha));
@@ -91,8 +94,14 @@ function J = nst_mne_lcurve(HM,OPTIONS)
         residual_kernal = eye(size(M,1)) - GSG * inv_matrix;
         wKernel = wSG*inv_matrix;
 
-        Fit(iAlpha)     = normest(residual_kernal*M);  % Define Fit as a function of alpha
-        Prior(iAlpha)   = normest(wKernel*M);      % Define Prior as a function of alpha
+
+        % Estimate the corresponding norm
+        R = qr(residual_kernal*U);
+        Fit(iAlpha)     = norm(R*S);
+
+        R = qr(wKernel*U);
+        Prior(iAlpha)   = norm(R*S);
+
     
         bst_progress('inc', 1); 
     end
