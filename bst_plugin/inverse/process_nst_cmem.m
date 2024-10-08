@@ -143,38 +143,29 @@ end
 
 %% Run MEM
 bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...', pipeline));
-[dOD_sources_cMEM,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn );
+sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 
 %% Save results
+
 bst_progress('text', 'Saving Results...');
-for iwl=1:nb_wavelengths
-     swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-     [sStudy, ResultFile] = add_surf_data(squeeze(dOD_sources_cMEM(:,iwl,:)), sDataIn.Time, nirs_head_model, ...
-         [diagnosis(iwl).Comment     ' | ' swl 'nm'], ...
-         sInputs, sStudy, diagnosis(iwl).Comment, ...
-         'OD', store_sparse_results,1,diagnosis(iwl));
-     OutputFiles{end+1} = ResultFile;
+
+for iMap = 1:length(sResults)
+     [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
+                                          sResults(iMap).Comment, sInputs, sStudy, ...
+                                          sResults(iMap).History, sResults(iMap).Units , ...
+                                          store_sparse_results,1, sResults(iMap).MEMoptions);
+
+    OutputFiles{end+1} = ResultFile;
+
 end
 
-hb_unit_factor = 1e6;
-hb_unit = '\mumol.l-1';
-hb_types = {'HbO', 'HbR','HbT'};
-for ihb=1:3
-    [sStudy, ResultFile] = add_surf_data(squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor,...
-                                         sDataIn.Time, nirs_head_model, ...
-                                         [diagnosis(iwl).Comment     ' | ' hb_types{ihb}], ...
-                                         sInputs, sStudy, diagnosis(iwl).Comment, ...
-                                         hb_unit, store_sparse_results);    
-    OutputFiles{end+1} = ResultFile;
-end
 
 bst_progress('stop', ['Reconstruction by ' pipeline], 'Finishing...');
 % Update Brainstorm database
 bst_set('Study', sInputs.iStudy, sStudy);
 end
 
-function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn )
-    diagnosis= [];
+function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
@@ -202,9 +193,7 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
         OPTIONS.MEMpaneloptions.clustering.neighborhood_order = nbo;
     end
 
-    
-    dOD_sources = zeros(nb_nodes, nb_wavelengths, nb_samples);
-
+       
     for iwl=1:nb_wavelengths
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
         selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (sDataIn.ChannelFlag>0)';
@@ -226,21 +215,15 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
-        [Results, O_updated] = be_main_call(HM, OPTIONS);
+        [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
-        %cMEM results
-        grid_amp = zeros(nb_nodes, nb_samples); 
-        if iscell(Results.ImageGridAmp)
-            % Todo: Improve code to save factors
-            grid_amp(valid_nodes,:) = full(Results.ImageGridAmp{1} * Results.ImageGridAmp{2});
-        else
-            grid_amp(valid_nodes,:) = Results.ImageGridAmp;
-        end
-        dOD_sources(:, iwl, :)  = grid_amp;
+        result.Comment =  [result.MEMoptions.automatic.Comment ' | ' swl 'nm'];
+        result.History =  [result.MEMoptions.automatic.Comment];
+        result.Units   =  'OD';
+        result.MEMoptions.automatic.neighborhood_order = sOptions(iwl).MEMpaneloptions.clustering.neighborhood_order;
+        result.MEMoptions.automatic.valid_nodes = valid_nodes;
         
-        Results.MEMoptions.automatic.neighborhood_order = O_updated.MEMpaneloptions.clustering.neighborhood_order;
-        Results.MEMoptions.automatic.valid_nodes = valid_nodes;
-        diagnosis          = [diagnosis Results.MEMoptions.automatic];
+        sResults(iwl) = result;
     end
     
     bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
@@ -248,14 +231,47 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
 
-    Hb_sources = zeros(nb_nodes, 3, nb_samples);
-    for idx=1:length(valid_nodes)
-        inode = valid_nodes(idx);
+    if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'cMEM')
+        dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
+    else
+
+    end
+
+    Hb_sources = zeros(length(valid_nodes), 3, nb_samples);
+    for inode=1:length(valid_nodes)
         Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
                                     squeeze(dOD_sources(inode, :, :));
     
     end
     Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
+
+    hb_unit_factor = 1e6;
+    hb_unit = '\mumol.l-1';
+    hb_types = {'HbO', 'HbR','HbT'};
+
+    sResults_hb = repmat(sResults(1), 1, 3);
+    for iHb = 1:3
+        sResults_hb(iHb).Comment = [ sResults(end).History     ' | ' hb_types{iHb}];
+        sResults_hb(iHb).History = sResults(end).History;
+        sResults_hb(iHb).Units = hb_unit;
+        sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+    end
+
+    sResults = [ sResults, sResults_hb];
+
+    mapping = zeros(nb_nodes, length(valid_nodes)); 
+    for iNode = 1:length(valid_nodes)
+        mapping(valid_nodes(iNode), iNode) = 1;
+    end
+    mapping = sparse(mapping);
+
+    for iMap = 1:length(sResults)
+        if iscell(sResults(iMap).ImageGridAmp)
+
+        else
+            sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+        end
+    end
 end
 
 
