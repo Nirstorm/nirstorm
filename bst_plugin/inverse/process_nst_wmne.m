@@ -120,7 +120,7 @@ store_sparse_results = sProcess.options.store_sparse_results.Value;
 
 %% Run dMNE
 bst_progress('start', 'Reconstruction by wMNE', 'Launching wMNE...');
-[dOD_sources_wMNE,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn );
+[mapping, dOD_sources_wMNE,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn );
 
 
 bst_progress('text', 'Saving Results...');
@@ -131,7 +131,7 @@ else
 end    
 for iwl=1:nb_wavelengths
     swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-    [sStudy, ResultFile] = add_surf_data(squeeze(dOD_sources_wMNE(:,iwl,:)), sDataIn.Time, nirs_head_model, ...
+    [sStudy, ResultFile] = add_surf_data({mapping, squeeze(dOD_sources_wMNE(:,iwl,:))}, sDataIn.Time, nirs_head_model, ...
                                         [function_name ' sources - ' swl 'nm'], ...
                                         sInputs, sStudy, [function_name 'sources reconstruction'], ...
                                         'OD', store_sparse_results);    
@@ -145,7 +145,7 @@ hb_types = {'HbO', 'HbR', 'HbT'};
 
 for ihb=1:3
     
-    [sStudy, ResultFile] = add_surf_data(squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor,...
+    [sStudy, ResultFile] = add_surf_data({mapping, squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor},...
                                          sDataIn.Time, nirs_head_model, ...
                                          [function_name ' sources - ' hb_types{ihb}], ...
                                          sInputs, sStudy, [function_name ' sources reconstruction - dHb'], ...
@@ -186,7 +186,7 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
 end
 
-function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
+function [mapping,dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
@@ -203,7 +203,7 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
 
-    dOD_sources = zeros(nb_nodes, nb_wavelengths, nb_samples);
+    dOD_sources = zeros(length(valid_nodes), nb_wavelengths, nb_samples);
 
     for iwl=1:nb_wavelengths
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
@@ -227,9 +227,9 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
         % MNE results
         Results = nst_mne_lcurve(HM, OPTIONS);
 
-        grid_amp = zeros(nb_nodes, nb_samples);
+        grid_amp = zeros(length(valid_nodes), nb_samples);
         sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
-        grid_amp(valid_nodes,sample(1):sample(2)) = Results;
+        grid_amp(:,sample(1):sample(2)) = Results;
         
         dOD_sources(:, iwl, :) = grid_amp;
     end
@@ -239,14 +239,18 @@ function [dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
     hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
 
-    Hb_sources = zeros(nb_nodes, 3, nb_samples);
-    for idx=1:length(valid_nodes)
-        inode = valid_nodes(idx);
+    Hb_sources = zeros(length(valid_nodes), 3, nb_samples);
+    for inode=1:length(valid_nodes)
         Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
                                     squeeze(dOD_sources(inode, :, :));
     
     end
     Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
+
+
+    mapping = zeros(nb_nodes, length(valid_nodes)); 
+    mapping(valid_nodes, 1:length(valid_nodes)) = 1;
+
 
 end
 
