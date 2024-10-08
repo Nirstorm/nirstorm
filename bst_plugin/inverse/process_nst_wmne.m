@@ -247,11 +247,11 @@ function [mapping,dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn 
     end
     Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
 
-
     mapping = zeros(nb_nodes, length(valid_nodes)); 
-    mapping(valid_nodes, 1:length(valid_nodes)) = 1;
-
-
+    for iNode = 1:length(valid_nodes)
+        mapping(valid_nodes(iNode), iNode) = 1;
+    end
+    mapping = sparse(mapping);
 end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
