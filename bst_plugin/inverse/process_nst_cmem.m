@@ -234,10 +234,13 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'cMEM')
         dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
     else
-
+        dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
+        for iResult = 1:length(sResults)
+            dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+        end
     end
 
-    Hb_sources = zeros(length(valid_nodes), 3, nb_samples);
+    Hb_sources = zeros(length(valid_nodes), 3, size(dOD_sources,3));
     for inode=1:length(valid_nodes)
         Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
                                     squeeze(dOD_sources(inode, :, :));
@@ -254,7 +257,11 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         sResults_hb(iHb).Comment = [ sResults(end).History     ' | ' hb_types{iHb}];
         sResults_hb(iHb).History = sResults(end).History;
         sResults_hb(iHb).Units = hb_unit;
-        sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+        if iscell(sResults_hb(iHb).ImageGridAmp )
+            sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+        else
+            sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+        end
     end
 
     sResults = [ sResults, sResults_hb];
@@ -267,7 +274,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
     for iMap = 1:length(sResults)
         if iscell(sResults(iMap).ImageGridAmp)
-
+            sResults(iMap).ImageGridAmp = [ {mapping} sResults(iMap).ImageGridAmp ];
         else
             sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
         end
