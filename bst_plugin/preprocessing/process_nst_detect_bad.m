@@ -324,7 +324,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
             criteria(end+1,:)= {'Low power', power_channels,{h1_axes,leg}};
             criteria(end+1,:)= {'Cardiac', SCI_channels & power_channels,{}};
 
-            channel_flags(SCI_channels & power_channels) = -1;
+            channel_flags(SCI_channels | power_channels) = -1;
     end
     
     if options.option_coefficient_variation.Value
