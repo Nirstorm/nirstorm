@@ -226,13 +226,18 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
-         [Results, O_updated] = be_main_call(HM, OPTIONS);
+        [Results, O_updated] = be_main_call(HM, OPTIONS);
 
         %cMEM results
         grid_amp = zeros(nb_nodes, nb_samples); 
-        grid_amp(valid_nodes,:) = Results.ImageGridAmp;
-        
+        if iscell(Results.ImageGridAmp)
+            % Todo: Improve code to save factors
+            grid_amp(valid_nodes,:) = full(Results.ImageGridAmp{1} * Results.ImageGridAmp{2});
+        else
+            grid_amp(valid_nodes,:) = Results.ImageGridAmp;
+        end
         dOD_sources(:, iwl, :)  = grid_amp;
+        
         Results.MEMoptions.automatic.neighborhood_order = O_updated.MEMpaneloptions.clustering.neighborhood_order;
         Results.MEMoptions.automatic.valid_nodes = valid_nodes;
         diagnosis          = [diagnosis Results.MEMoptions.automatic];

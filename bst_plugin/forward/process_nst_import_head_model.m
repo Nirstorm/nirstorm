@@ -48,10 +48,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.data_source.Type    = 'text';
     sProcess.options.data_source.Value = [nst_get_repository_url(), '/fluence/'];
     
-    sProcess.options.use_closest_wl.Comment = 'Use closest available wavelength';
-    sProcess.options.use_closest_wl.Type    = 'checkbox';
-    sProcess.options.use_closest_wl.Value   = 0;
-
 
     % === FWHM (kernel size)
 
@@ -67,26 +63,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
     sProcess.options.smoothing_fwhm.Value   = {0, 'mm', 2};
-    
-    sProcess.options.label2.Comment = '<B>Extra options:</B>';
-    sProcess.options.label2.Type    = 'label';
-
-    sProcess.options.use_all_pairs.Comment = 'Use all possible pairs: ';
-    sProcess.options.use_all_pairs.Type    = 'checkbox';
-    sProcess.options.use_all_pairs.Value   = 0;
-
-    sProcess.options.normalize_fluence.Comment = 'Normalize by source fluence at detector position';
-    sProcess.options.normalize_fluence.Type    = 'checkbox';
-    sProcess.options.normalize_fluence.Value   = 1;
-
-    sProcess.options.force_median_spread.Comment = 'Force median spread<FONT color="#777777">(not recommended)</FONT>';
-    sProcess.options.force_median_spread.Type    = 'checkbox';
-    sProcess.options.force_median_spread.Value   = 0; 
-    
-    sProcess.options.sensitivity_threshold_pct.Comment = 'Threshold (% of max-min): ';
-    sProcess.options.sensitivity_threshold_pct.Type    = 'value';
-    sProcess.options.sensitivity_threshold_pct.Value   = {0, '%', 2};
-    
+  
 end
 
 %% ===== FORMAT COMMENT =====
@@ -100,16 +77,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {sInputs.FileName};
 
-use_closest_wl      = sProcess.options.use_closest_wl.Value;
-use_all_pairs       = sProcess.options.use_all_pairs.Value;
-sens_thresh_pct     = sProcess.options.sensitivity_threshold_pct.Value{1};
-normalize_fluence   = sProcess.options.normalize_fluence.Value;
 data_source         = sProcess.options.data_source.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    bst_error(['Head model importation works only for dOD data ' ... 
-               ' (eg do not use MBLL prior to this process)']);
+    bst_error('Head model importation works only for dOD data (eg do not use MBLL prior to this process)');
     return;
 end
 
@@ -142,26 +114,18 @@ det_ids         = montage_info.det_ids;
 pair_sd_idx     = montage_info.pair_sd_indexes;
 
 nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
-nb_sources = size(src_locs, 1);
-nb_dets = size(det_locs, 1);
-if use_all_pairs
-    [gs, gd] = meshgrid(1:nb_sources, 1:nb_dets);
-    pair_sd_idx = [gs(:) gd(:)];
-    pair_names = {};
-    for ipair = 1:size(pair_sd_idx, 1)
-        pair_names{ipair} = nst_format_channel(src_ids(pair_sd_idx(ipair, 1)),...
-                                               det_ids(pair_sd_idx(ipair, 2)));
-    end
-end
+nb_sources     = size(src_locs, 1);
+nb_dets        = size(det_locs, 1);
+nb_pairs       = length(pair_names);
 
-nb_pairs = length(pair_names);
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 
 [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
 
 %% Load fluence data from local .brainstorm folder (download if not available)
-        
+use_closest_wl = 0;
 [all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
                                                                          ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
                                                                          use_closest_wl);
@@ -227,16 +191,14 @@ for ipair=1:nb_pairs
     idet = pair_sd_idx(ipair, 2);
     separation = separations_by_pairs(ipair);
     for iwl=1:nb_wavelengths
-        if normalize_fluence
-            ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                                  det_reference_voxels_index{idet}{iwl}(2),...
-                                                  det_reference_voxels_index{idet}{iwl}(3));
-        else
-            ref_fluence = 1;
-        end
+
+        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
+                                              det_reference_voxels_index{idet}{iwl}(2),...
+                                              det_reference_voxels_index{idet}{iwl}(3));
+
         
         separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-        if ref_fluence==0 && separation > separation_threshold
+        if ref_fluence == 0 && separation > separation_threshold
             sensitivity_vol = mri_zeros;
         else 
             if ref_fluence==0
@@ -273,6 +235,9 @@ if sProcess.options.smoothing_fwhm.Value{1} > 0
         [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute', ... 
                                         sSubject.Surface(sSubject.iCortex).FileName, ...
                                         sensitivity_surf, FWHM, 'geodesic_dist');
+    end
+    
+    if ~isempty(warmInfo)
          bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
     end
 end
@@ -281,73 +246,6 @@ sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
 
 bst_progress('stop');
 
-%% Sensitivity thresholding
-if sens_thresh_pct > 0
-
-    nz_sensitivity = sensitivity_surf(sensitivity_surf>0);
-    min_sens =  min(nz_sensitivity);
-    max_sens =  max(nz_sensitivity);
-    sens_thresh = min_sens + sens_thresh_pct/100 * (max_sens - min_sens);
-
-    sensitivity_surf(sensitivity_surf<sens_thresh) = 0;
-end
-
-if sProcess.options.force_median_spread.Value
-    if ~isfield(sCortex, 'VertArea') || isempty(sCortex.VertArea)
-        [tmp, sCortex.VertArea] = tess_area(sCortex.Vertices, sCortex.Faces);
-    end
-    
-    areas = zeros(nb_pairs, nb_wavelengths);
-    for ipair=1:nb_pairs
-        for iwl=1:nb_wavelengths
-            areas(ipair, iwl) = sum(sCortex.VertArea(squeeze(sensitivity_surf(ipair, iwl, :) > 0)));
-        end
-    end
-    median_area = median(areas(areas>0));
-    
-    for ipair=1:nb_pairs
-        for iwl=1:nb_wavelengths
-            area = areas(ipair, iwl);
-            if area > 0
-                vi_orig = find(sensitivity_surf(ipair, iwl, :) > 0);
-                if area > median_area
-                    [sorted_ss, vertex_stack] = sort(squeeze(sensitivity_surf(ipair, iwl, :)));
-                    vertex_stack = intersect(vertex_stack, vi_orig, 'stable');
-                    iv = 1;
-                    while sum(sCortex.VertArea(vertex_stack(iv:end))) > median_area
-                        iv = iv + 1;
-                    end
-                    sensitivity_surf(ipair, iwl, vertex_stack(1:iv)) = 0;
-                    
-                else
-                    seedXYZ = mean(sCortex.Vertices(vi_orig, :));
-                    to_add = [];
-                    vi_growth = vi_orig;
-                    while area < median_area
-                        % Grow one vertex at a time
-                        % Get closest neighbours
-                        viNew = setdiff(tess_scout_swell(vi_growth, sCortex.VertConn), vi_growth);
-                        if ~isempty(viNew)
-                            % Compute the distance from each point to the seed
-                            distFromSeed = sqrt(sum(bst_bsxfun(@minus, sCortex.Vertices(viNew,:), seedXYZ) .^ 2, 2));
-                            % Get the minimum distance
-                            [minVal, iMin] = min(distFromSeed);
-                            iMin = iMin(1);
-                            % Add the closest vertex to scout vertices
-                            vi_growth = union(vi_growth, viNew(iMin));
-                            area = sum(sCortex.VertArea(vi_growth));
-                            to_add(end+1) = viNew(iMin); %#ok<AGROW>
-                        else
-                            warning('Sensitivity cluster growth stopped before reaching target area');
-                            break;
-                        end
-                    end
-                    sensitivity_surf(ipair, iwl, to_add) = min(sensitivity_surf(ipair, iwl, vi_orig));
-                end
-            end
-        end
-    end
-end
 
 
 %% Outputs
@@ -360,9 +258,7 @@ HeadModelMat.Gain           = sensitivity_surf;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
 HeadModelMat.Comment        = 'NIRS head model';
-if use_all_pairs
-    HeadModelMat.Comment = [HeadModelMat.Comment ' [all pairs]'];
-end
+
 % newHeadModelMat.VoiNodes = voi_nodes;
 HeadModelMat.pair_names = pair_names;
 HeadModelMat  = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
@@ -375,9 +271,7 @@ bst_save(HeadModelFile, HeadModelMat, 'v7');
 newHeadModel = db_template('HeadModel');
 newHeadModel.FileName = file_short(HeadModelFile);
 newHeadModel.Comment = 'NIRS head model from fluence';
-if use_all_pairs
-    newHeadModel.Comment = [newHeadModel.Comment ' [all pairs]'];
-end
+
 newHeadModel.HeadModelType  = 'surface';    
 % Update Study structure
 iHeadModel = length(sStudy.HeadModel) + 1;

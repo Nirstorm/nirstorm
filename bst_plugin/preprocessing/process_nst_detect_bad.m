@@ -108,12 +108,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.auxilary_signal.Comment   = 'Auxilary measurment:';
     sProcess.options.auxilary_signal.Type    = 'combobox';
     sProcess.options.auxilary_signal.Value   = {1, {'Keep all','Remove flat','Remove all'}};
-    
-    sProcess.options.option_keep_unpaired.Comment = 'Keep unpaired channels';
-    sProcess.options.option_keep_unpaired.Type    = 'checkbox';
-    sProcess.options.option_keep_unpaired.Value   = 0;
-    
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -279,54 +273,56 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     
     nb_chnnels=size(signal,2);
     nb_sample= size(signal,1);
-    nb_nirs  = sum(nirs_flags);
+
+    
+    % Remove negative channel
     neg_channels = nirs_flags & any(signal < 0, 1);
     channel_flags(neg_channels) = -1;
     criteria(1,:)= {'negative channels', neg_channels,{} };
     
-
+    % Remove channel with low SCI or power
     if options.option_sci.Value 
+        fs = 1 / diff(sData.Time(1:2));
+        [SCI, power] = process_nst_sci('compute',nirs_signal',channel_def.Channel(nirs_flags), fs);
+            
+        SCI = SCI *100;
+        power = power*100;
         
-            fs = 1 / diff(sData.Time(1:2));
-            [SCI, power] = process_nst_sci('compute',nirs_signal',channel_def.Channel(nirs_flags), fs);
-            
-            SCI = SCI *100;
-            power = power*100;
-            
-            SCI_threshold = options.sci_threshold.Value{1};
-            SCI_channels = false(1,nb_chnnels);
-            SCI_channels(nirs_flags) = SCI < SCI_threshold ;
-            
-            power_threshold =  options.power_threshold.Value{1};
-            power_channels = false(1,nb_chnnels);
-            power_channels(nirs_flags) = power < power_threshold ;
-            
-            %create figure
-            fig1= figure('visible','off');
-            h1_axes=subplot(1,1,1);
-            h=histogram(SCI');
-            h.Annotation.LegendInformation.IconDisplayStyle = 'off';
-            line(h1_axes,[SCI_threshold, SCI_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
+        SCI_threshold = options.sci_threshold.Value{1};
+        SCI_channels = false(1,nb_chnnels);
+        SCI_channels(nirs_flags) = SCI < SCI_threshold ;
         
-            leg=legend(h1_axes,'SCI threshold');
-            title(sprintf('SCI rejection: %d channels',sum(SCI_channels))) 
-            criteria(end+1,:)= {'Low SCI', SCI_channels,{h1_axes,leg}};
-
-            fig1= figure('visible','off');
-            h1_axes=subplot(1,1,1);
-            h=histogram(power');
-            h.Annotation.LegendInformation.IconDisplayStyle = 'off';
-            line(h1_axes,[power_threshold, power_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-        
-            leg=legend(h1_axes,'SCI threshold');
-            title(sprintf('power rejection: %d channels',sum(power_channels))) 
+        power_threshold =  options.power_threshold.Value{1};
+        power_channels = false(1,nb_chnnels);
+        power_channels(nirs_flags) = power < power_threshold ;
             
-            criteria(end+1,:)= {'Low power', power_channels,{h1_axes,leg}};
-            criteria(end+1,:)= {'Cardiac', SCI_channels & power_channels,{}};
-
-            channel_flags(SCI_channels & power_channels) = -1;
-    end
+        %create figure
+        fig1= figure('visible','off');
+        h1_axes=subplot(1,1,1);
+        h=histogram(SCI');
+        h.Annotation.LegendInformation.IconDisplayStyle = 'off';
+        line(h1_axes,[SCI_threshold, SCI_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
     
+        leg=legend(h1_axes,'SCI threshold');
+        title(sprintf('SCI rejection: %d channels',sum(SCI_channels))) 
+        criteria(end+1,:)= {'Low SCI', SCI_channels,{h1_axes,leg}};
+
+        fig1= figure('visible','off');
+        h1_axes=subplot(1,1,1);
+        h=histogram(power');
+        h.Annotation.LegendInformation.IconDisplayStyle = 'off';
+        line(h1_axes,[power_threshold, power_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
+    
+        leg=legend(h1_axes,'SCI threshold');
+        title(sprintf('power rejection: %d channels',sum(power_channels))) 
+        
+        criteria(end+1,:)= {'Low power', power_channels,{h1_axes,leg}};
+        criteria(end+1,:)= {'Cardiac', SCI_channels & power_channels,{}};
+
+        channel_flags(SCI_channels | power_channels) = -1;
+    end
+
+    % Remove channel with high CV
     if options.option_coefficient_variation.Value
         CV_threshold = options.coefficient_variation.Value{1};                 
         low_cutoff  = 1/200;
@@ -337,34 +333,16 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         [nirs_filtered, transient] = process_nst_iir_filter('Compute',nirs_signal(100:end,:), fs, 'bandpass', low_cutoff, ...
                                   high_cutoff, order, 1);
         
-        %CV2 = std(nirs_signal,1)./mean(nirs_signal,1).*100;
         CV = std(nirs_filtered,1,'omitnan')./mean(nirs_filtered,1).*100;
-        
-        % To see the impact of adding the filter: (large drop of CV)
-        % figure; boxplot([CV,CV2],[ ones(1,size(nirs_signal,2)),2*ones(1,size(nirs_signal,2))])
         
         CV_channels = false(1,nb_chnnels);
         CV_channels(nirs_flags) = CV>CV_threshold ;
         
-        channel_flags(CV_channels) = -1;
-        
-        %create figure
-%         fig1= figure('visible','off');
-%         h1_axes=subplot(1,1,1);
-%         h=histfit(CV',12,'normal');
-%         h(1).Annotation.LegendInformation.IconDisplayStyle = 'off';
-%         h(2).Annotation.LegendInformation.IconDisplayStyle = 'off';
-% %         
-%         line(h1_axes,[CV_threshold, CV_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-%         line(h1_axes,[icdf(CV_fit,0.99), icdf(CV_fit,0.99)], ylim(gca), 'LineWidth', 2, 'Color', 'g');
-%         
-%         leg=legend(h1_axes,{sprintf('Used threshold: %.1f (Prob of rejection %.3f%%)',CV_threshold,100*cdf(CV_fit,CV_threshold,'upper')), ...
-%                               sprintf('Suggested threshold: %.3f',icdf(CV_fit,0.99))});
-%                            
-%         title(sprintf('CV rejection: %d channels',sum(CV_channels)))        
+        channel_flags(CV_channels) = -1; 
         criteria(end+1,:)= {'high coeffience variation channels', CV_channels,{}};
     end    
-    
+
+    % Remove channel with saturation
     if options.option_remove_saturating.Value
         max_sat_prop = options.option_max_sat_prop.Value{1};
         min_sat_prop = options.option_min_sat_prop.Value{1};
@@ -386,6 +364,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         criteria(end+1,:)= {'saturating channels', saturating,{} };
     end
 
+    % Remove channel based on source-detector separation
     if options.option_separation_filtering.Value
         
         min_separation_m = options.option_separation.Value{1}(1);
@@ -421,40 +400,12 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         criteria(end+1,:)= {'Extrem separation', distances_flag,{h1_axes,leg} };
     end 
     
-    % plot SCI and power according to distance
-    if 0
-    figure; 
-    h1_axes= subplot(2,1,1); hold on;
-    plot(separations_m_by_chans,SCI,'+')
-    line(h1_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h1_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h1_axes,xlim(gca), [SCI_threshold, SCI_threshold], 'LineWidth', 2, 'Color', 'r');
-    plot(separations_m_by_chans(SCI_channels & power_channels),SCI(SCI_channels & power_channels),'o')
-    xlabel('Source-Detecteur separation (cm)');ylabel('SCI(%)');
-    title('Rejection based on SCI and power')
-    h2_axes=subplot(2,1,2); hold on;
-    plot(separations_m_by_chans,power,'+')
-    line(h2_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h2_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h2_axes,xlim(gca), [power_threshold, power_threshold], 'LineWidth', 2, 'Color', 'r');   
-    plot(separations_m_by_chans(SCI_channels & power_channels),power(SCI_channels & power_channels),'o')
-    xlabel('Source-Detecteur separation (cm)');ylabel('power(%)');
-    
-    figure; % relation CV/Distance
-    h1_axes= subplot(1,1,1); hold on;
-    plot(separations_m_by_chans,CV,'+')
-    line(h1_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h1_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 1, 'Color', 'b');
-    line(h1_axes,xlim(gca), [CV_threshold, CV_threshold], 'LineWidth', 2, 'Color', 'r');
-    plot(separations_m_by_chans(CV > CV_threshold),CV(CV > CV_threshold),'o')
-    xlabel('Source-Detecteur separation (cm)');ylabel('CV(%)');
-    end
 
-   if ~options.option_keep_unpaired.Value
-        channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
-                                                            channel_def.Nirs.Wavelengths, ...
-                                                            channel_flags(nirs_flags) * -1) * -1;
-   end
+   % Remove a channel if one of the wavevlength is marked as bad channel
+   channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
+                                                        channel_def.Nirs.Wavelengths, ...
+                                                        channel_flags(nirs_flags) * -1) * -1;
+   
    
    % Remove auxilary signal
    if options.auxilary_signal.Value{1} == 2 % remove flat signal

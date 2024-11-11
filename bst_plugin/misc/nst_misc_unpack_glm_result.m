@@ -5,7 +5,7 @@ function results = nst_misc_unpack_glm_result(results, model,method_name,mask)
     if strcmp(method_name,'OLS_prewhitening')
         results.covB(:,:,mask)=model.covB;
     else
-        results.covB(:,:,mask)=repmat(model.covB,1,1,sum(mask));
+        results.covB(:,:,mask)=repmat(model.covB,1,1,length(mask));
     end
 
     results.residuals(:,mask)=model.residuals;
