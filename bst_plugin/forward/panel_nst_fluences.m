@@ -181,15 +181,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     % === PANEL: Forward options  ====
     jPanelForward = gui_river([2,2], [3,5,3,5], 'Forward Model');
-    jGroupRadio = ButtonGroup();
-    gui_component('label', jPanelForward, 'br', 'Segmentation label:', [], [], [], []);
-    jRadioSegSkinAsOne = gui_component('radio', jPanelForward, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne = gui_component('radio', jPanelForward, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne.setSelected(1);
-    jPanelRight.add('br hfill', jPanelForward);   
-    
-    ctrl.jRadioSegSkinAsOne = jRadioSegSkinAsOne;
-    ctrl.jRadioSegWMAsOne   = jRadioSegWMAsOne;
     
     gui_component('label', jPanelForward, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
     jWavelengths = gui_component('text', jPanelForward, 'hfill',  strjoin(OPTIONS.Wavelengths, ' ,'), [], [], [], []);
@@ -382,12 +373,6 @@ function s = GetPanelContents() %#ok<DEFNU>
         s.SubjectName =  ctrl.SubjectName;
     end
     
-    
-    if ctrl.jRadioSegSkinAsOne.isSelected
-        s.segmentation_label = 1;
-    else
-        s.segmentation_label = 2;
-    end  
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
     s.software = ctrl.software;
     GPU = zeros(1, length(ctrl.jCheckGPU));
