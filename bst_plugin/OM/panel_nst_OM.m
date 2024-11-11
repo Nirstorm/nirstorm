@@ -191,16 +191,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     ctrl.jWavelengths = jWavelengths;
  
     
-    jGroupRadio = ButtonGroup();
-    gui_component('label', jPanelFluence, 'br', 'Segmentation label:', [], [], [], []);
-    jRadioSegSkinAsOne = gui_component('radio', jPanelFluence, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne = gui_component('radio', jPanelFluence, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne.setSelected(1);
-    jPanelRight.add('br hfill', jPanelFluence);
-    
-    ctrl.jRadioSegSkinAsOne = jRadioSegSkinAsOne;
-    ctrl.jRadioSegWMAsOne   = jRadioSegWMAsOne;
-    
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
@@ -344,20 +334,14 @@ function s = GetPanelContents() %#ok<DEFNU>
     end
     s.SubjectName =  ctrl.SubjectName;
     
-     s.nb_sources = str2double(ctrl.jSources.getText);
-     s.nb_detectors = str2double(ctrl.jDetectors.getText);
-     s.nAdjacentDet = str2double(ctrl.jAdjacent.getText);
-     s.sep_optode  = [ str2double(ctrl.jSepOptodeMin.getText), str2double(ctrl.jSepOptodeMax.getText)];
-     s.sepmin_SD  = str2double(ctrl.jSepmin_SD.getText);
+    s.nb_sources = str2double(ctrl.jSources.getText);
+    s.nb_detectors = str2double(ctrl.jDetectors.getText);
+    s.nAdjacentDet = str2double(ctrl.jAdjacent.getText);
+    s.sep_optode  = [ str2double(ctrl.jSepOptodeMin.getText), str2double(ctrl.jSepOptodeMax.getText)];
+    s.sepmin_SD  = str2double(ctrl.jSepmin_SD.getText);
 
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
-
-    if ctrl.jRadioSegSkinAsOne.isSelected
-        s.segmentation_label = 1;
-    else
-        s.segmentation_label = 2;
-    end   
-        
+    
     s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
     s.outputdir = strtrim(char(ctrl.jWeightFolder.getText));

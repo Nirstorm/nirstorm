@@ -215,21 +215,22 @@ if ~any(iseg)
 end
 
 sSegmentation   = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-tissues         = sSegmentation.Labels;
-
 if ~isequal(sMri.Voxsize,sSegmentation.Voxsize)
     bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
     return
 end
 
+if ~isfield(sSegmentation,'Labels') || isempty(sSegmentation.Labels)
+    bst_report('Error', sProcess, [], ['BST> Invalid atlas "' segmentation_name '": does not contain any labels.']);
+    return;
+end
+tissues         = sSegmentation.Labels;
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_vertices_mri = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
-%head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-head_normals = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
-head_normals = -head_normals;
-
-nb_vertex = length(valid_vertices);
+head_vertices_mri   = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
+head_normals        = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
+head_normals        = -head_normals;
 
 %load wavelength info 
 wavelengths_input = options.wavelengths;
@@ -239,8 +240,10 @@ catch
     bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
     return
 end
-wavelengths = double(scan_res{1}');
-nb_wavelengths = length(wavelengths);
+
+wavelengths     = double(scan_res{1}');
+nb_wavelengths  = length(wavelengths);
+nb_vertex       = length(valid_vertices);
 
 %% Compute fluences from mcxlab
 %=========================================================================
