@@ -109,6 +109,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Create panel
     jPanelUseDefault = gui_river([2,2], [3,3,3,3], '');
     jUseDefaultSpace = gui_component('checkbox', jPanelUseDefault, 'br', 'Use default search space', [], [], @(h,ev)UpdatePanel(), []);
+    jUseDefaultSpace.setSelected(1);    
     gui_component('label', jPanelUseDefault, 'br', '', [], [], [], []);
     jPanelLeft.add('br hfill vfill', jPanelUseDefault);
     ctrl.jUseDefaultSpace = jUseDefaultSpace;
@@ -116,7 +117,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
         % Extent label
     jExtentTitle = gui_component('label', jPanelUseDefault, 'br', 'Extent of scalp projection:', [], [], [], []);
-    jExtent = gui_component('text', jPanelUseDefault, 'hfill', '5', [], [], [], []);
+    jExtent = gui_component('text', jPanelUseDefault, 'hfill', '4', [], [], [], []);
     jExtentTitle2 = gui_component('label', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
     ctrl.jExtent= jExtent;
         
@@ -167,7 +168,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     gui_component('label', jPanelMontage, 'br', 'Range of optodes distance', [], [], [], []);
     jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);       
     gui_component('label', jPanelMontage, '', ' - ', [], [], [], []);
-    jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', '55', [], [], [], []);
+    jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', '40', [], [], [], []);
     gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
     ctrl.jSepOptodeMin = jSepOptodeMin;
     ctrl.jSepOptodeMax = jSepOptodeMax;
