@@ -190,7 +190,10 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     gui_component('label', jPanelFluence, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
     jWavelengths = gui_component('text', jPanelFluence, 'hfill', '685', [], [], [], []);
     ctrl.jWavelengths = jWavelengths;
- 
+
+    prefPanelSize = java_scaled('dimension', 800,100);
+    jPanelFluence.setPreferredSize(prefPanelSize)
+    jPanelRight.add('br hfill', jPanelFluence);
     
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
