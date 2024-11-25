@@ -188,6 +188,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     if   OPTIONS.fromMontage
         jWavelengths.setEnabled(0);
     end    
+
+    jPanelRight.add('br hfill', jPanelForward);    
+     
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');    
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
