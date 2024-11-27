@@ -231,7 +231,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
 
-    if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'cMEM')
+    if ~iscell(sResults(1).ImageGridAmp)
         dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
     else
         dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
