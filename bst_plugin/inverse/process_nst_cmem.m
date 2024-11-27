@@ -79,7 +79,6 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 MethodOptions.MEMpaneloptions = sProcess.options.mem.Value.MEMpaneloptions;
-store_sparse_results          = sProcess.options.store_sparse_results.Value;
 
 % Canceled by user
 if isempty(MethodOptions)
@@ -133,8 +132,6 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
 end
 
 OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
-nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
-measure_tag     = 'WL';
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
 if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
@@ -153,7 +150,7 @@ for iMap = 1:length(sResults)
      [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
                                           sResults(iMap).Comment, sInputs, sStudy, ...
                                           sResults(iMap).History, sResults(iMap).Units , ...
-                                          store_sparse_results,1, sResults(iMap).MEMoptions);
+                                          sResults(iMap).MEMoptions);
 
     OutputFiles{end+1} = ResultFile;
 
@@ -171,8 +168,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
-    nb_nodes = size(cortex.Vertices, 1);
-    nb_samples = length(sDataIn.Time);
+    nb_nodes        = size(cortex.Vertices, 1);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
@@ -217,6 +213,17 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
+        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM')
+            selected_samples = result.MEMoptions.automatic.selected_samples;
+
+            % sort the sample by time instead of energy
+            [~,ia] = sort(selected_samples(1,:));
+            result.ImageGridAmp{1} = result.ImageGridAmp{1}(:,ia);
+            result.ImageGridAmp{2} = result.ImageGridAmp{2}(ia,:);
+
+            result.MEMoptions.automatic.selected_samples = result.MEMoptions.automatic.selected_samples(:,ia);
+        end
+
         result.Comment =  [result.MEMoptions.automatic.Comment ' | ' swl 'nm'];
         result.History =  [result.MEMoptions.automatic.Comment];
         result.Units   =  'OD';
@@ -234,9 +241,23 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     if ~iscell(sResults(1).ImageGridAmp)
         dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
     else
-        dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
-        for iResult = 1:length(sResults)
-            dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+        isConsistent = 1;
+        for iResult = 2:length(sResults)
+            isConsistent =  isConsistent && isequal( sResults(1).ImageGridAmp{2}, sResults(iResult).ImageGridAmp{2});
+        end
+
+        if isConsistent
+            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
+            for iResult = 1:length(sResults)
+                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+            end
+        else
+            % If not consistent, go back to full time-course
+            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
+            for iResult = 1:length(sResults)
+                sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
+                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
+            end
         end
     end
 
@@ -372,7 +393,7 @@ end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
-                                              data_unit, store_sparse,store_diagnosis,diagnosis)
+                                              data_unit, diagnosis)
                                           
     if nargin < 8
         data_unit = '';
@@ -385,15 +406,13 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat = db_template('resultsmat');
     ResultsMat.Comment       = name;
     ResultsMat.Function      = '';
-    if store_sparse
-        ResultsMat.ImageGridAmp = sparse(data); %TODO TOCHECK with FT: sparse data seem not well handled. Eg while viewing (could not reproduce)
-    else
-        ResultsMat.ImageGridAmp = data;
-    end
-    if nargin >=10 && store_diagnosis && ~isempty(diagnosis) 
+    ResultsMat.ImageGridAmp  = data;
+
+    if nargin >= 9 && ~isempty(diagnosis) 
         ResultsMat.diagnosis = diagnosis;
     end
-    ResultsMat.DisplayUnits = data_unit;
+
+    ResultsMat.DisplayUnits  = data_unit;
     ResultsMat.Time          = time;
     ResultsMat.DataFile      = sInputs.FileName;
     ResultsMat.HeadModelFile = head_model.FileName;
@@ -401,9 +420,10 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat.ChannelFlag   = [];
     ResultsMat.GoodChannel   = [];
     ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc    = [];
-    ResultsMat.GridOrient = [];
-    ResultsMat.nAvg      = 1;
+    ResultsMat.GridLoc       = [];
+    ResultsMat.GridOrient    = [];
+    ResultsMat.nAvg          = 1;
+
     % History
     ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
     % Save new file structure
