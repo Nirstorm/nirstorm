@@ -214,26 +214,24 @@ if ~any(iseg)
                       segmentation_name, sSubject.Name));
     return
 end
-seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-if options.segmentation_label == 1
-    seg.Cube = nst_prepare_segmentation(seg.Cube,{1,2,3,4,5});
-elseif options.segmentation_label == 2
-    seg.Cube = nst_prepare_segmentation(seg.Cube,{5,4,3,2,1});
-end    
 
-if ~isequal(sMri.Voxsize,seg.Voxsize)
+sSegmentation   = in_mri_bst(sSubject.Anatomy(iseg).FileName);
+if ~isequal(sMri.Voxsize,sSegmentation.Voxsize)
     bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
     return
 end
 
+if ~isfield(sSegmentation,'Labels') || isempty(sSegmentation.Labels)
+    bst_report('Error', sProcess, [], ['BST> Invalid atlas "' segmentation_name '": does not contain any labels.']);
+    return;
+end
+tissues         = sSegmentation.Labels;
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
-head_vertices_mri = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
-%head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-head_normals = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
-head_normals = -head_normals;
-
-nb_vertex = length(valid_vertices);
+head_vertices_mri   = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
+head_normals        = tess_normals(head_vertices_mri,sHead.Faces); %Use brainstorm
+head_normals        = -head_normals;
 
 %load wavelength info 
 wavelengths_input = options.wavelengths;
@@ -243,46 +241,40 @@ catch
     bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
     return
 end
-wavelengths = double(scan_res{1}');
-nb_wavelengths = length(wavelengths);
+
+wavelengths     = double(scan_res{1}');
+nb_wavelengths  = length(wavelengths);
+nb_vertex       = length(valid_vertices);
 
 %% Compute fluences from mcxlab
 %=========================================================================
 % mcxlab setup
 %=========================================================================
-% GPU thread sadfsconfiguration
 
-flag_autoOpticalProperties = options.mcxlab_flag_autoOP;
-flag_thresh_fluences = options.mcxlab_flag_thresh;
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
-if flag_thresh_fluences
-    thresh_value = options.mcxlab_thresh_value.*1e-6;
-else
-    thresh_value = 0;
-end    
 
-cfg.gpuid = options.mcxlab_gpuid;
-cfg.autopilot = 1;
-cfg.respin = 1;
+cfg.gpuid       = options.mcxlab_gpuid;
+cfg.autopilot   = 1;
+cfg.respin      = 1;
 % set seed to make the simulation repeatible
-cfg.seed=hex2dec('623F9A9E'); 
-cfg.nphoton=options.mcxlab_nphoton*1e6;
-cfg.vol=seg.Cube; % segmentation
-cfg.unitinmm=seg.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
-cfg.isreflect=1; % reflection at exterior boundary
-cfg.isrefint=1;   % 1-index mismatch at inner boundaries, [0]-matched index
+cfg.seed        = hex2dec('623F9A9E'); 
+cfg.nphoton     = options.mcxlab_nphoton*1e6;
+cfg.vol         = sSegmentation.Cube; % segmentation
+cfg.unitinmm    = sSegmentation.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
+cfg.isreflect   = 1; % reflection at exterior boundary
+cfg.isrefint    = 1; % 1-index mismatch at inner boundaries, [0]-matched index
 % time-domain simulation parameters
-cfg.tstart=0;
-cfg.tend=5e-9;
-cfg.tstep=5e-9;
+cfg.tstart      = 0;
+cfg.tend        = 5e-9;
+cfg.tstep       = 5e-9;
 % nornalisation
-cfg.isnormalized=1; % [1]-normalize the output flux to unitary source
+cfg.isnormalized= 1; % [1]-normalize the output flux to unitary source
 
-cfg.issrcfrom0=0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
+cfg.issrcfrom0  = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 % project optodes position on cfg.vol
-options.proj.stepAlongNorm=1;
-options.meshes.skin.vertices=head_vertices_mri;
-options.meshes.skin.faces=sHead.Faces;
+options.proj.stepAlongNorm      = 1;
+options.meshes.skin.vertices    = head_vertices_mri;
+options.meshes.skin.faces       = sHead.Faces;
 
 [vertex_pos,invalid_id]=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
 
@@ -318,10 +310,8 @@ for ivertx = 1:nb_vertex
             fprintf('Fluence for head vertex %g exists in the target folder\n',valid_vertices(ivertx));
             bst_progress('inc', 1);
         else
-            if flag_autoOpticalProperties
-                cfg.prop=mfip_getOpticalProperties_5layers(1,num2str(wl));
-            end
-            % running simulation
+
+            cfg.prop = nst_get_tissues_optical_properties(tissues,wl);
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
             if strcmp(options.software, 'mcxlab-cuda')
@@ -342,15 +332,11 @@ for ivertx = 1:nb_vertex
                 return;
             end
             
-            if flag_thresh_fluences
-                fluenceRate.data(fluenceRate.data<thresh_value) = 0;
-            end
-
             fluence_vol = fluenceRate.data;
+
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
-            reference_voxel_index = cfg.srcpos;
-            %         fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
-            %         output_dir = sProcess.options.outputdir.Value{1};
+            reference_voxel_index   = cfg.srcpos;
+
             save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
             bst_progress('inc', 1);
         end
@@ -359,7 +345,6 @@ end
 bst_progress('stop', 1);
 disp('');
 disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2str(toc) ' seconds']);
-%save([output_dir,'/','montage_region.mat'],'newScout');
 
 end
 
@@ -580,57 +565,7 @@ if flag_display
 end
 end
 
-function [prop] = mfip_getOpticalProperties_5layers(method,wavelength)
 
-%==========================================================================
-%                       INITIALISATION: SET DEFAULTS
-%==========================================================================
-p = inputParser;
-addRequired(p,'method',@isscalar);
-addRequired(p,'wavelength',@ischar);
-parse(p,method,wavelength);
-
-
-
-%==========================================================================
-%                       GET OPTICAL PROPERTIES
-%==========================================================================
-switch method
-    case 1
-        % Strangman_2003: mus was calculated from mus', conversion in mm-1
-        % NB: another useful references : Yamada 2009 JBO 14(6) has a set of absorption and scattering coeff at multiple wavelength for the five layers
-
-        
-        if strcmp(wavelength,'685')
-            % 690 nm : [mua, mus, g, n]
-            prop=[0       0       1    1      % medium 0: the environment
-                0.0159  10      0.92 1.37   % medium 1: skin
-                0.0101  12.5    0.92 1.37   % medium 2: skull
-                0.0004  0.125   0.92 1.37   % medium 3: CSF
-                0.0178  15.625  0.92 1.37   % medium 4: gray matter
-                0.0178  15.625  0.92 1.37]; % medium 5: white matter
-            
-       elseif strcmp(wavelength,'690')
-            % 690 nm : [mua, mus, g, n]
-            prop=[0       0       1    1      % medium 0: the environment
-                0.0159  10      0.92 1.37   % medium 1: skin
-                0.0101  12.5    0.92 1.37   % medium 2: skull
-                0.0004  0.125   0.92 1.37   % medium 3: CSF
-                0.0178  15.625  0.92 1.37   % medium 4: gray matter
-                0.0178  15.625  0.92 1.37]; % medium 5: white matter
-            
-        elseif strcmp(wavelength,'830')
-            % 830 nm : [mua, mus, g, n]
-            prop=[0      0      1     1       % medium 0: the environment
-                0.0191 8.25   0.92  1.37    % medium 1: skin
-                0.0136 10.75  0.92  1.37    % medium 2: skull
-                0.0026 0.125   0.92 1.37    % medium 3: CSF
-                0.0186 13.875 0.92  1.37    % medium 4: gray matter
-                0.0186 13.875 0.92  1.37]; % medium 5: white matter
-        end      
-
-end
-end
 
 function mfip_setAxesOrientation (hAxes, orientation)
 
@@ -659,6 +594,3 @@ end
 axis(hAxes,'vis3d')
 axis(hAxes, 'equal')
 end
-
-
-

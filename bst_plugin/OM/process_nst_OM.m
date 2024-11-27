@@ -168,7 +168,7 @@ end
     
     
 voronoi_bst = in_mri_bst(voronoi_fn);
-voronoi = voronoi_bst.Cube;
+voronoi     = voronoi_bst.Cube;
     
 % Load segmentation
 segmentation_name = 'segmentation_5tissues';
@@ -177,18 +177,15 @@ if isempty(iseg)
     bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
     return;
 end
-seg = in_mri_bst(sSubject.Anatomy(iseg).FileName);
 
-if  options.segmentation_label == 1 % GM label = 4
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 4) & ismember(voronoi,ROI_cortex.Vertices);
-elseif  options.segmentation_label == 2 % GM label = 2
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi) & (seg.Cube == 2) & ismember(voronoi,ROI_cortex.Vertices);
-end    
+GM_mask = process_nst_compute_voronoi('get_grey_matter_mask',sSubject.Anatomy(iseg).FileName);
+voronoi_mask = (voronoi > -1) &  ~isnan(voronoi) & GM_mask & ismember(voronoi,ROI_cortex.Vertices);
 
-voi = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
+voi               = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
 voi(voronoi_mask) = 1;
-voi_flat = voi(:);
-vois = sparse(voi_flat > 0);
+
+voi_flat    = voi(:);
+vois        = sparse(voi_flat > 0);
 
 if nnz(vois)==0
     bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
@@ -196,7 +193,6 @@ if nnz(vois)==0
 end
 
 weight_table = [];
-
 weight_cache = struct();
 
 if exist(fullfile(options.outputdir , 'weight_tables.mat'))

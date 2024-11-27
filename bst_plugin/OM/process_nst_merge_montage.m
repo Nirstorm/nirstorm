@@ -105,14 +105,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end
    end
    
-    disp('source-source conflict')
-    detect_conflict(sources_pos, sources_pos, 1);
+    detect_conflict(sources_pos, sources_pos, 1, {'Source', 'Source'});
    
-    disp('Det-Det conflict')
-    detect_conflict(det_pos, det_pos , 1 );
+    detect_conflict(det_pos, det_pos , 1 ,{'Detector', 'Detector'});
 
-    disp('Source-Det conflict')
-    detect_conflict(sources_pos, det_pos, 0);
+    detect_conflict(sources_pos, det_pos, 0,{'Source', 'Detector'});
    
     iStudy = db_add_condition(sInputs(1).SubjectName, [sInputs(1).Condition, '_merge2']);
     sStudy = bst_get('Study', iStudy);
@@ -158,7 +155,7 @@ function d = euc_dist(p1, p2)
     d = sqrt(sum((p1 - p2).^2));
 end
 
-function conflict = detect_conflict(pos1, pos2, isSymetrical)
+function conflict = detect_conflict(pos1, pos2, isSymetrical, labels)
 
     conflict =cell(1, size(pos1,2));
     for i = 1:size(pos1,2)
@@ -176,9 +173,13 @@ function conflict = detect_conflict(pos1, pos2, isSymetrical)
               conflict{i} = union( conflict{i}, colapsing)';  
         end    
     end  
-    for i=1:length(conflict)
-        if ~isempty(conflict{i})
-            disp(sprintf('%d and %s are conflicting',i,strjoin(strsplit(num2str(conflict{i})), ' - ')))
-       end 
-   end
+
+    if any(~cellfun(@isempty,conflict))
+        fprintf('%s - %s conflicts: \n', labels{1},labels{2});
+        for i=1:length(conflict)
+            if ~isempty(conflict{i})
+                fprintf('%s %d and %s %s are conflicting \n',labels{1}, i, labels{2}, strjoin(strsplit(num2str(conflict{i})), ' - '));
+           end 
+        end
+    end
 end   

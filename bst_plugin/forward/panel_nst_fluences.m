@@ -181,15 +181,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     % === PANEL: Forward options  ====
     jPanelForward = gui_river([2,2], [3,5,3,5], 'Forward Model');
-    jGroupRadio = ButtonGroup();
-    gui_component('label', jPanelForward, 'br', 'Segmentation label:', [], [], [], []);
-    jRadioSegSkinAsOne = gui_component('radio', jPanelForward, [], '1: skin, 2: skull, 3: CSF, 4: GM, 5: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne = gui_component('radio', jPanelForward, [],  '5: skin, 4: skull, 3: CSF, 2: GM, 1: WM', jGroupRadio, [], [], []);
-    jRadioSegWMAsOne.setSelected(1);
-    jPanelRight.add('br hfill', jPanelForward);   
-    
-    ctrl.jRadioSegSkinAsOne = jRadioSegSkinAsOne;
-    ctrl.jRadioSegWMAsOne   = jRadioSegWMAsOne;
     
     gui_component('label', jPanelForward, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
     jWavelengths = gui_component('text', jPanelForward, 'hfill',  strjoin(OPTIONS.Wavelengths, ' ,'), [], [], [], []);
@@ -197,6 +188,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     if   OPTIONS.fromMontage
         jWavelengths.setEnabled(0);
     end    
+
+    jPanelRight.add('br hfill', jPanelForward);    
+     
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');    
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
@@ -221,15 +215,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
-    jUseThreshold = gui_component('checkbox', jPanelOutput, 'br', 'Threshold fluences(reduce file size)', [], [], @(h,ev)UpdateOutputPanel(), []);
-    gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
-    ctrl.jUseThreshold=jUseThreshold;
-    gui_component('label', jPanelOutput, 'br', 'Threshold:', [], [], [], []);
-    jThreshold = gui_component('text', jPanelOutput, 'hfill', '1', [], [], [], []);
-    gui_component('label', jPanelOutput, 'hfill', '1e-6(1/mm2/s)', [], [], [], []);
-    ctrl.jThreshold=jThreshold;
-    jUseThreshold.setSelected(0);
-
     jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwirte existing fluences', [], [], [], []);
     gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
     ctrl.jOverwrite=jOverwrite;
@@ -260,7 +245,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     % Redraw panel
     UpdatePanel();
-    UpdateOutputPanel();
     
 %% =================================================================================
 %  === LOCAL CALLBACKS  ============================================================
@@ -300,13 +284,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             jPanelScouts.setVisible(0);
         end
     end
-    function UpdateOutputPanel()
-         if jUseThreshold.isSelected()
-             jThreshold.setEnabled(1);
-         else
-             jThreshold.setEnabled(0);
-         end    
-    end     
 
     %% ===== UPDATE SCOUT LIST =====
     function UpdateScoutList(Atlas, iAtlas)
@@ -382,12 +359,6 @@ function s = GetPanelContents() %#ok<DEFNU>
         s.SubjectName =  ctrl.SubjectName;
     end
     
-    
-    if ctrl.jRadioSegSkinAsOne.isSelected
-        s.segmentation_label = 1;
-    else
-        s.segmentation_label = 2;
-    end  
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
     s.software = ctrl.software;
     GPU = zeros(1, length(ctrl.jCheckGPU));
@@ -405,16 +376,11 @@ function s = GetPanelContents() %#ok<DEFNU>
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
     
-     s.mcxlab_nphoton =  str2double(ctrl.jNphoton.getText);
-     s.outputdir = strtrim(char(ctrl.jOutputFolder.getText));
-     
-     s.mcxlab_flag_thresh = ctrl.jUseThreshold.isSelected;
-     if ctrl.jUseThreshold.isSelected
-           s.mcxlab_thresh_value = str2double(ctrl.jThreshold.getText);
-     end
+     s.mcxlab_nphoton   =  str2double(ctrl.jNphoton.getText);
+     s.outputdir        = strtrim(char(ctrl.jOutputFolder.getText));
      s.mcxlab_overwrite_fluences = ctrl.jOverwrite.isSelected;
      
-     s.mcxlab_flag_autoOP = 1; %ToDo: allow user to change optical property; needs to find a good way
+     s.mcxlab_flag_autoOP = 1; 
 end
 
 

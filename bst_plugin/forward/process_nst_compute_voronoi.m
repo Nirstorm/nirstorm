@@ -183,7 +183,27 @@ vox_size    = sMri.Voxsize ;
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 
 if nargin > 2
+
+    GM_mask = get_grey_matter_mask(segmentation_file);
+
+    tmp = -1 * ones(size(vol_voro));
+    tmp(GM_mask) = vol_voro(GM_mask);
+
+    vol_voro = tmp; 
+
+end
+end
+
+
+function GM_mask = get_grey_matter_mask(segmentation_file)
+
     sSegmentation = in_mri_bst(segmentation_file);
+    GM_mask       = false(size(sSegmentation.Cube)); 
+
+    if ~isfield(sSegmentation,'Labels') ||  isempty(sSegmentation.Labels)
+        bst_error('Unrecognized segmentation.');
+        return;
+    end
 
     idx = [];
     if any(contains({sSegmentation.Labels{:,2}}, 'Cortex'))
@@ -194,18 +214,14 @@ if nargin > 2
 
     if isempty(idx)
         bst_error('Unrecognized segmentation.');
-        vol_voro = [];
         return;
     end    
 
-    tmp = -1 * ones(size(vol_voro));
     for i = 1:length(idx)               
-        tmp(sSegmentation.Cube == idx(i)) = vol_voro(sSegmentation.Cube == idx(i));
+        GM_mask(sSegmentation.Cube == idx(i)) = true;
     end
-    vol_voro = tmp;
-end
-end
 
+end
 
 function voronoi_fn = get_voronoi_fn(sSubject)
     i_voronoi = find(strcmp( {sSubject.Anatomy.Comment}, sprintf('Voronoi interpolator for %s onto %s',sSubject.Anatomy(sSubject.iAnatomy).Comment, sSubject.Surface(sSubject.iCortex).Comment)));

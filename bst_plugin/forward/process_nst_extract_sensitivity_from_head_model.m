@@ -295,7 +295,7 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
 %% Save a cortical map to brainstorm with given data
 
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                            ['results_' protect_fn_str(name)]);
+                            ['results_NIRS_' protect_fn_str(name)]);
                         
     % ===== CREATE FILE STRUCTURE =====
     ResultsMat = db_template('resultsmat');
