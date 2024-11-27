@@ -79,7 +79,6 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 MethodOptions.MEMpaneloptions = sProcess.options.mem.Value.MEMpaneloptions;
-store_sparse_results          = sProcess.options.store_sparse_results.Value;
 
 % Canceled by user
 if isempty(MethodOptions)
@@ -133,8 +132,6 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
 end
 
 OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
-nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
-measure_tag     = 'WL';
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
 if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
@@ -143,45 +140,35 @@ end
 
 %% Run MEM
 bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...', pipeline));
-[dOD_sources_cMEM,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn );
+sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 
 %% Save results
+
 bst_progress('text', 'Saving Results...');
-for iwl=1:nb_wavelengths
-     swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-     [sStudy, ResultFile] = add_surf_data(squeeze(dOD_sources_cMEM(:,iwl,:)), sDataIn.Time, nirs_head_model, ...
-         [diagnosis(iwl).Comment     ' | ' swl 'nm'], ...
-         sInputs, sStudy, diagnosis(iwl).Comment, ...
-         'OD', store_sparse_results,1,diagnosis(iwl));
-     OutputFiles{end+1} = ResultFile;
+
+for iMap = 1:length(sResults)
+     [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
+                                          sResults(iMap).Comment, sInputs, sStudy, ...
+                                          sResults(iMap).History, sResults(iMap).Units , ...
+                                          sResults(iMap).MEMoptions);
+
+    OutputFiles{end+1} = ResultFile;
+
 end
 
-hb_unit_factor = 1e6;
-hb_unit = '\mumol.l-1';
-hb_types = {'HbO', 'HbR','HbT'};
-for ihb=1:3
-    [sStudy, ResultFile] = add_surf_data(squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor,...
-                                         sDataIn.Time, nirs_head_model, ...
-                                         [diagnosis(iwl).Comment     ' | ' hb_types{ihb}], ...
-                                         sInputs, sStudy, diagnosis(iwl).Comment, ...
-                                         hb_unit, store_sparse_results);    
-    OutputFiles{end+1} = ResultFile;
-end
 
 bst_progress('stop', ['Reconstruction by ' pipeline], 'Finishing...');
 % Update Brainstorm database
 bst_set('Study', sInputs.iStudy, sStudy);
 end
 
-function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sDataIn )
-    diagnosis= [];
+function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
-    nb_nodes = size(cortex.Vertices, 1);
-    nb_samples = length(sDataIn.Time);
+    nb_nodes        = size(cortex.Vertices, 1);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
@@ -202,9 +189,7 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
         OPTIONS.MEMpaneloptions.clustering.neighborhood_order = nbo;
     end
 
-    
-    dOD_sources = zeros(nb_nodes, nb_wavelengths, nb_samples);
-
+       
     for iwl=1:nb_wavelengths
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
         selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (sDataIn.ChannelFlag>0)';
@@ -226,21 +211,26 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
-        [Results, O_updated] = be_main_call(HM, OPTIONS);
+        [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
-        %cMEM results
-        grid_amp = zeros(nb_nodes, nb_samples); 
-        if iscell(Results.ImageGridAmp)
-            % Todo: Improve code to save factors
-            grid_amp(valid_nodes,:) = full(Results.ImageGridAmp{1} * Results.ImageGridAmp{2});
-        else
-            grid_amp(valid_nodes,:) = Results.ImageGridAmp;
+        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM')
+            selected_samples = result.MEMoptions.automatic.selected_samples;
+
+            % sort the sample by time instead of energy
+            [~,ia] = sort(selected_samples(1,:));
+            result.ImageGridAmp{1} = result.ImageGridAmp{1}(:,ia);
+            result.ImageGridAmp{2} = result.ImageGridAmp{2}(ia,:);
+
+            result.MEMoptions.automatic.selected_samples = result.MEMoptions.automatic.selected_samples(:,ia);
         end
-        dOD_sources(:, iwl, :)  = grid_amp;
+
+        result.Comment =  [result.MEMoptions.automatic.Comment ' | ' swl 'nm'];
+        result.History =  [result.MEMoptions.automatic.Comment];
+        result.Units   =  'OD';
+        result.MEMoptions.automatic.neighborhood_order = sOptions(iwl).MEMpaneloptions.clustering.neighborhood_order;
+        result.MEMoptions.automatic.valid_nodes = valid_nodes;
         
-        Results.MEMoptions.automatic.neighborhood_order = O_updated.MEMpaneloptions.clustering.neighborhood_order;
-        Results.MEMoptions.automatic.valid_nodes = valid_nodes;
-        diagnosis          = [diagnosis Results.MEMoptions.automatic];
+        sResults(iwl) = result;
     end
     
     bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
@@ -248,14 +238,68 @@ function [dOD_sources,Hb_sources, diagnosis] = Compute(OPTIONS,ChannelMat, sData
     hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
 
-    Hb_sources = zeros(nb_nodes, 3, nb_samples);
-    for idx=1:length(valid_nodes)
-        inode = valid_nodes(idx);
+    if ~iscell(sResults(1).ImageGridAmp)
+        dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
+    else
+        isConsistent = 1;
+        for iResult = 2:length(sResults)
+            isConsistent =  isConsistent && isequal( sResults(1).ImageGridAmp{2}, sResults(iResult).ImageGridAmp{2});
+        end
+
+        if isConsistent
+            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
+            for iResult = 1:length(sResults)
+                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+            end
+        else
+            % If not consistent, go back to full time-course
+            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
+            for iResult = 1:length(sResults)
+                sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
+                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
+            end
+        end
+    end
+
+    Hb_sources = zeros(length(valid_nodes), 3, size(dOD_sources,3));
+    for inode=1:length(valid_nodes)
         Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
                                     squeeze(dOD_sources(inode, :, :));
     
     end
     Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
+
+    hb_unit_factor = 1e6;
+    hb_unit = '\mumol.l-1';
+    hb_types = {'HbO', 'HbR','HbT'};
+
+    sResults_hb = repmat(sResults(1), 1, 3);
+    for iHb = 1:3
+        sResults_hb(iHb).Comment = [ sResults(end).History     ' | ' hb_types{iHb}];
+        sResults_hb(iHb).History = sResults(end).History;
+        sResults_hb(iHb).Units = hb_unit;
+        if iscell(sResults_hb(iHb).ImageGridAmp )
+            sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+        else
+            sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+        end
+    end
+
+    sResults = [ sResults, sResults_hb];
+
+    mapping = zeros(nb_nodes, length(valid_nodes)); 
+    for iNode = 1:length(valid_nodes)
+        mapping(valid_nodes(iNode), iNode) = 1;
+    end
+    mapping = sparse(mapping);
+
+    for iMap = 1:length(sResults)
+        if iscell(sResults(iMap).ImageGridAmp)
+            sResults(iMap).ImageGridAmp = [ {mapping} sResults(iMap).ImageGridAmp ];
+        else
+            sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+        end
+    end
 end
 
 
@@ -349,7 +393,7 @@ end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
-                                              data_unit, store_sparse,store_diagnosis,diagnosis)
+                                              data_unit, diagnosis)
                                           
     if nargin < 8
         data_unit = '';
@@ -362,15 +406,13 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat = db_template('resultsmat');
     ResultsMat.Comment       = name;
     ResultsMat.Function      = '';
-    if store_sparse
-        ResultsMat.ImageGridAmp = sparse(data); %TODO TOCHECK with FT: sparse data seem not well handled. Eg while viewing (could not reproduce)
-    else
-        ResultsMat.ImageGridAmp = data;
-    end
-    if nargin >=10 && store_diagnosis && ~isempty(diagnosis) 
+    ResultsMat.ImageGridAmp  = data;
+
+    if nargin >= 9 && ~isempty(diagnosis) 
         ResultsMat.diagnosis = diagnosis;
     end
-    ResultsMat.DisplayUnits = data_unit;
+
+    ResultsMat.DisplayUnits  = data_unit;
     ResultsMat.Time          = time;
     ResultsMat.DataFile      = sInputs.FileName;
     ResultsMat.HeadModelFile = head_model.FileName;
@@ -378,9 +420,10 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat.ChannelFlag   = [];
     ResultsMat.GoodChannel   = [];
     ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc    = [];
-    ResultsMat.GridOrient = [];
-    ResultsMat.nAvg      = 1;
+    ResultsMat.GridLoc       = [];
+    ResultsMat.GridOrient    = [];
+    ResultsMat.nAvg          = 1;
+
     % History
     ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
     % Save new file structure
