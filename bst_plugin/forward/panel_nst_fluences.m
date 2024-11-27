@@ -215,15 +215,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
-    jUseThreshold = gui_component('checkbox', jPanelOutput, 'br', 'Threshold fluences(reduce file size)', [], [], @(h,ev)UpdateOutputPanel(), []);
-    gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
-    ctrl.jUseThreshold=jUseThreshold;
-    gui_component('label', jPanelOutput, 'br', 'Threshold:', [], [], [], []);
-    jThreshold = gui_component('text', jPanelOutput, 'hfill', '1', [], [], [], []);
-    gui_component('label', jPanelOutput, 'hfill', '1e-6(1/mm2/s)', [], [], [], []);
-    ctrl.jThreshold=jThreshold;
-    jUseThreshold.setSelected(0);
-
     jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwirte existing fluences', [], [], [], []);
     gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
     ctrl.jOverwrite=jOverwrite;
@@ -254,7 +245,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     % Redraw panel
     UpdatePanel();
-    UpdateOutputPanel();
     
 %% =================================================================================
 %  === LOCAL CALLBACKS  ============================================================
@@ -294,13 +284,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             jPanelScouts.setVisible(0);
         end
     end
-    function UpdateOutputPanel()
-         if jUseThreshold.isSelected()
-             jThreshold.setEnabled(1);
-         else
-             jThreshold.setEnabled(0);
-         end    
-    end     
 
     %% ===== UPDATE SCOUT LIST =====
     function UpdateScoutList(Atlas, iAtlas)
@@ -393,16 +376,11 @@ function s = GetPanelContents() %#ok<DEFNU>
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
     
-     s.mcxlab_nphoton =  str2double(ctrl.jNphoton.getText);
-     s.outputdir = strtrim(char(ctrl.jOutputFolder.getText));
-     
-     s.mcxlab_flag_thresh = ctrl.jUseThreshold.isSelected;
-     if ctrl.jUseThreshold.isSelected
-           s.mcxlab_thresh_value = str2double(ctrl.jThreshold.getText);
-     end
+     s.mcxlab_nphoton   =  str2double(ctrl.jNphoton.getText);
+     s.outputdir        = strtrim(char(ctrl.jOutputFolder.getText));
      s.mcxlab_overwrite_fluences = ctrl.jOverwrite.isSelected;
      
-     s.mcxlab_flag_autoOP = 1; %ToDo: allow user to change optical property; needs to find a good way
+     s.mcxlab_flag_autoOP = 1; 
 end
 
 

@@ -250,15 +250,8 @@ nb_vertex       = length(valid_vertices);
 %=========================================================================
 % mcxlab setup
 %=========================================================================
-% GPU thread sadfsconfiguration
 
-flag_thresh_fluences    = options.mcxlab_flag_thresh;
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
-if flag_thresh_fluences
-    thresh_value = options.mcxlab_thresh_value.*1e-6;
-else
-    thresh_value = 0;
-end    
 
 cfg.gpuid       = options.mcxlab_gpuid;
 cfg.autopilot   = 1;
@@ -339,10 +332,6 @@ for ivertx = 1:nb_vertex
                 return;
             end
             
-            if flag_thresh_fluences
-                fluenceRate.data(fluenceRate.data<thresh_value) = 0;
-            end
-
             fluence_vol = fluenceRate.data;
 
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
