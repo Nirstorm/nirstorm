@@ -150,6 +150,7 @@ for iMap = 1:length(sResults)
      [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
                                           sResults(iMap).Comment, sInputs, sStudy, ...
                                           sResults(iMap).History, sResults(iMap).Units , ...
+                                          sResults(iMap).Options, ...
                                           sResults(iMap).MEMoptions);
 
     OutputFiles{end+1} = ResultFile;
@@ -223,7 +224,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
             result.MEMoptions.automatic.selected_samples = result.MEMoptions.automatic.selected_samples(:,ia);
         end
-
+        result.Options =  sOptions(iwl).MEMpaneloptions;
         result.Comment =  [result.MEMoptions.automatic.Comment ' | ' swl 'nm'];
         result.History =  [result.MEMoptions.automatic.Comment];
         result.Units   =  'OD';
@@ -393,10 +394,13 @@ end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
-                                              data_unit, diagnosis)
+                                              data_unit, OPTIONS, MEMoptions)
                                           
     if nargin < 8
         data_unit = '';
+    end
+    if nargin < 9
+        OPTIONS = [];
     end
     
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
@@ -408,8 +412,8 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat.Function      = '';
     ResultsMat.ImageGridAmp  = data;
 
-    if nargin >= 9 && ~isempty(diagnosis) 
-        ResultsMat.diagnosis = diagnosis;
+    if nargin >= 10 && ~isempty(MEMoptions) 
+        ResultsMat.MEMoptions = MEMoptions;
     end
 
     ResultsMat.DisplayUnits  = data_unit;
@@ -417,6 +421,7 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat.DataFile      = sInputs.FileName;
     ResultsMat.HeadModelFile = head_model.FileName;
     ResultsMat.HeadModelType = head_model.HeadModelType;
+    ResultsMat.Options       = OPTIONS;
     ResultsMat.ChannelFlag   = [];
     ResultsMat.GoodChannel   = [];
     ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
