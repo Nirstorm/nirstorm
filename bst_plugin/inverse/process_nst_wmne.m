@@ -130,11 +130,12 @@ else
     function_name='MNE';
 end    
 for iwl=1:nb_wavelengths
+OPTIONS.DataTime  = [];
     swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
     [sStudy, ResultFile] = add_surf_data({mapping, squeeze(dOD_sources_wMNE(:,iwl,:))}, sDataIn.Time, nirs_head_model, ...
                                         [function_name ' sources - ' swl 'nm'], ...
                                         sInputs, sStudy, [function_name 'sources reconstruction'], ...
-                                        'OD', store_sparse_results);    
+                                        'OD', OPTIONS);    
     
     OutputFiles{end+1} = ResultFile;
 end
@@ -256,7 +257,7 @@ end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               sInputs, sStudy, history_comment, ...
-                                              data_unit, store_sparse)
+                                              data_unit, OPTIONS)
                                           
     if nargin < 8
         data_unit = '';
@@ -269,16 +270,13 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat = db_template('resultsmat');
     ResultsMat.Comment       = name;
     ResultsMat.Function      = '';
-    if store_sparse
-        ResultsMat.ImageGridAmp = sparse(data); %TODO TOCHECK with FT: sparse data seem not well handled. Eg while viewing (could not reproduce)
-    else
-        ResultsMat.ImageGridAmp = data;
-    end
+    ResultsMat.ImageGridAmp = data;
     ResultsMat.DisplayUnits = data_unit;
     ResultsMat.Time          = time;
     ResultsMat.DataFile      = sInputs.FileName;
     ResultsMat.HeadModelFile = head_model.FileName;
     ResultsMat.HeadModelType = head_model.HeadModelType;
+    ResultsMat.Options       = OPTIONS;
     ResultsMat.ChannelFlag   = [];
     ResultsMat.GoodChannel   = [];
     ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
