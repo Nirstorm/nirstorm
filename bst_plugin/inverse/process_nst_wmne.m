@@ -64,11 +64,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.TimeSegmentNoise.Value   = [];
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
 
-    sProcess.options.store_sparse_results.Comment = 'Store sparse results';
-    sProcess.options.store_sparse_results.Type    = 'checkbox';
-    sProcess.options.store_sparse_results.Value   = 0;
-    sProcess.options.store_sparse_results.Group   = 'output';
-
 end
 
 function s = str_pad(s,padsize)
@@ -103,7 +98,6 @@ if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
     sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
-    sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
 end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -116,7 +110,6 @@ end
 nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 measure_tag     = 'WL';
 OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
-store_sparse_results = sProcess.options.store_sparse_results.Value;
 
 %% Run dMNE
 bst_progress('start', 'Reconstruction by wMNE', 'Launching wMNE...');
