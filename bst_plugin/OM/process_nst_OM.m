@@ -113,7 +113,7 @@ else
     i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
     head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;  
     
-    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+exclude_scout = sHead.Atlas(i_atlas_head).Scouts(strcmp('FluenceExclude', {sHead.Atlas(i_atlas_head).Scouts.Label}));
     if ~isempty(exclude_scout)
         head_vertex_ids = setdiff(head_vertex_ids, exclude_scout.Vertices);
     end
