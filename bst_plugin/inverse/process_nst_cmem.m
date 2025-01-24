@@ -432,7 +432,7 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     % History
     ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
     % Save new file structure
-    bst_save(ResultFile, ResultsMat, 'v6');
+    bst_save(ResultFile, ResultsMat);
     % ===== REGISTER NEW FILE =====
     % Create new results structure
     newResult = db_template('results');
@@ -448,8 +448,10 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     bst_set('Study', sInputs.iStudy, sStudy);
 end
 
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' ', '_');
+function sfn = protect_fn_str(sfn)
+    sfn = strrep(sfn, ' ', '_');
+    sfn = strrep(sfn, '|','');
+    sfn = strrep(sfn, ':', '_');
 end
 
 function VoisinsOA = adj2Voisins(adj)
