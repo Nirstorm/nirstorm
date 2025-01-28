@@ -35,8 +35,13 @@ Fc = filter_cutoff * 2/sample_rate;
 signal_mean = mean(signal);
 signal = signal - signal_mean;
 if Fc<1
-    [fb,fa] = butter(filter_order,Fc);
-    signal_low = filtfilt(fb,fa,signal);
+    if bst_get('UseSigProcToolbox') 
+        [fb,fa] = butter(filter_order,Fc);
+        signal_low = filtfilt(fb,fa,signal);
+    else
+        [fb,fa] = oc_butter(filter_order,Fc);
+        signal_low = oc_filtfilt(fb,fa,signal);
+    end
 else
     signal_low = signal;
 end
