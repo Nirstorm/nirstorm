@@ -29,7 +29,7 @@ end
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
 sProcess.Comment     = 'Scalp Coupling Index';
-sProcess.Category    = 'Custom';
+sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1201;
 sProcess.isSeparator = 0;
@@ -61,17 +61,18 @@ Comment = sProcess.Comment;
 end
 
 function OutputFiles = Run(sProcess, sInputs)
-OutputFiles = {};
-for iInput=1:length(sInputs)
+
+    OutputFiles = {};
+
     % Load recordings
-    if strcmp(sInputs(iInput).FileType, 'data')     % Imported data structure
-        sDataIn = in_bst_data(sInputs(iInput).FileName);
-    elseif strcmp(sInputs(iInput).FileType, 'raw')  % Continuous data file
-        sDataIn = in_bst(sInputs(iInput).FileName, [], 1, 1, 'no');
+    if strcmp(sInputs.FileType, 'data')     % Imported data structure
+        sDataIn = in_bst_data(sInputs.FileName);
+    elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
+        sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
     end
     
 
-    ChannelMat = in_bst_channel(sInputs(iInput).ChannelFile);
+    ChannelMat = in_bst_channel(sInputs.ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
     
     signals = sDataIn.F(nirs_ichans,:);
@@ -96,12 +97,12 @@ for iInput=1:length(sInputs)
     sDataOut.DisplayUnits = '%';
     
     % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs(iInput).iStudy);
+    sStudy = bst_get('Study', sInputs.iStudy);
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
     sDataOut.FileName = file_short(OutputFile);
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
-    db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
     OutputFiles{end+1} = OutputFile;
 
     
@@ -118,12 +119,12 @@ for iInput=1:length(sInputs)
     sDataOut.DisplayUnits = '%';
     
     % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs(iInput).iStudy);
+    sStudy = bst_get('Study', sInputs.iStudy);
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
     sDataOut.FileName = file_short(OutputFile);
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
-    db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
     OutputFiles{end+1} = OutputFile;
 
     % Save time-series data
@@ -139,15 +140,14 @@ for iInput=1:length(sInputs)
     sDataOut.DisplayUnits = 'Hz';
     
     % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs(iInput).iStudy);
+    sStudy = bst_get('Study', sInputs.iStudy);
     OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
     sDataOut.FileName = file_short(OutputFile);
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
-    db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
 
     OutputFiles{end+1} = OutputFile;
-end
 end
 
 function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, low_cutoff, high_cutoff, wlen )
