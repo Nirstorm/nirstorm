@@ -81,16 +81,16 @@ for iInput=1:length(sInputs)
     
     fs = 1 / diff(sDataIn.Time(1:2));
 
-    [sci,xpower] = compute(signals,ChannelMat.Channel(nirs_ichans), fs,low_cutoff,high_cutoff );
+    [idx, sci, xpower, xpower_f] = compute(signals,ChannelMat.Channel(nirs_ichans), fs,low_cutoff,high_cutoff );
 
     % Save time-series data
-    data_out = zeros(size(sDataIn.F, 1), 1);
+    data_out = zeros(size(sDataIn.F, 1), length(idx));
     data_out(nirs_ichans,:) = 100*sci;
     sDataOut = db_template('data');
     sDataOut.F            = data_out;
     sDataOut.Comment      = 'SCI';
     sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.Time         = [1];
+    sDataOut.Time         = sDataIn.Time(idx);
     sDataOut.DataType     = 'recordings';
     sDataOut.nAvg         = 1;
     sDataOut.DisplayUnits = '%';
@@ -102,16 +102,17 @@ for iInput=1:length(sInputs)
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
     db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    OutputFiles{end+1} = OutputFile;
+
     
-    
-        % Save time-series data
-    data_out = zeros(size(sDataIn.F, 1), 1);
+    % Save time-series data
+    data_out = zeros(size(sDataIn.F, 1), length(idx));
     data_out(nirs_ichans,:) = 100*xpower;
     sDataOut = db_template('data');
     sDataOut.F            = data_out;
     sDataOut.Comment      = 'xpower';
     sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.Time         = [1];
+    sDataOut.Time         = sDataIn.Time(idx);
     sDataOut.DataType     = 'recordings';
     sDataOut.nAvg         = 1;
     sDataOut.DisplayUnits = '%';
@@ -123,17 +124,33 @@ for iInput=1:length(sInputs)
     bst_save(OutputFile, sDataOut, 'v7');
     % Register in database
     db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+    OutputFiles{end+1} = OutputFile;
+
+    % Save time-series data
+    data_out = zeros(size(sDataIn.F, 1), length(idx));
+    data_out(nirs_ichans,:) = xpower_f;
+    sDataOut = db_template('data');
+    sDataOut.F            = data_out;
+    sDataOut.Comment      = 'Cardiac frequency (xpower)';
+    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+    sDataOut.Time         = sDataIn.Time(idx);
+    sDataOut.DataType     = 'recordings';
+    sDataOut.nAvg         = 1;
+    sDataOut.DisplayUnits = 'Hz';
     
-    [sSubject, iSubject] = bst_get('Subject', sInputs(iInput).SubjectName);
-    panel_protocols('UpdateNode', 'Subject', iSubject);
-    panel_protocols('SelectNode', [], 'subject', iSubject, -1 );
-    % Save database
-    db_save();
-    
-    OutputFiles{iInput} = OutputFile;
+    % Generate a new file name in the same folder
+    sStudy = bst_get('Study', sInputs(iInput).iStudy);
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+    sDataOut.FileName = file_short(OutputFile);
+    bst_save(OutputFile, sDataOut, 'v7');
+    % Register in database
+    db_add_data(sInputs(iInput).iStudy, OutputFile, sDataOut);
+
+    OutputFiles{end+1} = OutputFile;
 end
 end
-function [sci,xpower] = compute(signals,Channel, fs,low_cutoff,high_cutoff,wlen )
+
+function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, low_cutoff, high_cutoff, wlen )
 %By: Guilherme A. Zimeo Morais 
 % https://github.com/GuilhermeZimeo/fNIRS-analysis
 %Contact: gazmorais@gmail.com
@@ -142,37 +159,43 @@ function [sci,xpower] = compute(signals,Channel, fs,low_cutoff,high_cutoff,wlen 
      if nargin < 4
          low_cutoff = 0.5;
      end
+
      if nargin < 5
          high_cutoff = 2.5;
      end
+
      if nargin < 6
         wlen  = 10; %10s sliding windows 
      end    
      
     order = 3;
-    wlen= round(wlen*fs); % convert s to sample
+    wlen = round(wlen*fs); % convert s to sample
     
     [b,a] = butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
     signals = filtfilt(b, a, signals'); % ntime x nchan
     
-    n_sample = size(signals,1);
-    n_channel=size(signals,2);
+    n_sample  = size(signals,1);
+    n_channel = size(signals,2);
     
     % Compute 0-lag cross-correlation
     pair_indexes = nst_get_pair_indexes_from_names({Channel(:).Name});
-    sci         = zeros(n_channel,1);
-    xpower    = zeros(n_channel,1);
-    
+
+    % windows starts
+    idx_win_start = 1:wlen:(n_sample-wlen);
+
+    sci         = zeros(n_channel,length(idx_win_start));
+    xpower      = zeros(n_channel,length(idx_win_start));
+    xpower_f    = zeros(n_channel,length(idx_win_start));
+
     for ipair=1:size(pair_indexes, 1)
         chan_indexes = pair_indexes(ipair, 1:2); %Consider only 2 first wavelengths
 
-        %run sliding window with length wlen
-        SCI_w = zeros(1,length(1:wlen:(n_sample-wlen)));
-        xpower_w = zeros(1,length(1:wlen:(n_sample-wlen)));
-        
+
         %initialize counter for sliding window iteration
         i=1;
-        for w=1:wlen:(n_sample-wlen)
+        for idx_win=1:length(idx_win_start)
+
+            w = idx_win_start(idx_win);
             
             %normalize data of each wavelength to its standard deviation
             wl1_norm = signals(w:w+wlen,chan_indexes(1))./std(signals(w:w+wlen,chan_indexes(1)),1);
@@ -180,27 +203,32 @@ function [sci,xpower] = compute(signals,Channel, fs,low_cutoff,high_cutoff,wlen 
 
             
             %calculate scalp coupling index
-            SCI_w(i) = xcorr(wl1_norm,wl2_norm,0,'coeff');
+            [xcorr_wl, lags] = xcorr(wl1_norm,wl2_norm,'coeff');
+            sci(chan_indexes,i) = xcorr_wl(lags == 0);
 
-            
-            xcorr_wl = xcorr(wl1_norm,wl2_norm,'coeff');
-            
             %Compute Power Spectrum of normalized cross correlation
-            X = xcorr_wl;
-            t = 1/fs:1/fs:length(X)/fs;
-            y = fft(X);
-            P2 = abs(y/length(t));
-            P1 = P2(1:round(length(t)/2));
-            
-            %calculate xpower
-            xpower_w(i) = max(P1);  
-            
+            L   = length(lags);
+            y   = fft(xcorr_wl);
+            P2 = abs(y / L );
+            P1 = P2(1:round(length(lags)/2));
+            P1(2:end-1) = 2*P1(2:end-1);
+
+            freq_fft = fs/L*(0:(L/2));
+
+            %calculate xpower and frequency
+            [max_power, idx] = max(P1);
+
+            xpower(chan_indexes,i) = max_power;   
+            xpower_f(chan_indexes,i) = freq_fft(idx);   
+
             i= i+1;
         end
+
          %final SCI and xpower values (median from sliding window)
-        sci(chan_indexes) = median(SCI_w);
-        xpower(chan_indexes) = median(xpower_w);
+        %sci(chan_indexes) = median(SCI_w);
+        %xpower(chan_indexes) = median(xpower_w);
     end
+
 end
 
 
