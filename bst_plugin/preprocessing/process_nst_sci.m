@@ -42,6 +42,11 @@ sProcess.OutputTypes = {'data','raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 
+
+sProcess.options.window_length.Comment = 'Window length';
+sProcess.options.window_length.Type    = 'value';
+sProcess.options.window_length.Value   = {10, 's', 0};
+
 sProcess.options.text1.Comment   = '<b>Export the following indicator</b>'; 
 sProcess.options.text1.Type    = 'label';
 
@@ -89,20 +94,19 @@ function OutputFiles = Run(sProcess, sInputs)
     end
     
     fs = 1 / diff(sDataIn.Time(1:2));
+    window_length = sProcess.options.window_length.Value{1};
 
-    ChannelMat = in_bst_channel(sInputs.ChannelFile);
-    [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+    ChannelMat          = in_bst_channel(sInputs.ChannelFile);
+    [nirs_ichans, tmp]  = channel_find(ChannelMat.Channel, 'NIRS');
     signals = sDataIn.F(nirs_ichans,:);
 
     if sProcess.options.option_coefficient_variation.Value
 
-        mu = movmean(signals,100,2);
-        sigma = movstd(signals,100,[],2);
-
+        CV = compute_CV(sDataIn.Time, signals, window_length);
 
         % Save time-series data
-        data_out = zeros(size(sDataIn.F, 1), size(mu,2));
-        data_out(nirs_ichans,:) = 100* mu ./ sigma;
+        data_out = zeros(size(sDataIn.F));
+        data_out(nirs_ichans,:) = 100 * CV;
         sDataOut = db_template('data');
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'Coefficent of Variation';
@@ -130,6 +134,7 @@ function OutputFiles = Run(sProcess, sInputs)
         
 
         [idx, sci, xpower, xpower_f] = compute(signals,ChannelMat.Channel(nirs_ichans), fs, low_cutoff, high_cutoff );
+        idx = sDataIn.Time;
 
         % Save time-series data
         data_out = zeros(size(sDataIn.F, 1), length(idx));
@@ -138,7 +143,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'SCI';
         sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = '%';
@@ -160,7 +165,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'xpower';
         sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = '%';
@@ -181,7 +186,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'Cardiac frequency (xpower)';
         sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.Time         = sDataIn.Time;
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = 'Hz';
@@ -237,23 +242,26 @@ function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, 
     % windows starts
     idx_win_start = 1:wlen:(n_sample-wlen);
 
-    sci         = zeros(n_channel,length(idx_win_start));
-    xpower      = zeros(n_channel,length(idx_win_start));
-    xpower_f    = zeros(n_channel,length(idx_win_start));
+    sci         = zeros(n_channel, n_sample);
+    xpower      = zeros(n_channel, n_sample);
+    xpower_f    = zeros(n_channel, n_sample);
 
     for ipair=1:size(pair_indexes, 1)
         chan_indexes = pair_indexes(ipair, 1:2); %Consider only 2 first wavelengths
 
 
         %initialize counter for sliding window iteration
-        i=1;
-        for idx_win=1:length(idx_win_start)
+        for i = 1:n_sample
+    
+            windows_start =  max( 1, i - wlen/2);
+            windows_end   =  min( n_sample, i + wlen/2);
+    
+            nirs_windows  = signals(windows_start:windows_end, chan_indexes);
 
-            w = idx_win_start(idx_win);
             
             %normalize data of each wavelength to its standard deviation
-            wl1_norm = signals(w:w+wlen,chan_indexes(1)) ./ std(signals(w:w+wlen,chan_indexes(1)),1);
-            wl2_norm = signals(w:w+wlen,chan_indexes(2)) ./ std(signals(w:w+wlen,chan_indexes(2)),1);
+            wl1_norm = nirs_windows(:,1) ./ std(nirs_windows(:,1));
+            wl2_norm = nirs_windows(:,2) ./ std(nirs_windows(:,2));
 
             
             %calculate scalp coupling index
@@ -274,10 +282,40 @@ function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, 
 
             xpower(chan_indexes,i) = max_power;   
             xpower_f(chan_indexes,i) = freq_fft(idx);   
-
-            i= i+1;
         end
 
     end
 
 end
+
+
+function CV = compute_CV(Time, signals, wlen)
+    if nargin < 6
+        wlen  = 10; %10s sliding windows 
+    end   
+
+    fs = 1 / diff(Time(1:2));
+    wlen = round(wlen*fs); % convert s to sample
+
+    n_channel = size(signals,1);
+    n_sample = size(signals,2);
+
+    mov_mean    = zeros(n_channel,n_sample); 
+    mov_std     = zeros(n_channel,n_sample); 
+
+    for i = 1:n_sample
+
+       windows_start =  max( 1,i - wlen/2);
+       windows_end   =  min( n_sample, i + wlen/2);
+
+       nirs_windows  = signals(:, windows_start:windows_end);
+       mov_mean(:,i) = mean(nirs_windows, 2 );
+       mov_std(:, i) = std(nirs_windows, [], 2);
+    end    
+
+    CV = mov_mean ./ mov_std;
+
+end
+
+
+
