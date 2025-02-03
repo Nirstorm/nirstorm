@@ -28,7 +28,7 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() %#ok<DEFNU>
 % Description the process
-sProcess.Comment     = 'Scalp Coupling Index';
+sProcess.Comment     = 'Signal Quality Control';
 sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1201;
@@ -42,14 +42,31 @@ sProcess.OutputTypes = {'data','raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 
+sProcess.options.text1.Comment   = '<b>Export the following indicator</b>'; 
+sProcess.options.text1.Type    = 'label';
+
+
+sProcess.options.option_coefficient_variation.Comment = 'Coefficient of variation';
+sProcess.options.option_coefficient_variation.Type    = 'checkbox';
+sProcess.options.option_coefficient_variation.Value   = 0;
+sProcess.options.option_coefficient_variation.Controller='variation';
+
+
+sProcess.options.option_sci.Comment = 'Scalp Coupling Index';
+sProcess.options.option_sci.Type    = 'checkbox';
+sProcess.options.option_sci.Value   = 0;
+sProcess.options.option_sci.Controller='sci';
 
 sProcess.options.option_low_cutoff.Comment = 'Bandpass Low cut-off';
 sProcess.options.option_low_cutoff.Type    = 'value';
 sProcess.options.option_low_cutoff.Value   = {0.5, 'Hz', 4};
+sProcess.options.option_low_cutoff.Class='sci';
 
 sProcess.options.option_high_cutoff.Comment = 'Bandpass High cut-off';
 sProcess.options.option_high_cutoff.Type    = 'value';
 sProcess.options.option_high_cutoff.Value   = {2.5, 'Hz', 4};
+sProcess.options.option_high_cutoff.Class='sci';
+
 
 end
 
@@ -71,83 +88,115 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
     end
     
+    fs = 1 / diff(sDataIn.Time(1:2));
 
     ChannelMat = in_bst_channel(sInputs.ChannelFile);
     [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
-    
     signals = sDataIn.F(nirs_ichans,:);
-    
-    low_cutoff = sProcess.options.option_low_cutoff.Value{1};
-    high_cutoff = sProcess.options.option_high_cutoff.Value{1};
-    
-    fs = 1 / diff(sDataIn.Time(1:2));
 
-    [idx, sci, xpower, xpower_f] = compute(signals,ChannelMat.Channel(nirs_ichans), fs,low_cutoff,high_cutoff );
+    if sProcess.options.option_coefficient_variation.Value
 
-    % Save time-series data
-    data_out = zeros(size(sDataIn.F, 1), length(idx));
-    data_out(nirs_ichans,:) = 100*sci;
-    sDataOut = db_template('data');
-    sDataOut.F            = data_out;
-    sDataOut.Comment      = 'SCI';
-    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.Time         = sDataIn.Time(idx);
-    sDataOut.DataType     = 'recordings';
-    sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = '%';
+        mu = movmean(signals,100,2);
+        sigma = movstd(signals,100,[],2);
+
+
+        % Save time-series data
+        data_out = zeros(size(sDataIn.F, 1), size(mu,2));
+        data_out(nirs_ichans,:) = 100* mu ./ sigma;
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = 'Coefficent of Variation';
+        sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.Time         = sDataIn.Time;
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = '%';
     
-    % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs.iStudy);
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
-    sDataOut.FileName = file_short(OutputFile);
-    bst_save(OutputFile, sDataOut, 'v7');
-    % Register in database
-    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
-    OutputFiles{end+1} = OutputFile;
+        % Generate a new file name in the same folder
+        sStudy = bst_get('Study', sInputs.iStudy);
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        OutputFiles{end+1} = OutputFile;
+
+    end
+
+    if sProcess.options.option_sci.Value
+
+        low_cutoff = sProcess.options.option_low_cutoff.Value{1};
+        high_cutoff = sProcess.options.option_high_cutoff.Value{1};
+        
+
+        [idx, sci, xpower, xpower_f] = compute(signals,ChannelMat.Channel(nirs_ichans), fs, low_cutoff, high_cutoff );
+
+        % Save time-series data
+        data_out = zeros(size(sDataIn.F, 1), length(idx));
+        data_out(nirs_ichans,:) = 100*sci;
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = 'SCI';
+        sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = '%';
+    
+        % Generate a new file name in the same folder
+        sStudy = bst_get('Study', sInputs.iStudy);
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        OutputFiles{end+1} = OutputFile;
 
     
-    % Save time-series data
-    data_out = zeros(size(sDataIn.F, 1), length(idx));
-    data_out(nirs_ichans,:) = 100*xpower;
-    sDataOut = db_template('data');
-    sDataOut.F            = data_out;
-    sDataOut.Comment      = 'xpower';
-    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.Time         = sDataIn.Time(idx);
-    sDataOut.DataType     = 'recordings';
-    sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = '%';
+        % Save time-series data
+        data_out = zeros(size(sDataIn.F, 1), length(idx));
+        data_out(nirs_ichans,:) = 100*xpower;
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = 'xpower';
+        sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = '%';
     
-    % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs.iStudy);
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
-    sDataOut.FileName = file_short(OutputFile);
-    bst_save(OutputFile, sDataOut, 'v7');
-    % Register in database
-    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
-    OutputFiles{end+1} = OutputFile;
+        % Generate a new file name in the same folder
+        sStudy = bst_get('Study', sInputs.iStudy);
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        OutputFiles{end+1} = OutputFile;
 
-    % Save time-series data
-    data_out = zeros(size(sDataIn.F, 1), length(idx));
-    data_out(nirs_ichans,:) = xpower_f;
-    sDataOut = db_template('data');
-    sDataOut.F            = data_out;
-    sDataOut.Comment      = 'Cardiac frequency (xpower)';
-    sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
-    sDataOut.Time         = sDataIn.Time(idx);
-    sDataOut.DataType     = 'recordings';
-    sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = 'Hz';
+        % Save time-series data
+        data_out = zeros(size(sDataIn.F, 1), length(idx));
+        data_out(nirs_ichans,:) = xpower_f;
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = 'Cardiac frequency (xpower)';
+        sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.Time         = sDataIn.Time(idx);
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = 'Hz';
     
-    % Generate a new file name in the same folder
-    sStudy = bst_get('Study', sInputs.iStudy);
-    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
-    sDataOut.FileName = file_short(OutputFile);
-    bst_save(OutputFile, sDataOut, 'v7');
-    % Register in database
-    db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        % Generate a new file name in the same folder
+        sStudy = bst_get('Study', sInputs.iStudy);
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+    
+        OutputFiles{end+1} = OutputFile;
+    end
 
-    OutputFiles{end+1} = OutputFile;
 end
 
 function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, low_cutoff, high_cutoff, wlen )
