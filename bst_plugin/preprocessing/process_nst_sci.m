@@ -171,9 +171,14 @@ function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, 
     order = 3;
     wlen = round(wlen*fs); % convert s to sample
     
-    [b,a] = butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
-    signals = filtfilt(b, a, signals'); % ntime x nchan
-    
+    if bst_get('UseSigProcToolbox') 
+        [b,a] = butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
+        signals = filtfilt(b, a, signals'); % ntime x nchan
+    else
+        [b,a] = oc_butter(order,[low_cutoff*2/fs high_cutoff*2/fs]);
+        signals = oc_filtfilt(b, a, signals'); % ntime x nchan
+    end
+
     n_sample  = size(signals,1);
     n_channel = size(signals,2);
     
