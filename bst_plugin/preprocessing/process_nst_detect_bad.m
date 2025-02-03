@@ -282,11 +282,11 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     
     % Remove channel with low SCI or power
     if options.option_sci.Value 
-        fs = 1 / diff(sData.Time(1:2));
-        [SCI, power] = process_nst_sci('compute',nirs_signal',channel_def.Channel(nirs_flags), fs);
+        fs = 1 / diff(sData.Time(1:2)); 
+        [~, SCI, power] = process_nst_sci('compute',nirs_signal',channel_def.Channel(nirs_flags), fs);
             
-        SCI = SCI *100;
-        power = power*100;
+        SCI     = median(SCI,2)   * 100;
+        power   = median(power,2) * 100;
         
         SCI_threshold = options.sci_threshold.Value{1};
         SCI_channels = false(1,nb_chnnels);
