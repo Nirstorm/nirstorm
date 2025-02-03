@@ -203,8 +203,8 @@ function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, 
             w = idx_win_start(idx_win);
             
             %normalize data of each wavelength to its standard deviation
-            wl1_norm = signals(w:w+wlen,chan_indexes(1))./std(signals(w:w+wlen,chan_indexes(1)),1);
-            wl2_norm = signals(w:w+wlen,chan_indexes(2))./std(signals(w:w+wlen,chan_indexes(2)),1);
+            wl1_norm = signals(w:w+wlen,chan_indexes(1)) ./ std(signals(w:w+wlen,chan_indexes(1)),1);
+            wl2_norm = signals(w:w+wlen,chan_indexes(2)) ./ std(signals(w:w+wlen,chan_indexes(2)),1);
 
             
             %calculate scalp coupling index
@@ -229,20 +229,6 @@ function [idx_win_start, sci, xpower, xpower_f] = compute(signals, Channel, fs, 
             i= i+1;
         end
 
-         %final SCI and xpower values (median from sliding window)
-        %sci(chan_indexes) = median(SCI_w);
-        %xpower(chan_indexes) = median(xpower_w);
     end
 
 end
-
-
-function sig = normalize(sig)
-nb_samples = size(sig, 2);
-
-% sig = 2 * (sig - repmat(min(sig,[],2), 1, nb_samples)) ./ ...
-%       repmat(max(sig,[],2)-min(sig,[],2), 1, nb_samples) - 1;
-%sig = sig - repmat(mean(sig,2), 1, nb_samples);
-sig = sig ./ repmat(std(sig, 0, 2), 1, nb_samples);
-end
-
