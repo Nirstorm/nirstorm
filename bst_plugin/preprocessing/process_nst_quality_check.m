@@ -1,5 +1,6 @@
-function varargout = process_nst_sci( varargin )
-% process_nst_sci: compute the Scalp Coupling Index
+function varargout = process_nst_quality_check( varargin )
+% process_nst_quality_check: compute several indicator of the signal
+% quality
 %
 % @=============================================================================
 % This function is part of the Brainstorm software:
@@ -19,14 +20,14 @@ function varargout = process_nst_sci( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Thomas Vincent, 2018
+% Authors: Edouard Delaire, 2025
 %
 eval(macro_method);
 end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription()
 % Description the process
 sProcess.Comment     = 'Signal Quality Control';
 sProcess.Category    = 'File';
@@ -79,7 +80,7 @@ end
 
 %% ===== FORMAT COMMENT =====
 function Comment = FormatComment(sProcess)
-Comment = sProcess.Comment;
+    Comment = sProcess.Comment;
 end
 
 function OutputFiles = Run(sProcess, sInputs)
@@ -311,7 +312,7 @@ function [Time, CV] = compute_CV(Time, signals, wlen)
        mov_std(:, i) = std(nirs_windows, [], 2);
     end    
 
-    CV = mov_mean ./ mov_std;
+    CV =  mov_std ./ mov_mean  ;
 
 end
 
