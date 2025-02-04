@@ -61,6 +61,9 @@ Comment = sProcess.Comment;
 end
 
 function OutputFiles = Run(sProcess, sInputs)
+
+warning('This process has been deprecated. Use Signal Quality Control instead')
+
 OutputFiles = {};
 for iInput=1:length(sInputs)
     % Load recordings
