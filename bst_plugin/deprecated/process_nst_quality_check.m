@@ -34,7 +34,7 @@ sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1201;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Scalp-coupling-index';
+sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Signal_quality_check';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
@@ -43,6 +43,8 @@ sProcess.OutputTypes = {'data','raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
 
+sProcess.options.text0.Comment   = '<b>Options</b>'; 
+sProcess.options.text0.Type    = 'label';
 
 sProcess.options.window_length.Comment = 'Window length';
 sProcess.options.window_length.Type    = 'value';
@@ -54,7 +56,7 @@ sProcess.options.text1.Type    = 'label';
 
 sProcess.options.option_coefficient_variation.Comment = 'Coefficient of variation';
 sProcess.options.option_coefficient_variation.Type    = 'checkbox';
-sProcess.options.option_coefficient_variation.Value   = 0;
+sProcess.options.option_coefficient_variation.Value   = 1;
 sProcess.options.option_coefficient_variation.Controller='variation';
 
 
@@ -73,7 +75,12 @@ sProcess.options.option_high_cutoff.Type    = 'value';
 sProcess.options.option_high_cutoff.Value   = {2.5, 'Hz', 4};
 sProcess.options.option_high_cutoff.Class='sci';
 
+sProcess.options.text2.Comment   = '<b>Export the following figures</b>'; 
+sProcess.options.text2.Type    = 'label';
 
+sProcess.options.option_light_intensity.Comment = 'Light intensity';
+sProcess.options.option_light_intensity.Type    = 'checkbox';
+sProcess.options.option_light_intensity.Value   = 0;
 end
 
 
@@ -207,6 +214,9 @@ function OutputFiles = Run(sProcess, sInputs)
         OutputFiles{end+1} = OutputFile;
     end
 
+    if sProcess.options.option_light_intensity.Value 
+        plot_intensity(sDataIn.Time, signals, window_length, ChannelMat.Channel(nirs_ichans));
+    end
 end
 
 function [Time, sci, xpower, xpower_f] = compute_SCI(Time, signals, wlen, Channel, low_cutoff, high_cutoff )
@@ -322,5 +332,38 @@ function [Time, CV] = compute_CV(Time, signals, wlen)
 
 end
 
+function [Time, hFig] = plot_intensity(Time, signals, wlen, Channel)
+    % Plot the light fall off. Light intensity as function of the
+    % source-detector distance
+    
 
+    groups = unique({Channel.Group});
+
+    hFig = figure('Color', 'k', 'Position', [200, 200, 560, 420]);
+    hold on;
+
+    for iGroup = 1:length(groups)
+        idx_chan = strcmp({Channel.Group},groups{iGroup});
+
+        separation_group = process_nst_separations('Compute', Channel(idx_chan)) * 100;
+        intensity_group  = mean(signals(idx_chan,:),2);
+
+        semilogy(separation_group, intensity_group,'.');
+    end
+
+    intensity  = mean(abs(signals),2);
+    M  = ceil(max(log10(abs(intensity(:)))));
+    yM = 10^M;
+
+    xM = min([max(separation_group)+0.5,100]);
+
+    axis([0,xM, 1e-6, yM]);
+    yscale log
+    xlabel('Source-Detector Separation ( mm )','Color','w')
+    ylabel('{\Phi_0} ( {\mu}W )','Color','w')
+    set(gca,'XColor','w','YColor','w','Xgrid','on','Ygrid','on','Color','k')
+    legend(groups,'Color','w')
+
+
+end
 
