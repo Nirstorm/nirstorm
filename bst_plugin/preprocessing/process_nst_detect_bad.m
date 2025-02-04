@@ -327,7 +327,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     if options.option_coefficient_variation.Value
         CV_threshold = options.coefficient_variation.Value{1};                 
         
-        window_length = 1000;
+        window_length = 10;
         [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
             
         CV = median(CV,2) * 100;
