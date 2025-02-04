@@ -268,11 +268,11 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     channel_flags   = sData.ChannelFlag;
     nirs_flags = strcmpi({channel_def.Channel.Type}, 'NIRS');
     
-    signal=sData.F';
-    nirs_signal=signal(:,nirs_flags);
+    signal      = sData.F';
+    nirs_signal = signal(:,nirs_flags);
     
-    nb_chnnels=size(signal,2);
-    nb_sample= size(signal,1);
+    nb_chnnels  = size(signal,2);
+    nb_sample   = size(signal,1);
 
     
     % Remove negative channel
@@ -282,11 +282,12 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     
     % Remove channel with low SCI or power
     if options.option_sci.Value 
-        fs = 1 / diff(sData.Time(1:2));
-        [SCI, power] = process_nst_sci('compute',nirs_signal',channel_def.Channel(nirs_flags), fs);
+
+        window_length = 10;
+        [~, SCI, power] = process_nst_quality_check('compute_SCI', sData.Time, nirs_signal', window_length, channel_def.Channel(nirs_flags));
             
-        SCI = SCI *100;
-        power = power*100;
+        SCI     = median(SCI,2)   * 100;
+        power   = median(power,2) * 100;
         
         SCI_threshold = options.sci_threshold.Value{1};
         SCI_channels = false(1,nb_chnnels);
@@ -325,18 +326,14 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     % Remove channel with high CV
     if options.option_coefficient_variation.Value
         CV_threshold = options.coefficient_variation.Value{1};                 
-        low_cutoff  = 1/200;
-        high_cutoff = 0.1;
-        order       = 2;
-        fs = 1 / diff(sData.Time(1:2));
+        
+        window_length = 1000;
+        [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
+            
+        CV = median(CV,2) * 100;
 
-        [nirs_filtered, transient] = process_nst_iir_filter('Compute',nirs_signal(100:end,:), fs, 'bandpass', low_cutoff, ...
-                                  high_cutoff, order, 1);
-        
-        CV = std(nirs_filtered,1,'omitnan')./mean(nirs_filtered,1).*100;
-        
         CV_channels = false(1,nb_chnnels);
-        CV_channels(nirs_flags) = CV>CV_threshold ;
+        CV_channels(nirs_flags) = CV > CV_threshold ;
         
         channel_flags(CV_channels) = -1; 
         criteria(end+1,:)= {'high coeffience variation channels', CV_channels,{}};

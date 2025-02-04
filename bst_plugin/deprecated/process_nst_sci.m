@@ -31,7 +31,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
 sProcess.Comment     = 'Scalp Coupling Index';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1201;
+sProcess.Index       = 0;
 sProcess.isSeparator = 0;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Scalp-coupling-index';
 
@@ -61,6 +61,9 @@ Comment = sProcess.Comment;
 end
 
 function OutputFiles = Run(sProcess, sInputs)
+
+warning('This process has been deprecated. Use Signal Quality Control instead')
+
 OutputFiles = {};
 for iInput=1:length(sInputs)
     % Load recordings
