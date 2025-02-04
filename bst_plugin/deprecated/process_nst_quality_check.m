@@ -106,7 +106,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
         % Save time-series data
         data_out = zeros(size(sDataIn.F));
-        data_out(nirs_ichans,:) = 100 * CV;
+        data_out(nirs_ichans,:) = CV;
         sDataOut = db_template('data');
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'Coefficent of Variation';
@@ -137,7 +137,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
         % Save time-series data
         data_out = zeros(size(sDataIn.F));
-        data_out(nirs_ichans,:) = 100*sci;
+        data_out(nirs_ichans,:) = sci;
         sDataOut = db_template('data');
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'SCI';
@@ -159,7 +159,7 @@ function OutputFiles = Run(sProcess, sInputs)
     
         % Save time-series data
         data_out = zeros(size(sDataIn.F));
-        data_out(nirs_ichans,:) = 100*xpower;
+        data_out(nirs_ichans,:) =  xpower;
         sDataOut = db_template('data');
         sDataOut.F            = data_out;
         sDataOut.Comment      = 'xpower';
