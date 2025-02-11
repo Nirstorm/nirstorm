@@ -10,5 +10,7 @@ function results = nst_misc_unpack_glm_result(results, model,method_name,mask)
 
     results.residuals(:,mask)=model.residuals;
     results.mse_residuals(:,mask)=model.mse_residuals;
+    results.dfe(mask) = model.dfe;
+
 end
 
