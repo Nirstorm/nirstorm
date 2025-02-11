@@ -66,6 +66,7 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
     sOutput = [];
     
     con_data = in_bst_data(sInputs(1).FileName);
+
     if isfield(con_data, 'SurfaceFile')
         surface_data = 1;
         
@@ -77,11 +78,13 @@ function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
 
     else
         surface_data = 0;
-        
-        con_mat = con_data.F';
-        con_std = real(con_data.Std)';
-        edf = con_data.edf;
 
+        ChannelMat = in_bst_channel(sInputs.ChannelFile);
+        [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
+
+        con_mat = con_data.F(nirs_ichans)';
+        con_std = real(con_data.Std(nirs_ichans))';
+        edf = con_data.edf(nirs_ichans);
     end
 
 

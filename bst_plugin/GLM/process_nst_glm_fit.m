@@ -249,8 +249,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         [nirs_ichans, tmp] = channel_find(ChannelMat.Channel, 'NIRS');
         Y       = DataMat.F(nirs_ichans,:)';
         mask    = [];
-        n_voxel = size(Y,2);
-        data_types = unique({ChannelMat.Channel.Group});
+        n_voxel = size(DataMat.F,1);
+        data_types = unique({ChannelMat.Channel(nirs_ichans).Group});
     end
     
     % TODO: Check for dOD
@@ -271,9 +271,13 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     %% Create model
     
     %Init GLM results struct
-    results = []; 
-    for data_type = data_types
-        bst_progress('text', sprintf('Fitting the model for %s',data_type{1})); 
+
+    results = [];
+    for  iData = 1:length(data_types)
+
+        data_type = data_types{iData};
+
+        bst_progress('text', sprintf('Fitting the model for %s',data_type)); 
 
         % Initialize model 
         model=nst_glm_initialize_model(DataMat.Time);
@@ -310,6 +314,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         low_cutoff = sProcess.options.hpf_low_cutoff.Value{1};
         high_cutoff = sProcess.options.hpf_high_cutoff.Value{1};
         apply_filer = 1; 
+
         if strcmp(filter_type, 'FIR_bp')
             param = sProcess.options.hpf_transition_band.Value{1};
         elseif strcmp(filter_type, 'IIR_bp')
@@ -317,6 +322,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         else
             apply_filer = 0;
         end
+
         if apply_filer
             model = nst_glm_apply_filter(model,filter_type, low_cutoff,high_cutoff,param  );
         end
@@ -329,14 +335,14 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         % Note: we add them after applying filter to the design matrix as
         % we know they have already been filter so we don't filter twice
 
-        if sProcess.options.SS_chan.Value==2 % based on distance
+        if sProcess.options.SS_chan.Value == 2 % based on distance
             separation_threshold_m = sProcess.options.SS_chan_distance.Value{1} / 100;
-            model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m,data_type);
+            model=nst_glm_add_regressors(model,'channel',sInput,'distance', separation_threshold_m, data_type);
     
-        elseif sProcess.options.SS_chan.Value==3 % based on name  
+        elseif sProcess.options.SS_chan.Value == 3 % based on name  
             if ~isempty(sProcess.options.SS_chan_name.Value)
                 SS_name=split(sProcess.options.SS_chan_name.Value,',');
-                model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name',data_type);
+                model=nst_glm_add_regressors(model,'channel',sInput,'name',SS_name', data_type);
             end    
         end   
 
