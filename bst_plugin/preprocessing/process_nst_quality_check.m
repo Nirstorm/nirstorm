@@ -106,7 +106,7 @@ function OutputFiles = Run(sProcess, sInputs)
     window_length = sProcess.options.window_length.Value{1};
 
     ChannelMat          = in_bst_channel(sInputs.ChannelFile);
-    [nirs_ichans, tmp]  = channel_find(ChannelMat.Channel, 'NIRS');
+    nirs_ichans  = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
     signals = sDataIn.F(nirs_ichans,:);
 
     if sProcess.options.option_coefficient_variation.Value
@@ -344,7 +344,6 @@ function [Time, hFig] = plot_intensity(Time, signals, wlen, Channel)
 
     for iGroup = 1:length(groups)
         idx_chan = strcmp({Channel.Group},groups{iGroup});
-
         separation_group = process_nst_separations('Compute', Channel(idx_chan)) * 100;
         intensity_group  = mean(signals(idx_chan,:),2);
 
@@ -358,10 +357,9 @@ function [Time, hFig] = plot_intensity(Time, signals, wlen, Channel)
     xM = min([max(separation_group)+0.5,100]);
 
     axis([0,xM, 1e-6, yM]);
-    yscale log
-    xlabel('Source-Detector Separation ( mm )','Color','w')
+    xlabel('Source-Detector Separation ( cm )','Color','w')
     ylabel('{\Phi_0} ( {\mu}W )','Color','w')
-    set(gca,'XColor','w','YColor','w','Xgrid','on','Ygrid','on','Color','k')
+    set(gca,'YScale', 'log', 'XColor','w','YColor','w','Xgrid','on','Ygrid','on','Color','k')
     legend(groups,'Color','w')
 
 
