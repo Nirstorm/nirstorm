@@ -35,7 +35,7 @@ sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import','data', 'raw'};
 % Definition of the outputs of this process
-sProcess.OutputTypes = {'data', 'raw'};
+sProcess.OutputTypes = {'data', 'data', 'raw'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 sProcess.isSeparator = 0;
