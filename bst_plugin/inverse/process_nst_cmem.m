@@ -150,8 +150,7 @@ for iMap = 1:length(sResults)
      [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
                                           sResults(iMap).Comment, sInputs, sStudy, ...
                                           sResults(iMap).History, sResults(iMap).Units , ...
-                                          sResults(iMap).Options, ...
-                                          sResults(iMap).MEMoptions);
+                                          sResults(iMap).Options);
 
     OutputFiles{end+1} = ResultFile;
 
@@ -215,21 +214,20 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
         if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM')
-            selected_samples = result.MEMoptions.automatic.selected_samples;
+            selected_samples = sOptions(iwl).automatic.selected_samples;
 
             % sort the sample by time instead of energy
             [~,ia] = sort(selected_samples(1,:));
             result.ImageGridAmp{1} = result.ImageGridAmp{1}(:,ia);
             result.ImageGridAmp{2} = result.ImageGridAmp{2}(ia,:);
 
-            result.MEMoptions.automatic.selected_samples = result.MEMoptions.automatic.selected_samples(:,ia);
+            sOptions(iwl).automatic.selected_samples = selected_samples(:,ia);
         end
-        result.Options =  sOptions(iwl).MEMpaneloptions;
-        result.Comment =  [result.MEMoptions.automatic.Comment ' | ' swl 'nm'];
-        result.History =  [result.MEMoptions.automatic.Comment];
+        
+        result.Options =  sOptions(iwl);
+        result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
+        result.History =  [sOptions(iwl).Comment];
         result.Units   =  'OD';
-        result.MEMoptions.automatic.neighborhood_order = sOptions(iwl).MEMpaneloptions.clustering.neighborhood_order;
-        result.MEMoptions.automatic.valid_nodes = valid_nodes;
         
         sResults(iwl) = result;
     end
@@ -278,7 +276,8 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     for iHb = 1:3
         sResults_hb(iHb).Comment = [ sResults(end).History     ' | ' hb_types{iHb}];
         sResults_hb(iHb).History = sResults(end).History;
-        sResults_hb(iHb).Units = hb_unit;
+        sResults_hb(iHb).Units   = hb_unit;
+
         if iscell(sResults_hb(iHb).ImageGridAmp )
             sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
         else
@@ -294,11 +293,17 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     end
     mapping = sparse(mapping);
 
+    isSaveFactor = isfield(sOptions(1), 'output') && sOptions(1).output.save_factor;
+
     for iMap = 1:length(sResults)
         if iscell(sResults(iMap).ImageGridAmp)
             sResults(iMap).ImageGridAmp = [ {mapping} sResults(iMap).ImageGridAmp ];
         else
-            sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+            if isSaveFactor
+                sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+            else
+                sResults(iMap).ImageGridAmp  = mapping *  sResults(iMap).ImageGridAmp;
+            end
         end
     end
 end
