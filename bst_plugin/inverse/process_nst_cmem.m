@@ -293,11 +293,17 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     end
     mapping = sparse(mapping);
 
+    isSaveFactor = isfield(sOptions(1), 'output') && sOptions(1).output.save_factor;
+
     for iMap = 1:length(sResults)
         if iscell(sResults(iMap).ImageGridAmp)
             sResults(iMap).ImageGridAmp = [ {mapping} sResults(iMap).ImageGridAmp ];
         else
-            sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+            if isSaveFactor
+                sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+            else
+                sResults(iMap).ImageGridAmp  = mapping *  sResults(iMap).ImageGridAmp;
+            end
         end
     end
 end
