@@ -209,12 +209,12 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     elseif strcmp(sInput.FileType, 'results')  % Imported data on the cortex
         surface_data = 1;
         
-        DataMat = in_bst_data(sInput.FileName);
+        DataMat = in_bst_results(sInput.FileName);
         channel_data = in_bst_data(DataMat.DataFile);
 
         % Make sure time axis is consistent
         assert(all(channel_data.Time == DataMat.Time));
-        if isempty(DataMat.Events) && isfield(channel_data, 'Events')
+        if (~isfield(DataMat,'Events') || isempty(DataMat.Events) )&& isfield(channel_data, 'Events')  
             DataMat.Events = channel_data.Events;
         end
     end
