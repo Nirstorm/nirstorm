@@ -401,7 +401,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
     
     if surface_data
         [sStudy, ResultFile] = nst_bst_add_surf_data(results.B', 1:nb_regressors, [], 'surf_glm_res', output_comment, ...
-                                                     [], sStudy, 'GLM', DataMat.SurfaceFile, 0, extra_output);
+                                                     sInput, sStudy, 'GLM estimate model', DataMat.SurfaceFile, 0, extra_output);
         OutputFiles{end+1} = ResultFile;
     else
         sDataOut = db_template('data');
