@@ -36,7 +36,8 @@ function sProcess = GetDescription() %#ok<DEFNU>
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'raw', 'data'};
     % Definition of the outputs of this process
-    sProcess.OutputTypes = {'data', 'data'};
+    sProcess.OutputTypes = {'results', 'results'};
+
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     % Definition of the options
@@ -81,6 +82,7 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+
 OutputFiles = {};
 
 sStudy = bst_get('Study', sInputs.iStudy);
@@ -93,7 +95,8 @@ end
 nirs_head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 nirs_head_model.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 
-%% Load recordings (TODO handle raw/data) 
+%% Load recordings 
+
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
@@ -107,49 +110,36 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
-nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
-measure_tag     = 'WL';
-OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
+
 
 %% Run dMNE
-bst_progress('start', 'Reconstruction by wMNE', 'Launching wMNE...');
-[mapping, dOD_sources_wMNE,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn );
+bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
+
+OPTIONS  = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
+sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 
 
 bst_progress('text', 'Saving Results...');
-if OPTIONS.depth_weigth_MNE > 0
-    function_name='wMNE';
-else
-    function_name='MNE';
-end    
-for iwl=1:nb_wavelengths
-OPTIONS.DataTime  = [];
-    swl = [measure_tag num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-    [sStudy, ResultFile] = add_surf_data({mapping, squeeze(dOD_sources_wMNE(:,iwl,:))}, sDataIn.Time, nirs_head_model, ...
-                                        [function_name ' sources - ' swl 'nm'], ...
-                                        sInputs, sStudy, [function_name 'sources reconstruction'], ...
-                                        'OD', OPTIONS);    
-    
+
+for iMap = 1:length(sResults)
+
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' protect_fn_str(sResults(iMap).Comment)]);
+
+    ResultsMat = sResults(iMap);
+    ResultsMat.DataFile   = sInputs.FileName;
+    ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
+    ResultsMat.Options       = OPTIONS;
+    ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
+
+    bst_save(ResultFile, ResultsMat, 'v6');
+    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
+
     OutputFiles{end+1} = ResultFile;
+
 end
 
-hb_unit_factor = 1e6;
-hb_unit = '\mumol.l-1';
-hb_types = {'HbO', 'HbR', 'HbT'};
+bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
 
-for ihb=1:3
-    
-    [sStudy, ResultFile] = add_surf_data({mapping, squeeze(Hb_sources(:,ihb,:)) .* hb_unit_factor},...
-                                         sDataIn.Time, nirs_head_model, ...
-                                         [function_name ' sources - ' hb_types{ihb}], ...
-                                         sInputs, sStudy, [function_name ' sources reconstruction - dHb'], ...
-                                         hb_unit, []);    
-    OutputFiles{end+1} = ResultFile;
-end
-
-bst_progress('stop', 'Reconstruction by wMNE', 'Finishing...');
-% Update Brainstorm database
-bst_set('Study', sInputs.iStudy, sStudy);
 end
 
 function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
@@ -159,12 +149,13 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.NoiseCov_recompute = sProcess.options.NoiseCov_recompute.Value;
     OPTIONS.depth_weigth_MNE = sProcess.options.depth_weightingMNE.Value{1};
 
-    OPTIONS.Comment = 'wMNE';
+    OPTIONS.Comment       = 'MNE';
     OPTIONS.DataFile      = DataFile;
     OPTIONS.DataTime      = round(sDataIn.Time,6);
     OPTIONS.ResultFile    = [];
-    OPTIONS.HeadModelFile =  HeadModel.FileName;
-    OPTIONS.FunctionName  = 'wMNE';
+    OPTIONS.HeadModelFile =  file_short(HeadModel.FileName);
+    OPTIONS.FunctionName  = 'MNE';
+
     if isfield(sProcess.options.TimeSegmentNoise, 'Value') && iscell(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value{1})
         OPTIONS.BaselineSegment  = sProcess.options.TimeSegmentNoise.Value{1};
     else    
@@ -180,125 +171,89 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
 end
 
-function [mapping,dOD_sources,Hb_sources] = Compute(OPTIONS,ChannelMat, sDataIn )
+function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
+
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
-    cortex = in_tess_bst(nirs_head_model.SurfaceFile);
+    sCortex         = in_tess_bst(nirs_head_model.SurfaceFile);
     
-    nb_nodes = size(cortex.Vertices, 1);
+    nb_nodes = size(sCortex.Vertices, 1);
     nb_samples = length(sDataIn.Time);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 
-    HM.SurfaceFile = nirs_head_model.SurfaceFile;
 
     %% define the reconstruction FOV
-    thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
-    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, sDataIn.ChannelFlag);
+    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, sCortex, OPTIONS.thresh_dis2cortex, sDataIn.ChannelFlag);
+    HM.SurfaceFile = nirs_head_model.SurfaceFile;
+    HM.vertex_connectivity  = sCortex.VertConn(valid_nodes, valid_nodes);
+    OPTIONS.MEMpaneloptions.optional.cortex_vertices = sCortex.Vertices(valid_nodes, :); 
 
-    OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
-    HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
 
-    dOD_sources = zeros(length(valid_nodes), nb_wavelengths, nb_samples);
+
+    sResults = repmat(db_template('resultsmat'), 1, nb_wavelengths);
+    isReconstructed = true(1, nb_wavelengths); 
 
     for iwl=1:nb_wavelengths
+        
+        bst_progress('text', sprintf('Running wMNE for wavelength # %d ...', iwl));
+        
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
         selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (sDataIn.ChannelFlag>0)';
         
+        if ~any(selected_chans)
+            isReconstructed(iwl) = false;
+            continue
+        end
+
         OPTIONS.GoodChannel = ones(sum(selected_chans), 1);
         OPTIONS.ChannelFlag = ones(sum(selected_chans), 1);
         OPTIONS.Channel     = ChannelMat.Channel(selected_chans);
-        OPTIONS.Data = sDataIn.F(selected_chans,:);
+        OPTIONS.Data        = sDataIn.F(selected_chans,:);
 
-        gain    = nst_headmodel_get_gains(nirs_head_model,iwl, ChannelMat.Channel, find(selected_chans));
+        gain    = nst_headmodel_get_gains(nirs_head_model, iwl, ChannelMat.Channel, find(selected_chans));
         HM.Gain = gain(:,valid_nodes);
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
-
-        bst_progress('text', ['WL' num2str(iwl) ', kept ' num2str(length(valid_nodes)) ...
-                 ' nodes that were in VOI and have non-zero sensitivity']);
-    
-        %% launch dMNE 
-        bst_progress('text', ['Running wMNE for wavelength #' num2str(iwl) '...']);
 
         % MNE results
         Results = nst_mne_lcurve(HM, OPTIONS);
 
-        grid_amp = zeros(length(valid_nodes), nb_samples);
-        sample = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
+        grid_amp    = zeros(length(valid_nodes), nb_samples);
+        sample      = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
         grid_amp(:,sample(1):sample(2)) = Results;
         
-        dOD_sources(:, iwl, :) = grid_amp;
-    end
 
-    bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
-    % Compute dHb
-    hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
-    hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
 
-    Hb_sources = zeros(length(valid_nodes), 3, nb_samples);
-    for inode=1:length(valid_nodes)
-        Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
-                                    squeeze(dOD_sources(inode, :, :));
-    
+        sResults(iwl).Comment       = sprintf('MNE sources | %s nm', swl);
+        sResults(iwl).ChannelFlag   = OPTIONS.ChannelFlag;
+        sResults(iwl).ImageGridAmp  = grid_amp;
+        sResults(iwl).Time          = OPTIONS.DataTime;
+        sResults(iwl).DisplayUnits  = 'OD';
+        sResults(iwl).HeadModelType = file_short(nirs_head_model.HeadModelType);
+        sResults(iwl).Function      = 'MNE';
+
     end
-    Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
+    % Filter reconstructed wavelengh
+    sResults = sResults(isReconstructed);
+
+    % Compute MBLL 
+    if length(sResults) > 1
+
+        sResults_hb = nst_mbll_source(sResults, ChannelMat.Nirs.Wavelengths(isReconstructed));
+        sResults    = [ sResults, sResults_hb];
+
+    end
 
     mapping = zeros(nb_nodes, length(valid_nodes)); 
     for iNode = 1:length(valid_nodes)
         mapping(valid_nodes(iNode), iNode) = 1;
     end
-    mapping = sparse(mapping);
-end
 
-function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
-                                              sInputs, sStudy, history_comment, ...
-                                              data_unit, OPTIONS)
-                                          
-    if nargin < 8
-        data_unit = '';
+    mapping = sparse(mapping);
+    for iMap = 1:length(sResults)
+        sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
+
     end
     
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                            ['results_NIRS_' protect_fn_str(name)]);
-                        
-    % ===== CREATE FILE STRUCTURE =====
-    ResultsMat = db_template('resultsmat');
-    ResultsMat.Comment       = name;
-    ResultsMat.Function      = '';
-    ResultsMat.ImageGridAmp = data;
-    ResultsMat.DisplayUnits = data_unit;
-    ResultsMat.Time          = time;
-    ResultsMat.DataFile      = sInputs.FileName;
-    ResultsMat.HeadModelFile = head_model.FileName;
-    ResultsMat.HeadModelType = head_model.HeadModelType;
-    ResultsMat.Options       = OPTIONS;
-    ResultsMat.ChannelFlag   = [];
-    ResultsMat.GoodChannel   = [];
-    ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc    = [];
-    ResultsMat.GridOrient = [];
-    ResultsMat.nAvg      = 1;
-    % History
-    ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
-    % Save new file structure
-    bst_save(ResultFile, ResultsMat, 'v6');
-    % ===== REGISTER NEW FILE =====
-    % Create new results structure
-    newResult = db_template('results');
-    newResult.Comment       = name;
-    newResult.FileName      = file_short(ResultFile);
-    newResult.DataFile      = sInputs.FileName;
-    newResult.isLink        = 0;
-    newResult.HeadModelType = ResultsMat.HeadModelType;
-    % Add new entry to the database
-    iResult = length(sStudy.Result) + 1;
-    sStudy.Result(iResult) = newResult;
-    % Update Brainstorm database
-    bst_set('Study', sInputs.iStudy, sStudy);
 end
-
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' ', '_');
-end
-
 
 function [idX] = be_closest(vecGuess, vecRef)
 % This function returns the index of the closest value of VECREF to those 
@@ -309,4 +264,11 @@ for ii  =   1 : numel(vecGuess)
     [dum, idX(ii)]  =   min( abs(vecGuess(ii)-vecRef) );     
 end
 
+end
+
+function sfn = protect_fn_str(s)
+    sfn = strrep(s, ' | ', '--');
+    sfn = strrep(s, ' : ', '--');
+    sfn = strrep(s, ' :', '--');
+    sfn = strrep(s, ' ', '_');
 end
