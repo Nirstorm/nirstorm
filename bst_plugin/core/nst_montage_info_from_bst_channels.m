@@ -112,8 +112,14 @@ pair_names = pair_to_chans.keys;
 pair_ichans = zeros(nb_pairs, nb_measures);
 pair_loc = zeros(nb_pairs, 3, 2);
 pair_sd_indexes = zeros(nb_pairs, 2);
+
+
 for ipair=1:nb_pairs
     p_indexes = pair_to_chans(pair_names{ipair});
+
+    if ~all(p_indexes > 0)
+        continue;
+    end
     pair_ichans(ipair, :) = p_indexes;
     pair_loc(ipair, : , :) = channel_def(pair_ichans(ipair, 1)).Loc;
     sdi = pair_to_sd(pair_names{ipair});
