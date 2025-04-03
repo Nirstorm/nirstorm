@@ -52,11 +52,6 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.mem.Value   = be_main;
     
 
-    %TODO: remove option
-    sProcess.options.auto_neighborhood_order.Comment = 'Set neighborhood order automatically (default)';
-    sProcess.options.auto_neighborhood_order.Type    = 'checkbox';
-    sProcess.options.auto_neighborhood_order.Value   = 1;
-   
 end
 
 %% ===== FORMAT COMMENT =====
@@ -173,15 +168,6 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
 
-    %% estimate the neighborhood order for cMEM  (goal: # of clusters ~= # of good channels) 
-    if OPTIONS.flag_auto_nbo
-        swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(1))];
-        n_channel = sum(strcmpi({ChannelMat.Channel.Group}, swl) & (sDataIn.ChannelFlag>0)');
-    
-        nbo = estimate_nbo(cortex, valid_nodes, n_channel, 1 );
-        OPTIONS.MEMpaneloptions.clustering.neighborhood_order = nbo;
-    end
-
     isReconstructed = true(1, nb_wavelengths); 
     for iwl=1:nb_wavelengths
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
@@ -274,77 +260,9 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
 end
 
 
-function nbo = estimate_nbo (cortex, valid_nodes, nClust,isRandom)
-
-    if nargin < 4
-        isRandom = 1; 
-    end
-
-    bst_progress('text', 'Setting neighborhood order for clustering automatically...');
-    
-    % see panel_scout.m line 2019
-    % Split hemispheres
-
-    [rH, lH] = tess_hemisplit(cortex);
-    rH       = intersect(rH,valid_nodes);
-    lH       = intersect(lH,valid_nodes);
-
-    if ~isempty(rH) && ~isempty(lH)
-        isConnected = 0;
-    else
-        isConnected = 1;
-    end
-
-    % Clustering
-    if isConnected
-        Labels = tess_cluster(cortex.VertConn(valid_nodes,valid_nodes), nClust, isRandom);
-    else
-        ratiolH = length(lH)./(length(lH)+length(rH));
-        ratiorH = length(rH)./(length(lH)+length(rH));
-        Labels = ones(length(valid_nodes), 1); 
-        Labels(ismember(valid_nodes,lH)) = tess_cluster(cortex.VertConn(lH,lH), max(1,round(nClust.*ratiolH)), isRandom);
-        Labels(ismember(valid_nodes,rH)) = tess_cluster(cortex.VertConn(rH,rH), max(1,round(nClust.*ratiorH)), isRandom) + max(Labels(ismember(valid_nodes,lH)));
-    end    
-    uniqueLabels = unique(Labels);
-    
-    % neighborhood order list
-    VoisinsOA = adj2Voisins(cortex.VertConn(valid_nodes,valid_nodes));
-    neighborhood_order = zeros(length(uniqueLabels),1);
-    for iScout = 1:length(uniqueLabels)
-        vertices = find(Labels == uniqueLabels(iScout));
-        seed = vertices(1);
-        [~,nbo_idx] = min(abs(VoisinsOA(:,seed) - length(vertices)));
-        neighborhood_order(iScout) = nbo_idx;     
-    end
-
-    % MEM clustering is different to the one above +2 is an emperical value
-    % best way should be tuning nbo in be_create_clusters.m but it takes a
-    % lot of time to compute. 
-    nbo = round(mean(neighborhood_order))+2; 
-end
-
-
 function sfn = protect_fn_str(sfn)
     sfn = strrep(sfn, ' ', '_');
     sfn = strrep(sfn, '|','');
     sfn = strrep(sfn, ':', '_');
 end
 
-function VoisinsOA = adj2Voisins(adj)
-    % Convert the adjacency matrix 'adj' to 'VoisinsOA' neighbor cell vector
-    len = length(adj);
-    
-    VoisinsOA = zeros(12,len);
-    
-    %h = waitbar(0,'Please wait...');
-    for iScale = 1:12
-        adj_i = logical(adj^iScale);
-        adj_i(logical(eye(size(adj_i)))) = 0;
-        for iSource = 1:len
-           VoisinsOA(iScale,iSource) = length(find(adj_i(iSource,:)));
-        end
-        %waitbar(iScale / 12)
-    end
-    %close(h) 
-
-end
