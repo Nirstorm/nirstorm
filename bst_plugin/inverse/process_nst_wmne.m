@@ -245,16 +245,8 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
     end
 
-    mapping = zeros(nb_nodes, length(valid_nodes)); 
-    for iNode = 1:length(valid_nodes)
-        mapping(valid_nodes(iNode), iNode) = 1;
-    end
-
-    mapping = sparse(mapping);
-    for iMap = 1:length(sResults)
-        sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
-
-    end
+    isSaveFactor =  1;
+    sResults = nst_misc_FOV_to_cortex(sResults, nb_nodes, valid_nodes, isSaveFactor);
     
 end
 

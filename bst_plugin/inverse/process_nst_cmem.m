@@ -252,28 +252,9 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
     end
 
-
-    mapping = zeros(nb_nodes, length(valid_nodes)); 
-    for iNode = 1:length(valid_nodes)
-        mapping(valid_nodes(iNode), iNode) = 1;
-    end
-    mapping = sparse(mapping);
-
     isSaveFactor = isfield(sOptions(1), 'output') && sOptions(1).output.save_factor;
-
-    for iMap = 1:length(sResults)
-        if iscell(sResults(iMap).ImageGridAmp)
-            sResults(iMap).ImageGridAmp = [ {mapping} sResults(iMap).ImageGridAmp ];
-        else
-            if isSaveFactor
-                sResults(iMap).ImageGridAmp  = {mapping ,  sResults(iMap).ImageGridAmp};
-            else
-                sResults(iMap).ImageGridAmp  = mapping *  sResults(iMap).ImageGridAmp;
-            end
-        end
-    end
+    sResults = nst_misc_FOV_to_cortex(sResults, nb_nodes, valid_nodes, isSaveFactor);
 end
-
 
 function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     MethodOptions.MEMpaneloptions =   sProcess.options.mem.Value.MEMpaneloptions;
