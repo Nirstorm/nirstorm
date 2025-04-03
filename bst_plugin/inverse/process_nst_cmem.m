@@ -175,7 +175,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
     %% define the reconstruction FOV
     thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
-    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex,sDataIn.ChannelFlag );
+    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, sDataIn.ChannelFlag );
 
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
@@ -189,11 +189,16 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         OPTIONS.MEMpaneloptions.clustering.neighborhood_order = nbo;
     end
 
-       
+    isReconstructed = true(1, nb_wavelengths); 
     for iwl=1:nb_wavelengths
         swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
         selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (sDataIn.ChannelFlag>0)';
         
+        if ~any(selected_chans)
+            isReconstructed(iwl) = false;
+            continue
+        end
+
         OPTIONS.GoodChannel     = ones(sum(selected_chans), 1);
         OPTIONS.ChannelFlag     = ones(sum(selected_chans), 1);
         OPTIONS.Channel         = ChannelMat.Channel(selected_chans);
@@ -232,60 +237,18 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         sResults(iwl) = result;
     end
     
-    bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
-    % Compute dHb
-    hb_extinctions = nst_get_hb_extinctions(ChannelMat.Nirs.Wavelengths);
-    hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
+    % Filter reconstructed wavelengh
+    sResults = sResults(isReconstructed);
+    sOptions = sOptions(isReconstructed);
 
-    if ~iscell(sResults(1).ImageGridAmp)
-        dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
-    else
-        isConsistent = 1;
-        for iResult = 2:length(sResults)
-            isConsistent =  isConsistent && isequal( sResults(1).ImageGridAmp{2}, sResults(iResult).ImageGridAmp{2});
-        end
+    % Compute MBLL 
+    if length(sResults) > 1
 
-        if isConsistent
-            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
-            for iResult = 1:length(sResults)
-                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
-            end
-        else
-            % If not consistent, go back to full time-course
-            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
-            for iResult = 1:length(sResults)
-                sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
-                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
-            end
-        end
+        sResults_hb = nst_mbll_source(sResults, ChannelMat.Nirs.Wavelengths(isReconstructed));
+        sResults    = [ sResults, sResults_hb];
+
     end
 
-    Hb_sources = zeros(length(valid_nodes), 3, size(dOD_sources,3));
-    for inode=1:length(valid_nodes)
-        Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
-                                    squeeze(dOD_sources(inode, :, :));
-    
-    end
-    Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
-
-    hb_unit_factor = 1e6;
-    hb_unit = '\mumol.l-1';
-    hb_types = {'HbO', 'HbR','HbT'};
-
-    sResults_hb = repmat(sResults(1), 1, 3);
-    for iHb = 1:3
-        sResults_hb(iHb).Comment = [ sResults(end).History     ' | ' hb_types{iHb}];
-        sResults_hb(iHb).History = sResults(end).History;
-        sResults_hb(iHb).Units   = hb_unit;
-
-        if iscell(sResults_hb(iHb).ImageGridAmp )
-            sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
-        else
-            sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
-        end
-    end
-
-    sResults = [ sResults, sResults_hb];
 
     mapping = zeros(nb_nodes, length(valid_nodes)); 
     for iNode = 1:length(valid_nodes)
@@ -435,6 +398,8 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     ResultsMat.nAvg          = 1;
 
     % History
+    tmp = in_bst_data( sInputs.FileName, 'History');
+    ResultsMat.History = tmp.History;
     ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
     % Save new file structure
     bst_save(ResultFile, ResultsMat);
