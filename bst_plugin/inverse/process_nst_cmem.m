@@ -230,7 +230,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
             sOptions(iwl).automatic.selected_samples = selected_samples(:,ia);
         end
-        
+        result.Time    = OPTIONS.DataTime;
         result.Options =  sOptions(iwl);
         result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
         result.History  = OPTIONS.History;
