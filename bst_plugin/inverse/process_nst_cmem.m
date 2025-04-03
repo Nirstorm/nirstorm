@@ -143,23 +143,25 @@ bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...'
 sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 
 %% Save results
-
 bst_progress('text', 'Saving Results...');
 
 for iMap = 1:length(sResults)
-     [sStudy, ResultFile] = add_surf_data(sResults(iMap).ImageGridAmp , sDataIn.Time, nirs_head_model, ...
-                                          sResults(iMap).Comment, sInputs, sStudy, ...
-                                          sResults(iMap).History, sResults(iMap).Units , ...
-                                          sResults(iMap).Options);
+
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' protect_fn_str(sResults(iMap).Comment)]);
+
+    ResultsMat = sResults(iMap);
+    ResultsMat.DataFile   = sInputs.FileName;
+    ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
+    ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
+
+    bst_save(ResultFile, ResultsMat, 'v6');
+    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
     OutputFiles{end+1} = ResultFile;
 
 end
 
-
-bst_progress('stop', ['Reconstruction by ' pipeline], 'Finishing...');
-% Update Brainstorm database
-bst_set('Study', sInputs.iStudy, sStudy);
+bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
 end
 
 function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
@@ -231,8 +233,9 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         
         result.Options =  sOptions(iwl);
         result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
-        result.History =  [sOptions(iwl).Comment];
-        result.Units   =  'OD';
+        result.History  = OPTIONS.History;
+        result = bst_history('add', result, 'compute', sOptions(iwl).Comment );
+        result.DisplayUnits   =  'OD';
         
         sResults(iwl) = result;
     end
@@ -306,6 +309,10 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.DataFile        = DataFile;
     OPTIONS.ResultFile      = [];
     OPTIONS.HeadModelFile   =  HeadModel.FileName;
+    
+    sDataIn = in_bst_data(DataFile, 'History');
+    OPTIONS.History       = sDataIn.History;
+
     OPTIONS.FunctionName    = 'mem';
 
 end
@@ -360,63 +367,6 @@ function nbo = estimate_nbo (cortex, valid_nodes, nClust,isRandom)
     nbo = round(mean(neighborhood_order))+2; 
 end
 
-function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
-                                              sInputs, sStudy, history_comment, ...
-                                              data_unit, OPTIONS, MEMoptions)
-                                          
-    if nargin < 8
-        data_unit = '';
-    end
-    if nargin < 9
-        OPTIONS = [];
-    end
-    
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                            ['results_NIRS_' protect_fn_str(name)]);
-                        
-    % ===== CREATE FILE STRUCTURE =====
-    ResultsMat = db_template('resultsmat');
-    ResultsMat.Comment       = name;
-    ResultsMat.Function      = '';
-    ResultsMat.ImageGridAmp  = data;
-
-    if nargin >= 10 && ~isempty(MEMoptions) 
-        ResultsMat.MEMoptions = MEMoptions;
-    end
-
-    ResultsMat.DisplayUnits  = data_unit;
-    ResultsMat.Time          = time;
-    ResultsMat.DataFile      = sInputs.FileName;
-    ResultsMat.HeadModelFile = head_model.FileName;
-    ResultsMat.HeadModelType = head_model.HeadModelType;
-    ResultsMat.Options       = OPTIONS;
-    ResultsMat.ChannelFlag   = [];
-    ResultsMat.GoodChannel   = [];
-    ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc       = [];
-    ResultsMat.GridOrient    = [];
-    ResultsMat.nAvg          = 1;
-
-    % History
-    tmp = in_bst_data( sInputs.FileName, 'History');
-    ResultsMat.History = tmp.History;
-    ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
-    % Save new file structure
-    bst_save(ResultFile, ResultsMat);
-    % ===== REGISTER NEW FILE =====
-    % Create new results structure
-    newResult = db_template('results');
-    newResult.Comment       = name;
-    newResult.FileName      = file_short(ResultFile);
-    newResult.DataFile      = sInputs.FileName;
-    newResult.isLink        = 0;
-    newResult.HeadModelType = ResultsMat.HeadModelType;
-    % Add new entry to the database
-    iResult = length(sStudy.Result) + 1;
-    sStudy.Result(iResult) = newResult;
-    % Update Brainstorm database
-    bst_set('Study', sInputs.iStudy, sStudy);
-end
 
 function sfn = protect_fn_str(sfn)
     sfn = strrep(sfn, ' ', '_');
@@ -425,20 +375,20 @@ function sfn = protect_fn_str(sfn)
 end
 
 function VoisinsOA = adj2Voisins(adj)
-% Convert the adjacency matrix 'adj' to 'VoisinsOA' neighbor cell vector
-len = length(adj);
-
-VoisinsOA = zeros(12,len);
-
-%h = waitbar(0,'Please wait...');
-for iScale = 1:12
-    adj_i = logical(adj^iScale);
-    adj_i(logical(eye(size(adj_i)))) = 0;
-    for iSource = 1:len
-       VoisinsOA(iScale,iSource) = length(find(adj_i(iSource,:)));
+    % Convert the adjacency matrix 'adj' to 'VoisinsOA' neighbor cell vector
+    len = length(adj);
+    
+    VoisinsOA = zeros(12,len);
+    
+    %h = waitbar(0,'Please wait...');
+    for iScale = 1:12
+        adj_i = logical(adj^iScale);
+        adj_i(logical(eye(size(adj_i)))) = 0;
+        for iSource = 1:len
+           VoisinsOA(iScale,iSource) = length(find(adj_i(iSource,:)));
+        end
+        %waitbar(iScale / 12)
     end
-    %waitbar(iScale / 12)
-end
-%close(h) 
+    %close(h) 
 
 end
