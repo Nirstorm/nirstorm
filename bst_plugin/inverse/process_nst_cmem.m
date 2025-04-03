@@ -25,6 +25,7 @@ eval(macro_method);
 end
 
 function sProcess = GetDescription() %#ok<DEFNU>
+
     % Description the process
     sProcess.Comment     = 'Compute sources: BEst';
     sProcess.FileTag     = '';
@@ -40,32 +41,21 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
-     
-    % Options: MNE options
+       % Definition of the options
+    sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
+    sProcess.options.thresh_dis2cortex.Type    = 'value';
+    sProcess.options.thresh_dis2cortex.Value   = {3, 'cm', 2};
+
+
     sProcess.options.mem.Comment = {'panel_brainentropy', 'Source estimation options: '};
     sProcess.options.mem.Type    = 'editpref';
     sProcess.options.mem.Value   = be_main;
     
-    % Definition of the options
-    sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
-    sProcess.options.thresh_dis2cortex.Type    = 'value';
-    sProcess.options.thresh_dis2cortex.Value   = {3, 'cm',2};
-    
-    sProcess.options.NoiseCov_recompute.Comment = 'Compute noise convariance for MNE';
-    sProcess.options.NoiseCov_recompute.Type    = 'checkbox';
-    sProcess.options.NoiseCov_recompute.Value   = 1;
-        
 
-    %TODO: tell neighborhood order will be ignored after
+    %TODO: remove option
     sProcess.options.auto_neighborhood_order.Comment = 'Set neighborhood order automatically (default)';
     sProcess.options.auto_neighborhood_order.Type    = 'checkbox';
     sProcess.options.auto_neighborhood_order.Value   = 1;
-    
-    sProcess.options.store_sparse_results.Comment = 'Store sparse results';
-    sProcess.options.store_sparse_results.Type    = 'checkbox';
-    sProcess.options.store_sparse_results.Value   = 0;
-    sProcess.options.store_sparse_results.Group   = 'output';
-
    
 end
 
@@ -77,6 +67,7 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+
 OutputFiles = {};
 MethodOptions.MEMpaneloptions = sProcess.options.mem.Value.MEMpaneloptions;
 
@@ -94,8 +85,8 @@ end
 
 % Get plugin information
 PluginDescription  = bst_plugin('GetInstalled', 'brainentropy'); 
-if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', PluginDescription.GetVersionFcn(), '2.7.4') < 0
-   bst_error('Please update the BrainEntropy toolbox to the verson 2.7.4 or higher');
+if isempty(PluginDescription.GetVersionFcn) || bst_plugin('CompareVersions', PluginDescription.GetVersionFcn(), '3.0.0') < 0
+   bst_error('Please update the BrainEntropy toolbox to the verson 3.0.0 or higher');
    return;
 end
 
@@ -257,44 +248,28 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 end
 
 function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
+
     MethodOptions.MEMpaneloptions =   sProcess.options.mem.Value.MEMpaneloptions;
-    % Add fields that are not defined by the options of the MEM interface
-    if ~isempty(MethodOptions)
-        switch (HeadModel.HeadModelType)
-            case {'surface', 'ImageGrid'}
-                MethodOptions.SourceOrient{1} = 'fixed';
-            case 'volume'
-                MethodOptions.SourceOrient{1} = 'free';
-                MethodOptions.flagSourceOrient = [0 0 2 0];
-        end
-    end
-    % Canceled by user
-    if isempty(MethodOptions)
-        return
-    end
-    % Add options to list
+    MethodOptions.SourceOrient{1} = 'fixed';
+
     OPTIONS = process_inverse_2016('Compute');
     OPTIONS.InverseMethod = 'mem';
     OPTIONS = struct_copy_fields(OPTIONS, MethodOptions, 1);
     OPTIONS.DataTypes = {'NIRS'};
     OPTIONS.NoiseCov = [];
     OPTIONS.MEMpaneloptions.solver.NoiseCov_recompute   = 1;
-    OPTIONS.MEMpaneloptions.model.NoiseCov_recompute    = sProcess.options.NoiseCov_recompute.Value;
 
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
-    OPTIONS.flag_auto_nbo = sProcess.options.auto_neighborhood_order.Value;
-
-    %% Run cMEM
+    OPTIONS.flag_auto_nbo     = sProcess.options.auto_neighborhood_order.Value;
     
     OPTIONS.Comment         = 'MEM';
+    OPTIONS.FunctionName    = 'mem';
     OPTIONS.DataFile        = DataFile;
     OPTIONS.ResultFile      = [];
     OPTIONS.HeadModelFile   =  HeadModel.FileName;
     
     sDataIn = in_bst_data(DataFile, 'History');
     OPTIONS.History       = sDataIn.History;
-
-    OPTIONS.FunctionName    = 'mem';
 
 end
 
