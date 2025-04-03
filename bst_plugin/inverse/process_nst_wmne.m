@@ -142,7 +142,7 @@ bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
 
 end
 
-function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
+function OPTIONS = getOptions(sProcess, HeadModel, DataFile)
     sDataIn = in_bst_data(DataFile);
 
 
@@ -155,6 +155,7 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.ResultFile    = [];
     OPTIONS.HeadModelFile =  file_short(HeadModel.FileName);
     OPTIONS.FunctionName  = 'MNE';
+    OPTIONS.History       = sDataIn.History;
 
     if isfield(sProcess.options.TimeSegmentNoise, 'Value') && iscell(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value) && ~isempty(sProcess.options.TimeSegmentNoise.Value{1})
         OPTIONS.BaselineSegment  = sProcess.options.TimeSegmentNoise.Value{1};
@@ -223,12 +224,14 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
         sResults(iwl).Comment       = sprintf('MNE sources | %s nm', swl);
-        sResults(iwl).ChannelFlag   = OPTIONS.ChannelFlag;
         sResults(iwl).ImageGridAmp  = grid_amp;
         sResults(iwl).Time          = OPTIONS.DataTime;
-        sResults(iwl).DisplayUnits  = 'OD';
-        sResults(iwl).HeadModelType = file_short(nirs_head_model.HeadModelType);
         sResults(iwl).Function      = 'MNE';
+        sResults(iwl).DisplayUnits  = 'OD';
+        sResults(iwl).ChannelFlag   = OPTIONS.ChannelFlag;
+        sResults(iwl).HeadModelType = file_short(nirs_head_model.HeadModelType);
+        sResults(iwl).History       = OPTIONS.History;
+        sResults(iwl) = bst_history('add', sResults(iwl), 'compute', 'Compute minimum norm estimate (MNE)');
 
     end
     % Filter reconstructed wavelengh
@@ -259,10 +262,10 @@ function [idX] = be_closest(vecGuess, vecRef)
 % This function returns the index of the closest value of VECREF to those 
 % in VECGUESS
 
-idX     =   [];
-for ii  =   1 : numel(vecGuess)
-    [dum, idX(ii)]  =   min( abs(vecGuess(ii)-vecRef) );     
-end
+    idX     =   [];
+    for ii  =   1 : numel(vecGuess)
+        [dum, idX(ii)]  =   min( abs(vecGuess(ii)-vecRef) );     
+    end
 
 end
 

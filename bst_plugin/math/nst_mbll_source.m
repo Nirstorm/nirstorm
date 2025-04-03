@@ -55,6 +55,7 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
         sResults_hb(iHb).Comment = strjoin( [{strjoin(tmp(1:end-1), '|')} ,   '|' , hb_types{iHb}]);
         sResults_hb(iHb).History = sResults(end).History;
         sResults_hb(iHb).DisplayUnits   = hb_unit;
+        sResults_hb(iHb) = bst_history('add', sResults_hb(iHb), 'compute', 'Estimate concentration change');
 
         if iscell(sResults_hb(iHb).ImageGridAmp )
             sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
