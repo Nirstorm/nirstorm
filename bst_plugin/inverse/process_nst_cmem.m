@@ -77,11 +77,11 @@ if isempty(MethodOptions)
 end
 
 % Install/load brainentropy plugin
-[isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
-if ~isInstalled
-    bst_error('The Brainentropy toolbox is required to use MEM');
-    return;
-end
+% [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
+% if ~isInstalled
+%     bst_error('The Brainentropy toolbox is required to use MEM');
+%     return;
+% end
 
 % Get plugin information
 PluginDescription  = bst_plugin('GetInstalled', 'brainentropy'); 
@@ -126,7 +126,7 @@ OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
 if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
-    bst_report('Warning', sProcess, sInputs, sprintf('%s was not tested for fNIRS data, proceed with caution',pipeline ))
+    %bst_report('Warning', sProcess, sInputs, sprintf('%s was not tested for fNIRS data, proceed with caution',pipeline ))
 end
 
 %% Run MEM
@@ -138,13 +138,12 @@ bst_progress('text', 'Saving Results...');
 
 for iMap = 1:length(sResults)
 
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' protect_fn_str(sResults(iMap).Comment)]);
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
 
     ResultsMat = sResults(iMap);
     ResultsMat.DataFile   = sInputs.FileName;
     ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
     ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
-
     bst_save(ResultFile, ResultsMat, 'v6');
     db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
@@ -165,12 +164,16 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
 
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
+    %cortex.VertDist = bst_tess_distance(cortex, 1:nb_nodes, 1:nb_nodes, 'geodesic_dist'); % in meter
+    %GreenM2 = tess_smooth_sources(cortex, 0.020, 'geodesic_dist');
 
     %% define the reconstruction FOV
     thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
     valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, sDataIn.ChannelFlag );
 
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
+    %OPTIONS.MEMpaneloptions.optional.GreenM2 = GreenM2(valid_nodes, valid_nodes); 
+
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
 
     %% estimate the neighborhood order for cMEM  (goal: # of clusters ~= # of good channels) 
@@ -203,10 +206,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         % Remove 0 from the gain matrix
         HM.Gain = gain(:,valid_nodes);
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
-    
-        bst_progress('text', ['WL' num2str(iwl) ', kept ' num2str(length(valid_nodes)) ...
-                 ' nodes that were in VOI and have non-zero sensitivity']);
-    
+        
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
@@ -221,8 +221,10 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
             sOptions(iwl).automatic.selected_samples = selected_samples(:,ia);
         end
+
         result.Time    = OPTIONS.DataTime;
         result.Options =  sOptions(iwl);
+        result.Function = result.Options.FunctionName;
         result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
         result.History  = OPTIONS.History;
         result = bst_history('add', result, 'compute', sOptions(iwl).Comment );
@@ -323,12 +325,6 @@ function nbo = estimate_nbo (cortex, valid_nodes, nClust,isRandom)
     nbo = round(mean(neighborhood_order))+2; 
 end
 
-
-function sfn = protect_fn_str(sfn)
-    sfn = strrep(sfn, ' ', '_');
-    sfn = strrep(sfn, '|','');
-    sfn = strrep(sfn, ':', '_');
-end
 
 function VoisinsOA = adj2Voisins(adj)
     % Convert the adjacency matrix 'adj' to 'VoisinsOA' neighbor cell vector

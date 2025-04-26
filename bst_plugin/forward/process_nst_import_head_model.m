@@ -347,7 +347,7 @@ end
 
 if nargin < 8 || isempty(local_cache_dir)
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(), ...
-                                   'fluence', protect_fn_str(anat_name));
+                                   'fluence', nst_protect_fn_str(anat_name));
 end
 %TODO: assert local cache directory exists
 
@@ -421,7 +421,7 @@ if ~isempty(strfind(data_source, 'http'))
             fluence_fns{ivertex}{iwl} = fluence_fn;
             
             if ~file_exist(fluence_fn)
-                url = [data_source protect_fn_str(anat_name) '/' fluence_bfn];
+                url = [data_source nst_protect_fn_str(anat_name) '/' fluence_bfn];
                 to_download_urls{idownload} = url;
                 if check_url_existence
                     tstart = tic();
@@ -611,13 +611,6 @@ voronoi_bst = in_mri_bst(voronoi_fn);
 voronoi = voronoi_bst.Cube;
 end
 
-function fn = protect_fn_str(sfn)
-fn = strrep(sfn, ' ', '_');
-fn = strrep(fn, '"', '');
-fn = strrep(fn, ':', '_');
-fn = strrep(fn, '(', '_');
-fn = strrep(fn, ')', '_');
-end
 
 %% ===== surface smoothing  =====
 function sens_smoothed = surface_smooth(FWHM, SurfaceMat, sens_temp, dispInfo) 
