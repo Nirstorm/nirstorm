@@ -162,18 +162,13 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     
     nb_nodes        = size(cortex.Vertices, 1);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
-
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
-    %cortex.VertDist = bst_tess_distance(cortex, 1:nb_nodes, 1:nb_nodes, 'geodesic_dist'); % in meter
-    %GreenM2 = tess_smooth_sources(cortex, 0.020, 'geodesic_dist');
 
     %% define the reconstruction FOV
     thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
     valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, sDataIn.ChannelFlag );
 
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
-    %OPTIONS.MEMpaneloptions.optional.GreenM2 = GreenM2(valid_nodes, valid_nodes); 
-
     HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
 
     %% estimate the neighborhood order for cMEM  (goal: # of clusters ~= # of good channels) 
