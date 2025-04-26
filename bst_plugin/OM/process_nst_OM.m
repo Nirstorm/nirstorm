@@ -307,6 +307,8 @@ for ipair=1:size(montage_pairs, 1)
     end
 end
 
+[sSubjStudies, ~] = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
+condition_name    = file_unique(condition_name, {sSubjStudies.Name}, 1);
 
 iStudy = db_add_condition(sSubject.Name, condition_name);
 sStudy = bst_get('Study', iStudy);
