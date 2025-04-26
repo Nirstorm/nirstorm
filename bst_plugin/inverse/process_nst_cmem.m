@@ -77,11 +77,11 @@ if isempty(MethodOptions)
 end
 
 % Install/load brainentropy plugin
-% [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
-% if ~isInstalled
-%     bst_error('The Brainentropy toolbox is required to use MEM');
-%     return;
-% end
+[isInstalled, errMessage] = bst_plugin('Load', 'brainentropy');
+if ~isInstalled
+    bst_error('The Brainentropy toolbox is required to use MEM');
+    return;
+end
 
 % Get plugin information
 PluginDescription  = bst_plugin('GetInstalled', 'brainentropy'); 
@@ -125,8 +125,8 @@ end
 OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
-if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
-    %bst_report('Warning', sProcess, sInputs, sprintf('%s was not tested for fNIRS data, proceed with caution',pipeline ))
+if  strcmp(pipeline,'rMEM')
+    bst_report('Warning', sProcess, sInputs, 'rMEM was not tested for fNIRS data, proceed with caution')
 end
 
 %% Run MEM
