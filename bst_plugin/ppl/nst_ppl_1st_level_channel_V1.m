@@ -357,7 +357,7 @@ for ifile=1:length(sFiles_GLM)
                 SubjectName, data_tag, options.GLM_1st_level.contrast_tstat.plot.pvalue_mcc_method,...
                 nst_format_pval(options.GLM_1st_level.contrast_tstat.plot.pvalue_threshold), ...
                 contrasts(icon).label);
-            fig_fn = protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
+            fig_fn = nst_protect_fn_str(fullfile(options.fig_dir, fig_bfn ));
             if ~isempty(options.fig_dir) && options.make_figs && ...
                     options.GLM_1st_level.contrast_tstat.plot.do && ...
                     (redo || options.GLM_1st_level.contrast_tstat.plot.redo || ~exist(fig_fn, 'file'))
@@ -743,13 +743,6 @@ catch ME
     end
 end
 
-end
-
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' | ', '--');
-sfn = strrep(s, ' : ', '--');
-sfn = strrep(s, ' :', '--');
-sfn = strrep(s, ' ', '_');
 end
 
 

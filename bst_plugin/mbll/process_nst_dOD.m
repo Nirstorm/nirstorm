@@ -152,13 +152,16 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
 
     if isRaw
         newCondition = ['@raw', cond_name, '_dOD'];
+        
     else
         newCondition =  [cond_name, '_dOD'];
     end
-
+    [sSubjStudies, iSubjStudies] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
+    newCondition = file_unique(newCondition, {sSubjStudies.Name}, 1);
+    
     iStudy = db_add_condition(sInputs.SubjectName, newCondition);
     sStudy = bst_get('Study', iStudy);
-     
+
     % Save channel definition
     [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
     db_set_channel(iChannelStudy, ChannelMat, 2, 0);

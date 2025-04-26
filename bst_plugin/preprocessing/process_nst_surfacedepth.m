@@ -79,7 +79,7 @@ end
     name = ['Distance from ' sSubject.Surface(sSubject.iCortex).Comment ' to ' sSubject.Surface(sSubject.iScalp).Comment ];
     iStudy = db_add_condition(sSubject.Name, 'distance');
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sSubject.FileName), ...
-                            ['/distance/results_' protect_fn_str(name)]);
+                            ['/distance/results_' nst_protect_fn_str(name)]);
                         
        
     ResultsMat = db_template('resultsmat');
@@ -87,7 +87,7 @@ end
     ResultsMat.Function      = '';
     ResultsMat.ImageGridAmp = dis;
     ResultsMat.Time          = 0;
-    ResultsMat.DataFile      = [];%[bst_fileparts(sSubject.FileName),'/distance/results_' protect_fn_str(name) '.mat'];%//
+    ResultsMat.DataFile      = [];%[bst_fileparts(sSubject.FileName),'/distance/results_' nst_protect_fn_str(name) '.mat'];%//
     ResultsMat.HeadModelFile = []; 
     ResultsMat.HeadModelType = [];
     ResultsMat.ChannelFlag   = [];
@@ -117,8 +117,4 @@ end
     %sStudy_new.Result = ResultsMat;
     % Update Brainstorm database
     bst_set('Study', iStudy, sStudy_new);
-end
-
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' ', '_');
 end

@@ -110,8 +110,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     detect_conflict(det_pos, det_pos , 1 ,{'Detector', 'Detector'});
 
     detect_conflict(sources_pos, det_pos, 0,{'Source', 'Detector'});
-   
-    iStudy = db_add_condition(sInputs(1).SubjectName, [sInputs(1).Condition, '_merge2']);
+
+    [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs(1).SubjectFile,'intra_subject', 'default_study');
+    newCondition = file_unique([sInputs(1).Condition, '_merge'], {sSubjStudies.Name}, 1);
+    iStudy = db_add_condition(sInputs(1).SubjectName, newCondition);
+
     sStudy = bst_get('Study', iStudy);
     
     ChannelMat         = db_template('channel');
