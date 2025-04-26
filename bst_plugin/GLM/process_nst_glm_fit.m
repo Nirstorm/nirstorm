@@ -1,4 +1,4 @@
-function varargout = process_nst_glm_fit( varargin )
+                                                function varargout = process_nst_glm_fit( varargin )
 % process_compute_glm: compute the glm : find B such as Y = XB +e with X
 % 
 % OlS_fit use an ordinary least square algorithm to find B : B= ( X^{T}X)^{-1} X^{T} Y 
@@ -253,10 +253,17 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         data_types = unique({ChannelMat.Channel(nirs_ichans).Group});
     end
     
-    % TODO: Check for dOD
-    Y=nst_misc_convert_to_mumol(Y,DataMat.DisplayUnits);
-    DataMat.DisplayUnits = 'mumol.l-1';
+    if any(contains(data_types, 'Hb'))
+
+        Y=nst_misc_convert_to_mumol(Y,DataMat.DisplayUnits);
+        DataMat.DisplayUnits = 'mumol.l-1';
+
+    end
     
+    if isempty(DataMat.Events)
+        bst_error('No avaialble event in the file');
+        return;
+    end
 
     all_event_names = {DataMat.Events.label};
     events_found = ismember(selected_event_names, all_event_names);
@@ -410,6 +417,8 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
         sDataOut.ChannelFlag  = DataMat.ChannelFlag;
         sDataOut.Time         = 1:nb_regressors;
         sDataOut.DataType     = 'recordings';
+        sDataOut.History      = DataMat.History;
+        sDataOut              = bst_history('add',  sDataOut,  'compute',  'GLM estimate model');
         sDataOut.nAvg         = 1;
         
         % Add extra fields

@@ -197,7 +197,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
-        sDataOut.DisplayUnits = glm_fit.DisplayUnits; %TODO: check scaling
+        sDataOut.DisplayUnits = glm_fit.DisplayUnits; 
+        sDataOut.History      = glm_fit.History;
+        sDataOut              = bst_history('add',  sDataOut,  'compute',  'GLM - specify contrast');
         
         % Add extra fields
         extra_fields = fieldnames(extra_output);
