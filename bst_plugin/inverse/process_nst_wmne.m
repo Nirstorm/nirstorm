@@ -123,7 +123,7 @@ bst_progress('text', 'Saving Results...');
 
 for iMap = 1:length(sResults)
 
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' protect_fn_str(sResults(iMap).Comment)]);
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
 
     ResultsMat = sResults(iMap);
     ResultsMat.DataFile   = sInputs.FileName;
@@ -261,9 +261,3 @@ function [idX] = be_closest(vecGuess, vecRef)
 
 end
 
-function sfn = protect_fn_str(s)
-    sfn = strrep(s, ' | ', '--');
-    sfn = strrep(s, ' : ', '--');
-    sfn = strrep(s, ' :', '--');
-    sfn = strrep(s, ' ', '_');
-end

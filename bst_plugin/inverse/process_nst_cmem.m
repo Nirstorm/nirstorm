@@ -72,7 +72,7 @@ if isempty(MethodOptions)
 end
 
 % Install/load brainentropy plugin
-[isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
+[isInstalled, errMessage] = bst_plugin('Load', 'brainentropy');
 if ~isInstalled
     bst_error('The Brainentropy toolbox is required to use MEM');
     return;
@@ -120,8 +120,8 @@ end
 OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
-if strcmp(pipeline,'wMEM') || strcmp(pipeline,'rMEM')
-    bst_report('Warning', sProcess, sInputs, sprintf('%s was not tested for fNIRS data, proceed with caution',pipeline ))
+if  strcmp(pipeline,'rMEM')
+    bst_report('Warning', sProcess, sInputs, 'rMEM was not tested for fNIRS data, proceed with caution')
 end
 
 %% Run MEM
@@ -133,13 +133,12 @@ bst_progress('text', 'Saving Results...');
 
 for iMap = 1:length(sResults)
 
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' protect_fn_str(sResults(iMap).Comment)]);
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
 
     ResultsMat = sResults(iMap);
     ResultsMat.DataFile   = sInputs.FileName;
     ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
     ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
-
     bst_save(ResultFile, ResultsMat, 'v6');
     db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
@@ -158,7 +157,6 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     
     nb_nodes        = size(cortex.Vertices, 1);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
-
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
 
     %% define the reconstruction FOV
@@ -189,10 +187,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         % Remove 0 from the gain matrix
         HM.Gain = gain(:,valid_nodes);
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
-    
-        bst_progress('text', ['WL' num2str(iwl) ', kept ' num2str(length(valid_nodes)) ...
-                 ' nodes that were in VOI and have non-zero sensitivity']);
-    
+        
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
@@ -207,8 +202,10 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
             sOptions(iwl).automatic.selected_samples = selected_samples(:,ia);
         end
+
         result.Time    = OPTIONS.DataTime;
         result.Options =  sOptions(iwl);
+        result.Function = result.Options.FunctionName;
         result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
         result.History  = OPTIONS.History;
         result = bst_history('add', result, 'compute', sOptions(iwl).Comment );
@@ -258,11 +255,3 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.History       = sDataIn.History;
 
 end
-
-
-function sfn = protect_fn_str(sfn)
-    sfn = strrep(sfn, ' ', '_');
-    sfn = strrep(sfn, '|','');
-    sfn = strrep(sfn, ':', '_');
-end
-

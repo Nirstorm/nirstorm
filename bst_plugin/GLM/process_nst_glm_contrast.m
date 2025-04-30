@@ -149,7 +149,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         con_std = sqrt(mse_res .* con_cov);
     end                             
     % Formating a readable comment such as -Rest +Task
-    comment = 'GLM con ';
+    comment =  strrep(sInputs(1).Comment, ' fitted model' , ' | contrast ');
     contrast = '';
     for i=1:nb_regressors
         if ( C(i) < 0)
@@ -166,7 +166,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             end 
         end     
     end    
-    comment = [comment contrast];
+    comment = [comment ' '  contrast];
     
 %     iStudy = sInputs.iStudy;    
 %     [tmp, iSubject] = bst_get('Subject', sInputs(1).SubjectName);
@@ -185,7 +185,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
     if surface_data
         [sStudy, ResultFile] = nst_bst_add_surf_data(con_mat', 1, [], 'surf_glm_con', comment, ...
-                                                     [], sStudy, 'GLM', glm_fit.SurfaceFile, ...
+                                                     sInputs(1), sStudy, 'GLM - specify contrast', glm_fit.SurfaceFile, ...
                                                      0, extra_output);
         OutputFiles{end+1} = ResultFile;
     else
@@ -197,7 +197,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataOut.Time         = [1];
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
-        sDataOut.DisplayUnits = glm_fit.DisplayUnits; %TODO: check scaling
+        sDataOut.DisplayUnits = glm_fit.DisplayUnits; 
+        sDataOut.History      = glm_fit.History;
+        sDataOut              = bst_history('add',  sDataOut,  'compute',  'GLM - specify contrast');
         
         % Add extra fields
         extra_fields = fieldnames(extra_output);

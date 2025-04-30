@@ -107,7 +107,7 @@ else
     suffix = ['_' sInput.Comment];
 end
 
-nirs_bfn = protect_fn_str([cond_name suffix '.nirs']);
+nirs_bfn = nst_protect_fn_str([cond_name suffix '.nirs']);
 end
 
 function nirs = Compute(channel_def, data, time, events)
@@ -152,17 +152,3 @@ nirs.aux = data(:, strcmp({channel_def.Channel.Type}, 'NIRS_AUX'));
 nirs.events = events;
 end
 
-
-
-function fn = protect_fn_str(sfn)
-fn = strrep(sfn, ' | ', '_');
-fn = strrep(fn, ' ', '_');
-fn = strrep(fn, '"', '');
-fn = strrep(fn, ':', '_');
-fn = strrep(fn, '(', '_');
-fn = strrep(fn, ')', '_');
-fn = strrep(fn, '[', '_');
-fn = strrep(fn, ']', '_');
-fn = strrep(fn, '!', '');
-fn = strrep(fn, '__', '_');
-end

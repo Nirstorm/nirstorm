@@ -132,6 +132,9 @@ function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
     else
         newCondition =  [cond_name, '_Hb'];
     end
+    
+    [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
+    newCondition = file_unique(newCondition, {sSubjStudies.Name}, 1);
 
     iStudy = db_add_condition(sInputs.SubjectName, newCondition);
     sStudy = bst_get('Study', iStudy);

@@ -24,35 +24,38 @@ end
 %% Save a cortical map to brainstorm with given data
 
 ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                         ['results_' protect_fn_str(file_tag)]);
+                         ['results_' nst_protect_fn_str(file_tag)]);
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
 ResultsMat.Comment       = comment;
 ResultsMat.Function      = '';
-if ~sparse_storage
-    ResultsMat.ImageGridAmp  = data;
-else
-    ResultsMat.ImageGridAmp  = sparse(data);
-end
+ResultsMat.ImageGridAmp  = data;
 ResultsMat.Time          = time;
-if ~isempty(sInputs)
-    ResultsMat.DataFile  = sInputs.FileName;
+
+
+if ~isempty(sInputs) 
+    if isfield(sInputs, 'DataFile')
+        ResultsMat.DataFile = sInputs.DataFile;
+    elseif isfield(sInputs, 'FileName')
+        ResultsMat.DataFile  = sInputs.FileName;
+    end
 end
+
 if ~isempty(head_model)
     if ~isempty(sStudy.iHeadModel)
         ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
     end
     ResultsMat.HeadModelType = head_model.HeadModelType;
-else
-    
 end
+
+
 ResultsMat.ChannelFlag   = [];
 ResultsMat.GoodChannel   = [];
 ResultsMat.SurfaceFile   = surface_file;
-ResultsMat.GridLoc    = [];
-ResultsMat.GridOrient = [];
-ResultsMat.nAvg      = 1;
+ResultsMat.GridLoc       = [];
+ResultsMat.GridOrient    = [];
+ResultsMat.nAvg          = 1;
 
 % Add extra fields
  extra_fields = fieldnames(extra);
@@ -62,6 +65,13 @@ ResultsMat.nAvg      = 1;
  end
 
 % History
+if ~isempty(sInputs)
+    sData = in_bst_data(sInputs.FileName,'History');
+    if isfield(sData,'History')
+        ResultsMat.History = sData.History;
+    end
+end
+
 ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
 % Save new file structure
 bst_save(ResultFile, ResultsMat, 'v6');
@@ -76,18 +86,11 @@ newResult.HeadModelType = ResultsMat.HeadModelType;
 iResult = length(sStudy.Result) + 1;
 sStudy.Result(iResult) = newResult;
 % Update Brainstorm database
-if ~isempty(sInputs)
+if ~isempty(sInputs) && isfield(sInputs,'iStudy')
     bst_set('Study', sInputs.iStudy, sStudy);
 else
     [tmp, iStudy] = bst_get('Study', sStudy.FileName);
     bst_set('Study', iStudy, sStudy);
 end
                                                   
-end
-
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' | ', '--');
-sfn = strrep(s, ' : ', '--');
-sfn = strrep(s, ' :', '--');
-sfn = strrep(s, ' ', '_');
 end
