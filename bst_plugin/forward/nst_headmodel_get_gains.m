@@ -9,12 +9,6 @@ for gpic=1:length(gain_pair_names)
     gpair_idx(gain_pair_names{gpic}) = gpic;
 end
 
-if ~isempty(strfind(channel_def(1).Name, 'WL'))
-    measure_tag = 'WL';
-else
-    measure_tag = 'Hb';
-end
-
 gains = zeros(length(selected_chans), size(gain_in, 3));
 for ic=1:length(selected_chans)
     ichan = selected_chans(ic);

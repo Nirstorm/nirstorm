@@ -105,7 +105,8 @@ sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex ).FileName);
 % Retrieve optode coordinates
 % Load channel file
 
-montage_info    = nst_montage_info_from_bst_channels(ChannelMat.Channel);
+sChannels       = ChannelMat.Channel;
+montage_info    = nst_montage_info_from_bst_channels(sChannels);
 pair_names      = montage_info.pair_names;
 src_locs        = montage_info.src_pos;
 src_ids         = montage_info.src_ids;
@@ -171,7 +172,6 @@ voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
 
 
 
-% separations_chans = process_nst_separations('Compute', ChannelMat.Channel);
 
 if length(src_ids) == 1
     pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
@@ -183,7 +183,7 @@ if length(det_ids) == 1
 else 
     pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
 end    
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel,pair_ids);
+separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_ids);
 
 
 for ipair=1:nb_pairs
@@ -224,28 +224,46 @@ for ipair=1:nb_pairs
     bst_progress('inc',1);
 end
 
-if sProcess.options.smoothing_fwhm.Value{1} > 0
-    FWHM = sProcess.options.smoothing_fwhm.Value{1} / 1000;
-
-    if ~isfield(sProcess.options, 'method') || strcmp(sProcess.options.method.Value, 'surfstat_before_2023')
-        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute', ... 
-                                        sSubject.Surface(sSubject.iCortex).FileName, ...
-                                        sensitivity_surf, FWHM, 'before_2023');
-    elseif strcmp(sProcess.options.method.Value, 'geodesic_dist')
-        [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute', ... 
-                                        sSubject.Surface(sSubject.iCortex).FileName, ...
-                                        sensitivity_surf, FWHM, 'geodesic_dist');
-    end
-    
-    if ~isempty(warmInfo)
-         bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
-    end
+[sensitivity_surf, warmInfo] = smooth_sensitivity_map(sSubject.Surface(sSubject.iCortex).FileName, sensitivity_surf, sProcess.options.method.Value, sProcess.options.smoothing_fwhm.Value{1});
+if ~isempty(warmInfo)
+    bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
 end
 
 sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
 
-bst_progress('stop');
+% we finally format as brainstorm format 
+sensitivity_surf_bst = zeros(length(sChannels), nb_nodes*3);
 
+for iWavelenth = 1:nb_wavelengths
+
+    gain_in         = sensitivity_surf;
+    gain_pair_names = pair_names;
+
+    % hash gain pair names
+    gpair_idx = containers.Map();
+    for gpic=1:length(gain_pair_names)
+        gpair_idx(gain_pair_names{gpic}) = gpic;
+    end
+
+    selected_chans = channel_find(sChannels, sprintf('WL%d',ChannelMat.Nirs.Wavelengths(iWavelenth)));
+
+    gains = zeros(length(selected_chans), size(gain_in, 3));
+    for ic=1:length(selected_chans)
+        ichan = selected_chans(ic);
+        chan_name = sChannels(ichan).Name;
+        pair_name = chan_name(1:strfind(chan_name, 'WL')-1);
+        if ~isempty(pair_name) && gpair_idx.isKey(pair_name)
+            gains(ic, :) = squeeze(gain_in(gpair_idx(pair_name), iwl, :));
+        end
+    end
+
+    sensitivity_surf_bst(selected_chans, 1:3:end) = gains;
+    sensitivity_surf_bst(selected_chans, 2:3:end) = gains;
+    sensitivity_surf_bst(selected_chans, 3:3:end) = gains;
+
+end
+
+bst_progress('stop');
 
 
 %% Outputs
@@ -253,15 +271,14 @@ bst_progress('stop');
 sStudy = bst_get('Study', sInputs.iStudy);
 
 % Create structure
-HeadModelMat = db_template('headmodelmat');
-HeadModelMat.Gain           = sensitivity_surf;
+HeadModelMat                = db_template('headmodelmat');
+HeadModelMat.NIRSMethod     = 'MCXlab';
+HeadModelMat.Gain           = sensitivity_surf_bst;
 HeadModelMat.HeadModelType  = 'surface';
 HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
 HeadModelMat.Comment        = 'NIRS head model';
+HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
 
-% newHeadModelMat.VoiNodes = voi_nodes;
-HeadModelMat.pair_names = pair_names;
-HeadModelMat  = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
 % Output file name
 HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudy.FileName)), 'headmodel_nirs_mcx_fluence.mat');
 HeadModelFile = file_unique(HeadModelFile);
@@ -271,7 +288,6 @@ bst_save(HeadModelFile, HeadModelMat, 'v7');
 newHeadModel = db_template('HeadModel');
 newHeadModel.FileName = file_short(HeadModelFile);
 newHeadModel.Comment = 'NIRS head model from fluence';
-
 newHeadModel.HeadModelType  = 'surface';    
 % Update Study structure
 iHeadModel = length(sStudy.HeadModel) + 1;
@@ -287,6 +303,7 @@ panel_protocols('UpdateNode', 'Study', sInputs.iStudy);
 
 % Save database
 db_save();
+
 end
 
 
@@ -577,7 +594,7 @@ closest_wavelengths = template_wls(arrayfun(@(wl) iclosest(template_wls, wl), wa
 end
 
 function ic = iclosest(catalog, value)
-[v,ic] = min(abs(catalog-value));
+    [v,ic] = min(abs(catalog-value));
 end
 
 function str_size = format_file_size(size)
@@ -613,6 +630,24 @@ end
 
 
 %% ===== surface smoothing  =====
+function [sensitivity_surf, warmInfo] = smooth_sensitivity_map(surface, sensitivity_surf, method, smoothing_fwhm)
+    warmInfo = [];
+
+    if smoothing_fwhm > 0
+        FWHM = smoothing_fwhm / 1000;
+        
+        if  strcmp(method, 'surfstat_before_2023')
+            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
+        elseif strcmp(method, 'geodesic_dist')
+            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute',  surface, sensitivity_surf, FWHM, 'geodesic_dist');
+        else
+            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
+        end
+
+    end
+
+end
+
 function sens_smoothed = surface_smooth(FWHM, SurfaceMat, sens_temp, dispInfo) 
     % ===== PROCESS =====
     % Convert surface to SurfStat format
@@ -646,3 +681,4 @@ function sens_smoothed = surface_smooth(FWHM, SurfaceMat, sens_temp, dispInfo)
     
     
 end
+
