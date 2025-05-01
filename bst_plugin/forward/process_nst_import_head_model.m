@@ -335,6 +335,7 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     HeadModelMat.Gain           = sensitivity_surf_bst;
     HeadModelMat.HeadModelType  = 'surface';
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
+    HeadModelMat.GridOrient     = sCortex.VertNormals;
     HeadModelMat.Comment        = 'NIRS head model';
     HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
                                          'smoothing_method', OPTIONS.smoothing_method, ...
