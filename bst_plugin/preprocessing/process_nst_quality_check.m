@@ -105,13 +105,21 @@ function OutputFiles = Run(sProcess, sInputs)
     
     window_length = sProcess.options.window_length.Value{1};
 
-    ChannelMat          = in_bst_channel(sInputs.ChannelFile);
-    nirs_ichans  = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
+    ChannelMat  = in_bst_channel(sInputs.ChannelFile);
+    nirs_ichans = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
+    isRaw       = isempty(sDataIn.DisplayUnits) || ~contains(sDataIn.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
+
     signals = sDataIn.F(nirs_ichans,:);
 
     if sProcess.options.option_coefficient_variation.Value
 
-        [Time, CV] = compute_CV(sDataIn.Time, signals, window_length);
+        if isRaw
+            [Time, CV] = compute_CV(sDataIn.Time, signals, window_length);
+        else
+            [Time, mov_std] = compute_std(sDataIn.Time, signals, window_length);
+            % Multiply by log(10) to get same CV as for raw data : 
+            CV = log(10) * mov_std;
+        end
 
         % Save time-series data
         data_out = zeros(size(sDataIn.F));
@@ -331,6 +339,31 @@ function [Time, CV] = compute_CV(Time, signals, wlen)
     CV =  mov_std ./ mov_mean  ;
 
 end
+
+function [Time, mov_std] = compute_std(Time, signals, wlen)
+    if nargin < 6
+        wlen  = 10; %10s sliding windows 
+    end   
+
+    fs = 1 / diff(Time(1:2));
+    wlen = round(wlen*fs); % convert s to sample
+
+    n_channel = size(signals,1);
+    n_sample = size(signals,2);
+
+    mov_std     = zeros(n_channel,n_sample); 
+
+    for i = 1:n_sample
+
+       windows_start =  max( 1,i - wlen/2);
+       windows_end   =  min( n_sample, i + wlen/2);
+
+       nirs_windows  = signals(:, windows_start:windows_end);
+       mov_std(:, i) = std(nirs_windows, [], 2);
+    end    
+
+end
+
 
 function [Time, hFig] = plot_intensity(Time, signals, wlen, Channel)
     % Plot the light fall off. Light intensity as function of the
