@@ -369,12 +369,11 @@ end
 
 function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
 
-head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
-src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
-det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
-src_head_vertex_ids = nst_knnsearch(head_vertices_mri, src_locs_mri);
-det_head_vertex_ids = nst_knnsearch(head_vertices_mri, det_locs_mri);
-
+    head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
+    src_locs_mri = cs_convert(sMri, 'scs', 'mri', src_locs) * 1000;
+    det_locs_mri = cs_convert(sMri, 'scs', 'mri', det_locs) * 1000;
+    src_head_vertex_ids = nst_knnsearch(head_vertices_mri, src_locs_mri);
+    det_head_vertex_ids = nst_knnsearch(head_vertices_mri, det_locs_mri);
 
 end
 
@@ -617,9 +616,8 @@ end
 
 function closest_wavelengths = get_template_closest_wl(wavelengths)
 
-template_wls = [685];
-
-closest_wavelengths = template_wls(arrayfun(@(wl) iclosest(template_wls, wl), wavelengths));
+    template_wls = [685];
+    closest_wavelengths = template_wls(arrayfun(@(wl) iclosest(template_wls, wl), wavelengths));
 
 end
 
@@ -628,34 +626,19 @@ function ic = iclosest(catalog, value)
 end
 
 function str_size = format_file_size(size)
-if size < 1e3
-    str_size = sprintf('%do', size);
-elseif size < 1e6
-    str_size = sprintf('%1.1fko', size/1e3);
-elseif size < 1e9
-    str_size = sprintf('%1.1fMo', size/1e6);
-else
-    str_size = sprintf('%1.2fGo', size/1e9);
-end
+    if size < 1e3
+        str_size = sprintf('%do', size);
+    elseif size < 1e6
+        str_size = sprintf('%1.1fko', size/1e3);
+    elseif size < 1e9
+        str_size = sprintf('%1.1fMo', size/1e6);
+    else
+        str_size = sprintf('%1.2fGo', size/1e9);
+    end
 end
 
 function flag = fluence_is_available(anat_name)
-    % TODO: check online
     flag = any(strcmp(strtrim(anat_name), {'MRI: Colin27 4NIRS'}));
-end
-
-
-
-function voronoi = get_voronoi(sProcess, sInputs)
-    [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    
-    if ~exist(voronoi_fn, 'file')
-        sProcess.options.do_grey_mask.Value   = 1; 
-        process_nst_compute_voronoi('Run', sProcess, sInputs);
-    end
-    voronoi_bst = in_mri_bst(voronoi_fn);
-    voronoi = voronoi_bst.Cube;
 end
 
 
@@ -677,38 +660,3 @@ function [sensitivity_surf, warmInfo] = smooth_sensitivity_map(surface, sensitiv
     end
 
 end
-
-function sens_smoothed = surface_smooth(FWHM, SurfaceMat, sens_temp, dispInfo) 
-    % ===== PROCESS =====
-    % Convert surface to SurfStat format
-    cortS.tri = SurfaceMat.Faces;
-    cortS.coord = SurfaceMat.Vertices';
-
-    % Get the average edge length
-    [vi,vj] = find(SurfaceMat.VertConn);
-    Vertices = SurfaceMat.VertConn;
-    meanDist = mean(sqrt((Vertices(vi,1) - Vertices(vj,1)).^2 + (Vertices(vi,2) - Vertices(vj,2)).^2 + (Vertices(vi,3) - Vertices(vj,3)).^2));
-    % FWHM in surfstat is in mesh units: Convert from millimeters to "edges"
-    FWHMedge = FWHM ./ meanDist;
-    
-    % Display the result of this conversion
-    msgInfo = ['Average distance between two vertices: ' num2str(round(meanDist*10000)/10) ' mm' 10 ...
-               'SurfStatSmooth called with FWHM=' num2str(round(FWHMedge * 1000)/1000) ' edges'];
-    
-    %bst_report('Info', sProcess, sInput, msgInfo);
-    if dispInfo
-        disp(msgInfo);
-        disp(['SMOOTH> ' strrep(msgInfo, char(10), [10 'SMOOTH> '])]); 
-    end
-      
-    if round(FWHMedge * 1000)/1000 ==0
-        disp('WARNING: FWHM too small, smoothing will not be performed.')
-    end
-    % Smooth surface
-    
-    sens_smoothed = SurfStatSmooth(sens_temp', cortS, FWHMedge)';
-    
-    
-    
-end
-
