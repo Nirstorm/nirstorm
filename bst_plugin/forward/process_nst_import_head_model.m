@@ -96,9 +96,18 @@ if isempty(sSubject.iAnatomy)
     bst_error(['No anatomical data found for ' sInputs.SubjectName]);
 end
 
+voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    
+if ~exist(voronoi_fn, 'file')
+    sProcess.options.do_grey_mask.Value   = 1; 
+    process_nst_compute_voronoi('Run', sProcess, sInputs);
+end
+
+
 OPTIONS = struct();
 OPTIONS.SubjectName     = sInputs.SubjectName;
 OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
+OPTIONS.VoronoiFile     = voronoi_fn;
 OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
 OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
 OPTIONS.FluenceFolder   = sProcess.options.data_source.Value;
@@ -154,20 +163,9 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     sChannels       = ChannelMat.Channel;
     
     % Get Voronoi
-
-    [sSubject, iSubject] = bst_get('Subject', OPTIONS.SubjectName);
-    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    
-    if ~exist(voronoi_fn, 'file')
-        sProcess.options.do_grey_mask.Value   = 1; 
-        process_nst_compute_voronoi('Run', sProcess, sInputs);
-    
-    end
-
-    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
     voronoi = voronoi_bst.Cube;
     voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
-
 
     % Load montage informations
     montage_info    = nst_montage_info_from_bst_channels(sChannels);
