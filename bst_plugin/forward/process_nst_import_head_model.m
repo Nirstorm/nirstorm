@@ -105,14 +105,17 @@ end
 
 
 OPTIONS = struct();
+
+% Subject Informations 
 OPTIONS.SubjectName     = sInputs.SubjectName;
 OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
 OPTIONS.VoronoiFile     = voronoi_fn;
 OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
 OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
-OPTIONS.FluenceFolder   = sProcess.options.data_source.Value;
 OPTIONS.ChannelFile     = sInputs(1).ChannelFile;
 
+% Use defined options : 
+OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
 OPTIONS.smoothing_method    = sProcess.options.method.Value;
 OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
 
@@ -333,6 +336,10 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     HeadModelMat.HeadModelType  = 'surface';
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
     HeadModelMat.Comment        = 'NIRS head model';
+    HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
+                                         'smoothing_method', OPTIONS.smoothing_method, ...
+                                         'smoothing_fwhm',   OPTIONS.smoothing_fwhm);
+    
     HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
 
 end
