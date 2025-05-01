@@ -77,7 +77,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {sInputs.FileName};
 
-data_source         = sProcess.options.data_source.Value;
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -88,7 +87,6 @@ end
 
 %% Retrieve list of vertex indexes corresponding to current montage
 % Load channel file
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
 % Load subject
 [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
@@ -98,198 +96,34 @@ if isempty(sSubject.iAnatomy)
     bst_error(['No anatomical data found for ' sInputs.SubjectName]);
 end
 
-sMri    = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
-sHead   = in_tess_bst(sSubject.Surface(sSubject.iScalp  ).FileName);
-sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex ).FileName);
+OPTIONS = struct();
+OPTIONS.SubjectName     = sInputs.SubjectName;
+OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
+OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
+OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
+OPTIONS.FluenceFolder   = sProcess.options.data_source.Value;
+OPTIONS.ChannelFile     = sInputs(1).ChannelFile;
 
-% Retrieve optode coordinates
-% Load channel file
+OPTIONS.smoothing_method    = sProcess.options.method.Value;
+OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
 
-sChannels       = ChannelMat.Channel;
-montage_info    = nst_montage_info_from_bst_channels(sChannels);
-pair_names      = montage_info.pair_names;
-src_locs        = montage_info.src_pos;
-src_ids         = montage_info.src_ids;
-det_locs        = montage_info.det_pos;
-det_ids         = montage_info.det_ids;
-pair_sd_idx     = montage_info.pair_sd_indexes;
-
-nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
-nb_sources     = size(src_locs, 1);
-nb_dets        = size(det_locs, 1);
-nb_pairs       = length(pair_names);
+% Compute Head model
+HeadModelMat = Compute(OPTIONS);
 
 
-% Find closest head vertices (for which we have fluence data)
-% Put everything in mri referential
-
-[src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
-
-%% Load fluence data from local .brainstorm folder (download if not available)
-use_closest_wl = 0;
-[all_fluences_flat_sparse, all_reference_voxels_index]= request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
-                                                                         ChannelMat.Nirs.Wavelengths, data_source, nan, nan, [], '',...
-                                                                         use_closest_wl);
-if isempty(all_fluences_flat_sparse)
-    return;
-end
-
-bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
-
-mri_zeros       = zeros(size(sMri.Cube));
-src_fluences    = cell(1, nb_sources);
-det_fluences    = cell(1, nb_dets);
-
-for iwl = 1:nb_wavelengths
-    src_iv = 1;
-    det_iv = 1;
-    for ivertex=1:length([src_hvidx ; det_hvidx])
-        if ivertex <= nb_sources
-            src_fluences{src_iv}{iwl} = mri_zeros;
-            src_fluences{src_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
-            src_iv = src_iv + 1;
-        else
-            det_fluences{det_iv}{iwl} = mri_zeros;
-            det_fluences{det_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
-            det_iv = det_iv + 1;
-        end
-        bst_progress('inc',1);
-    end
-end
-
-det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
-
-% Compute sensitivity matrix (volume) and interpolate on cortical surface
-% using Voronoi partitionning
-
-bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
-
-nb_nodes            = size(sCortex.Vertices, 1);
-sensitivity_surf    = zeros(nb_nodes,nb_pairs, nb_wavelengths);
-
-voronoi = get_voronoi(sProcess, sInputs);
-voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
-
-
-
-
-if length(src_ids) == 1
-    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
-else 
-    pair_ids  = [ src_ids(pair_sd_idx(:, 1))]'; 
-end    
-if length(det_ids) == 1
-    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))];
-else 
-    pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
-end    
-separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_ids);
-
-
-for ipair=1:nb_pairs
-    isrc = pair_sd_idx(ipair, 1);
-    idet = pair_sd_idx(ipair, 2);
-    separation = separations_by_pairs(ipair);
-    for iwl=1:nb_wavelengths
-
-        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                              det_reference_voxels_index{idet}{iwl}(2),...
-                                              det_reference_voxels_index{idet}{iwl}(3));
-
-        
-        separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-        if ref_fluence == 0 && separation > separation_threshold
-            sensitivity_vol = mri_zeros;
-        else 
-            if ref_fluence==0
-                normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
-                msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
-                bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
-            else
-                normalization_factor = ref_fluence;
-            end
-            sensitivity_vol = src_fluences{isrc}{iwl} .* ...
-                              det_fluences{idet}{iwl}./normalization_factor ;
-        end
-        % modified by zhengchen to normalize the sensitivity
-        %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
-        
-        sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
-        sens_tmp(end)=[]; % trash last column
-
-
-        sensitivity_surf(:,ipair,iwl) = sens_tmp;
-    end
-    bst_progress('inc',1);
-end
-
-[sensitivity_surf, warmInfo] = smooth_sensitivity_map(sSubject.Surface(sSubject.iCortex).FileName, sensitivity_surf, sProcess.options.method.Value, sProcess.options.smoothing_fwhm.Value{1});
-if ~isempty(warmInfo)
-    bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
-end
-
-sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
-
-% we finally format as brainstorm format 
-sensitivity_surf_bst = zeros(length(sChannels), nb_nodes*3);
-
-for iWavelenth = 1:nb_wavelengths
-
-    gain_in         = sensitivity_surf;
-    gain_pair_names = pair_names;
-
-    % hash gain pair names
-    gpair_idx = containers.Map();
-    for gpic=1:length(gain_pair_names)
-        gpair_idx(gain_pair_names{gpic}) = gpic;
-    end
-
-    selected_chans = channel_find(sChannels, sprintf('WL%d',ChannelMat.Nirs.Wavelengths(iWavelenth)));
-
-    gains = zeros(length(selected_chans), size(gain_in, 3));
-    for ic=1:length(selected_chans)
-        ichan = selected_chans(ic);
-        chan_name = sChannels(ichan).Name;
-        pair_name = chan_name(1:strfind(chan_name, 'WL')-1);
-        if ~isempty(pair_name) && gpair_idx.isKey(pair_name)
-            gains(ic, :) = squeeze(gain_in(gpair_idx(pair_name), iwl, :));
-        end
-    end
-
-    sensitivity_surf_bst(selected_chans, 1:3:end) = gains;
-    sensitivity_surf_bst(selected_chans, 2:3:end) = gains;
-    sensitivity_surf_bst(selected_chans, 3:3:end) = gains;
-
-end
-
-bst_progress('stop');
-
-
-%% Outputs
-% Save the new head model
+% Save Head Model
 sStudy = bst_get('Study', sInputs.iStudy);
 
-% Create structure
-HeadModelMat                = db_template('headmodelmat');
-HeadModelMat.NIRSMethod     = 'MCXlab';
-HeadModelMat.Gain           = sensitivity_surf_bst;
-HeadModelMat.HeadModelType  = 'surface';
-HeadModelMat.SurfaceFile    = sSubject.Surface(sSubject.iCortex).FileName;
-HeadModelMat.Comment        = 'NIRS head model';
-HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
-
-% Output file name
 HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudy.FileName)), 'headmodel_nirs_mcx_fluence.mat');
 HeadModelFile = file_unique(HeadModelFile);
-% Save file
 bst_save(HeadModelFile, HeadModelMat, 'v7');
 
+% Update Study structure
 newHeadModel = db_template('HeadModel');
 newHeadModel.FileName = file_short(HeadModelFile);
 newHeadModel.Comment = 'NIRS head model from fluence';
 newHeadModel.HeadModelType  = 'surface';    
-% Update Study structure
+
 iHeadModel = length(sStudy.HeadModel) + 1;
 if ~isempty(sStudy.HeadModel)
     sStudy.HeadModel(end+1) = newHeadModel(1);
@@ -297,42 +131,240 @@ else
     sStudy.HeadModel = newHeadModel;
 end
 sStudy.iHeadModel = iHeadModel;
+
 % Update DataBase
 bst_set('Study', sInputs.iStudy, sStudy);
 panel_protocols('UpdateNode', 'Study', sInputs.iStudy);
-
-% Save database
 db_save();
 
 end
 
+function [HeadModelMat, err] = Compute(OPTIONS)
+    
+    HeadModelMat = [];
+    err = '';
+
+    % Retrieve optode coordinates
+    % Load channel file
+    sMri    = in_mri_bst (OPTIONS.MriFile);
+    sHead   = in_tess_bst(OPTIONS.HeadFile);
+    sCortex = in_tess_bst(OPTIONS.CortexFile);
+
+    ChannelMat = in_bst_channel(OPTIONS.ChannelFile);
+    sChannels       = ChannelMat.Channel;
+    
+    % Get Voronoi
+
+    [sSubject, iSubject] = bst_get('Subject', OPTIONS.SubjectName);
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    
+    if ~exist(voronoi_fn, 'file')
+        sProcess.options.do_grey_mask.Value   = 1; 
+        process_nst_compute_voronoi('Run', sProcess, sInputs);
+    
+    end
+
+    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi = voronoi_bst.Cube;
+    voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
+
+
+    % Load montage informations
+    montage_info    = nst_montage_info_from_bst_channels(sChannels);
+    pair_names      = montage_info.pair_names;
+    src_locs        = montage_info.src_pos;
+    src_ids         = montage_info.src_ids;
+    det_locs        = montage_info.det_pos;
+    det_ids         = montage_info.det_ids;
+    pair_sd_idx     = montage_info.pair_sd_indexes;
+    
+    nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
+    nb_sources     = size(src_locs, 1);
+    nb_dets        = size(det_locs, 1);
+    nb_pairs       = length(pair_names);
+    
+    
+    % Find closest head vertices (for which we have fluence data)    
+    [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
+    
+    %% Load fluence data from local .brainstorm folder (download if not available)
+    use_closest_wl = 0;
+    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
+                                                                             ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
+                                                                             use_closest_wl);
+    if isempty(all_fluences_flat_sparse)
+        return;
+    end
+    
+    
+    mri_zeros       = zeros(size(sMri.Cube));
+    src_fluences    = cell(1, nb_sources);
+    det_fluences    = cell(1, nb_dets);
+
+    bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
+    for iwl = 1:nb_wavelengths
+        src_iv = 1;
+        det_iv = 1;
+        for ivertex=1:length([src_hvidx ; det_hvidx])
+            if ivertex <= nb_sources
+                src_fluences{src_iv}{iwl} = mri_zeros;
+                src_fluences{src_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
+                src_iv = src_iv + 1;
+            else
+                det_fluences{det_iv}{iwl} = mri_zeros;
+                det_fluences{det_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
+                det_iv = det_iv + 1;
+            end
+            bst_progress('inc',1);
+        end
+    end
+    
+    det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
+    
+    % Compute sensitivity matrix (volume) and interpolate on cortical surface
+    % using Voronoi partitionning
+    
+    bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
+    
+    nb_nodes            = size(sCortex.Vertices, 1);
+    sensitivity_surf    = zeros(nb_nodes, nb_pairs, nb_wavelengths);
+    
+    if length(src_ids) == 1
+        pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
+    else 
+        pair_ids  = [ src_ids(pair_sd_idx(:, 1))]'; 
+    end    
+    if length(det_ids) == 1
+        pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))];
+    else 
+        pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
+    end    
+    separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_ids);
+    
+    
+    for ipair  = 1:nb_pairs
+
+        isrc = pair_sd_idx(ipair, 1);
+        idet = pair_sd_idx(ipair, 2);
+        separation = separations_by_pairs(ipair);
+
+        for iwl=1:nb_wavelengths
+    
+            ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
+                                                  det_reference_voxels_index{idet}{iwl}(2),...
+                                                  det_reference_voxels_index{idet}{iwl}(3));
+    
+            
+            separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
+            if ref_fluence == 0 && separation > separation_threshold
+                sensitivity_vol = mri_zeros;
+            else 
+                if ref_fluence==0
+                    normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
+                    msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
+                                   src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
+                    bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
+                else
+                    normalization_factor = ref_fluence;
+                end
+                sensitivity_vol = src_fluences{isrc}{iwl} .* ...
+                                  det_fluences{idet}{iwl}./normalization_factor ;
+            end
+
+            % modified by zhengchen to normalize the sensitivity
+            %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
+            
+            sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
+            sens_tmp(end)=[]; % trash last column
+    
+    
+            sensitivity_surf(:,ipair,iwl) = sens_tmp;
+        end
+        bst_progress('inc',1);
+    end
+    
+    [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
+    if ~isempty(warmInfo)
+        bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+    end
+    
+    sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
+    
+    % we finally format as brainstorm format 
+    sensitivity_surf_bst = zeros(length(sChannels), nb_nodes*3);
+    
+    for iWavelenth = 1:nb_wavelengths
+    
+        gain_in         = sensitivity_surf;
+        gain_pair_names = pair_names;
+    
+        % hash gain pair names
+        gpair_idx = containers.Map();
+        for gpic=1:length(gain_pair_names)
+            gpair_idx(gain_pair_names{gpic}) = gpic;
+        end
+    
+        selected_chans = channel_find(sChannels, sprintf('WL%d',ChannelMat.Nirs.Wavelengths(iWavelenth)));
+    
+        gains = zeros(length(selected_chans), size(gain_in, 3));
+        for ic=1:length(selected_chans)
+            ichan = selected_chans(ic);
+            chan_name = sChannels(ichan).Name;
+            pair_name = chan_name(1:strfind(chan_name, 'WL')-1);
+            if ~isempty(pair_name) && gpair_idx.isKey(pair_name)
+                gains(ic, :) = squeeze(gain_in(gpair_idx(pair_name), iwl, :));
+            end
+        end
+    
+        sensitivity_surf_bst(selected_chans, 1:3:end) = gains;
+        sensitivity_surf_bst(selected_chans, 2:3:end) = gains;
+        sensitivity_surf_bst(selected_chans, 3:3:end) = gains;
+    
+    end
+    
+    bst_progress('stop');
+    
+    
+    %% Outputs
+    % Save the new head model
+    
+    % Create structure
+    HeadModelMat                = db_template('headmodelmat');
+    HeadModelMat.NIRSMethod     = 'MCXlab';
+    HeadModelMat.Gain           = sensitivity_surf_bst;
+    HeadModelMat.HeadModelType  = 'surface';
+    HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
+    HeadModelMat.Comment        = 'NIRS head model';
+    HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
+
+end
 
 function sensitivity = get_sensitivity_from_chans(head_model, pair_names)
 
-head_model_pair_ids = containers.Map();
-for ipair=1:length(head_model.pair_names)
-    head_model_pair_ids(head_model.pair_names{ipair}) = ipair;
-end
-
-pairs_not_found = {};
-for ipair=1:length(pair_names)
-    pair_name = pair_names{ipair};
-    if ~head_model_pair_ids.isKey(pair_name)
-        pairs_not_found{end+1} = pair_name;
+    head_model_pair_ids = containers.Map();
+    for ipair=1:length(head_model.pair_names)
+        head_model_pair_ids(head_model.pair_names{ipair}) = ipair;
     end
-end
-if ~isempty(pairs_not_found)
-    throw(MException('NIRSTORM:HeadmodelMismatch', ....
-          ['Sensitivity not found for pairs: ', ...
-           strjoin(pairs_not_found, ', ')]));
-end
 
-head_model_size = size(head_model.Gain);
-sensitivity = zeros(length(pair_names), head_model_size(2), head_model_size(3));
-for ipair=1:length(pair_names)
-    ipair_head_model = head_model_pair_ids(pair_names{ipair});
-    sensitivity(ipair, :, :) = head_model.Gain(ipair_head_model, :, :);
-end
+    pairs_not_found = {};
+    for ipair=1:length(pair_names)
+        pair_name = pair_names{ipair};
+        if ~head_model_pair_ids.isKey(pair_name)
+            pairs_not_found{end+1} = pair_name;
+        end
+    end
+    if ~isempty(pairs_not_found)
+        throw(MException('NIRSTORM:HeadmodelMismatch', ....
+              ['Sensitivity not found for pairs: ', ...
+               strjoin(pairs_not_found, ', ')]));
+    end
+
+    head_model_size = size(head_model.Gain);
+    sensitivity = zeros(length(pair_names), head_model_size(2), head_model_size(3));
+    for ipair=1:length(pair_names)
+        ipair_head_model = head_model_pair_ids(pair_names{ipair});
+        sensitivity(ipair, :, :) = head_model.Gain(ipair_head_model, :, :);
+    end
 
 end
 
@@ -610,22 +642,22 @@ end
 end
 
 function flag = fluence_is_available(anat_name)
-% TODO: check online
-flag = any(strcmp(strtrim(anat_name), {'MRI: Colin27 4NIRS'}));
+    % TODO: check online
+    flag = any(strcmp(strtrim(anat_name), {'MRI: Colin27 4NIRS'}));
 end
 
 
 
 function voronoi = get_voronoi(sProcess, sInputs)
-[sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-
-if ~exist(voronoi_fn, 'file')
-    sProcess.options.do_grey_mask.Value   = 1; 
-    process_nst_compute_voronoi('Run', sProcess, sInputs);
-end
-voronoi_bst = in_mri_bst(voronoi_fn);
-voronoi = voronoi_bst.Cube;
+    [sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    
+    if ~exist(voronoi_fn, 'file')
+        sProcess.options.do_grey_mask.Value   = 1; 
+        process_nst_compute_voronoi('Run', sProcess, sInputs);
+    end
+    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi = voronoi_bst.Cube;
 end
 
 
