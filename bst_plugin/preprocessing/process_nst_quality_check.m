@@ -332,6 +332,31 @@ function [Time, CV] = compute_CV(Time, signals, wlen)
 
 end
 
+function [Time, mov_std] = compute_std(Time, signals, wlen)
+    if nargin < 6
+        wlen  = 10; %10s sliding windows 
+    end   
+
+    fs = 1 / diff(Time(1:2));
+    wlen = round(wlen*fs); % convert s to sample
+
+    n_channel = size(signals,1);
+    n_sample = size(signals,2);
+
+    mov_std     = zeros(n_channel,n_sample); 
+
+    for i = 1:n_sample
+
+       windows_start =  max( 1,i - wlen/2);
+       windows_end   =  min( n_sample, i + wlen/2);
+
+       nirs_windows  = signals(:, windows_start:windows_end);
+       mov_std(:, i) = std(nirs_windows, [], 2);
+    end    
+
+end
+
+
 function [Time, hFig] = plot_intensity(Time, signals, wlen, Channel)
     % Plot the light fall off. Light intensity as function of the
     % source-detector distance

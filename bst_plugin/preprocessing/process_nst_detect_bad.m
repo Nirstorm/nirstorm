@@ -18,7 +18,7 @@ function varargout = process_nst_detect_bad( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2021; Thomas Vincent, 2015-2019
+% Authors: Edouard Delaire, 2021-2025; Thomas Vincent, 2015-2019
 
 
 eval(macro_method);
@@ -33,14 +33,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-    sProcess.Index       = 1301; %0: not shown, >0: defines place in the list of processes
-    sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Bad_channel_tagging';
+    sProcess.Index       = 1301; 
+    sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Bad_channel_detection';
     sProcess.isSeparator = 0; 
     
-    % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
-    % Definition of the outputs of this process
     sProcess.OutputTypes = {'data', 'raw'};
+
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
@@ -119,7 +118,7 @@ end
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
     % Compute bad channel for each Input file
-    % Assume that the same mobtage is used for each file
+    % Assume that the same montage is used for each file
     
     bad_chan_names  = cell(1, length(sInputs));
     bad_chan_msg = cell(1, length(sInputs));
@@ -137,11 +136,11 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             sData = in_bst(sInputs(i_input).FileName, [], 1, 1, 'no');
         end
         
-        nirs_flag= strcmpi({ChanneMat.Channel.Type}, 'NIRS');
+        nirs_flag           = strcmpi({ChanneMat.Channel.Type}, 'NIRS');
         nirs_flags{i_input} = nirs_flag;
-        nb_channel=sum(nirs_flag);
+        nb_channel          = sum(nirs_flag);
 
-        [new_ChannelFlag, bad_chan,msg] = Compute(sData, ChanneMat,sProcess.options);
+        [new_ChannelFlag, bad_chan, msg] = Compute(sData, ChanneMat, sProcess.options);
         bad_chan_names{i_input} = bad_chan;
         bad_chan_msg{i_input} = msg;
         
@@ -184,6 +183,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
             bst_report('Info',    sProcess, sInputs, sprintf('Bad channels: %s', strjoin(comon_bad_channel, ' ,')));       
          end      
    end
+
    for i=1: length(sInputs) 
        C = setdiff( intersect(bad_chan_names{i},{ChanneMat.Channel(nirs_flags{1}).Name}),comon_bad_channel); 
        if ~isempty(C) > 0
@@ -191,30 +191,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
        end
    end     
    
-%     critera=zeros( size(msg,1), nb_channel);
-%     text=cell(1,size(msg,1));
-%     for i = 1:size(msg,1)
-%         critera(i,:)= msg{i,2}(nirs_flags);
-%         text{i}=msg{i,1};
-%     end    
-%     confusion=computeConfusion(critera);
-%                                             
-%     % Warning if too many channels are removed                                         
-%     for i=1:size(msg,1)
-%         if any(strfind(text{i},'SCI')) || any(strfind(text{i},'power'))
-%             continue
-%         end
-%         fraction= round(100* confusion(i,i)/nb_channel);
-%         if fraction > 80  % send an error if more than 80% of the channels are marked bad
-%             bst_report('Error',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
-%         elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
-%             bst_report('Warning',    sProcess, sInputs, sprintf('Number of %s: %d (%d%% of the channels)', text{i},confusion(i,i),fraction))
-%         elseif confusion(i,i)> 0
-%             bst_report('Info',    sProcess, sInputs, sprintf('Number of %s: %d', text{i},confusion(i,i)))
-%         else 
-%             bst_report('Info',    sProcess, sInputs, sprintf('No %s', msg{i,1}))
-%         end
-%     end    
     bst_report('Open', 'current');                                      
     % Add bad channels
     OutputFiles = {sInputs.FileName};
@@ -264,22 +240,26 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
 %    - channel_flags: array of int, size: nb_channels
 %    - bad_channel_names: cell array of str, size: nb of bad channels
 
-    prev_channel_flags = sData.ChannelFlag;
-    channel_flags   = sData.ChannelFlag;
-    nirs_flags = strcmpi({channel_def.Channel.Type}, 'NIRS');
-    
+    prev_channel_flags  = sData.ChannelFlag;
+    channel_flags       = sData.ChannelFlag;
+    nirs_flags          = strcmpi({channel_def.Channel.Type}, 'NIRS');
+    isRaw = ~contains(sData.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
+
     signal      = sData.F';
     nirs_signal = signal(:,nirs_flags);
     
     nb_chnnels  = size(signal,2);
     nb_sample   = size(signal,1);
 
-    
-    % Remove negative channel
-    neg_channels = nirs_flags & any(signal < 0, 1);
-    channel_flags(neg_channels) = -1;
-    criteria(1,:)= {'negative channels', neg_channels,{} };
-    
+    criteria = {};
+
+    % Remove negative channel [ Only for raw files] 
+    if isRaw
+        neg_channels = nirs_flags & any(signal < 0, 1);
+        channel_flags(neg_channels) = -1;
+        criteria(1,:)= {'negative channels', neg_channels,{} };
+    end
+
     % Remove channel with low SCI or power
     if options.option_sci.Value 
 
@@ -297,27 +277,9 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         power_channels = false(1,nb_chnnels);
         power_channels(nirs_flags) = power < power_threshold ;
             
-        %create figure
-        fig1= figure('visible','off');
-        h1_axes=subplot(1,1,1);
-        h=histogram(SCI');
-        h.Annotation.LegendInformation.IconDisplayStyle = 'off';
-        line(h1_axes,[SCI_threshold, SCI_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-    
-        leg=legend(h1_axes,'SCI threshold');
-        title(sprintf('SCI rejection: %d channels',sum(SCI_channels))) 
-        criteria(end+1,:)= {'Low SCI', SCI_channels,{h1_axes,leg}};
 
-        fig1= figure('visible','off');
-        h1_axes=subplot(1,1,1);
-        h=histogram(power');
-        h.Annotation.LegendInformation.IconDisplayStyle = 'off';
-        line(h1_axes,[power_threshold, power_threshold], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-    
-        leg=legend(h1_axes,'SCI threshold');
-        title(sprintf('power rejection: %d channels',sum(power_channels))) 
-        
-        criteria(end+1,:)= {'Low power', power_channels,{h1_axes,leg}};
+        criteria(end+1,:)= {'Low SCI', SCI_channels,{}};
+        criteria(end+1,:)= {'Low power', power_channels,{}};
         criteria(end+1,:)= {'Cardiac', SCI_channels & power_channels,{}};
 
         channel_flags(SCI_channels | power_channels) = -1;
@@ -328,8 +290,15 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         CV_threshold = options.coefficient_variation.Value{1};                 
         
         window_length = 10;
-        [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
-            
+
+        % Replace Coeficient of Variation by Standard Deviation 
+        % for OD and HB as the mean is 0. 
+        if isRaw
+            [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
+        else
+            [~,  CV ] = process_nst_quality_check('compute_std', sData.Time, nirs_signal', window_length);
+        end
+
         CV = median(CV,2) * 100;
 
         CV_channels = false(1,nb_chnnels);
@@ -358,7 +327,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
             saturating(nirs_flags) = saturating(nirs_flags) | prop_sat_floor >= min_sat_prop;
         end
         channel_flags(saturating) = -1;
-        criteria(end+1,:)= {'saturating channels', saturating,{} };
+        criteria(end+1,:)= {'saturating channels', saturating, {} };
     end
 
     % Remove channel based on source-detector separation
@@ -378,23 +347,9 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         if max_separation_m > 0
              distances_flag(nirs_flags) = distances_flag(nirs_flags) | separations_m_by_chans >= max_separation_m;
         end
+        
         channel_flags(distances_flag) = -1;
-        
-        %create figure
-
-        fig1= figure('visible','off');
-        h1_axes=subplot(1,1,1);
-        h=histogram(separations_m_by_chans');
-        h.Annotation.LegendInformation.IconDisplayStyle = 'off';
-        
-        line(h1_axes,[min_separation_m, min_separation_m], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-        line(h1_axes,[max_separation_m, max_separation_m], ylim(gca), 'LineWidth', 2, 'Color', 'b');
-        
-        leg=legend(h1_axes,'Separation threshold');
-        title(sprintf('Distance rejection: %d channels',sum(distances_flag))) 
-        
-        
-        criteria(end+1,:)= {'Extrem separation', distances_flag,{h1_axes,leg} };
+        criteria(end+1,:)= {'Extrem separation', distances_flag, {} };
     end 
     
 
@@ -454,97 +409,5 @@ for ii=1:length(ichan_to_scan)
 end
 end
 
-function confusion=computeConfusion(criteria)
-    % Compute the 'confusion' matrix. confusion(i,j) contains the number of
-    % channel marked as bad with criteria i, and j (exemple negative
-    % channel and channel with high variance 
-    % Can be plotted usin confusionchart(m,classLabels) from machine
-    % learning toolbox
-    
-    n_criteria=size(criteria,1);
-    
-    confusion=zeros(n_criteria,n_criteria);
-    for i =1:n_criteria
-        for j=1:n_criteria
-            confusion(i,j) = sum( criteria(i,:) & criteria(j,:) ); 
-        end
-    end    
 
-end
-
-function plotConfMat(varargin)
-%PLOTCONFMAT plots the confusion matrix with colorscale, absolute numbers
-%   and precision normalized percentages
-%
-%   usage: 
-%   PLOTCONFMAT(confmat) plots the confmat with integers 1 to n as class labels
-%   PLOTCONFMAT(confmat, labels) plots the confmat with the specified labels
-%
-%   Vahe Tshitoyan
-%   20/08/2017
-%
-%   Arguments
-%   confmat:            a square confusion matrix
-%   labels (optional):  vector of class labels
-% number of arguments
-switch (nargin)
-    case 0
-       confmat = 1;
-       labels = {'1'};
-    case 1
-       confmat = varargin{1};
-       labels = 1:size(confmat, 1);
-    otherwise
-       confmat = varargin{1};
-       labels = varargin{2};
-end
-
-confmat(isnan(confmat))=0; % in case there are NaN elements
-numlabels = size(confmat, 1); % number of labels
-
-selection = any( confmat > 0, 1) & ~contains(labels,'SCI') & ~contains(labels,'power');
-
-
-% calculate the percentage accuracies
-tot_rejection = sum( diag( confmat(selection,selection))); 
-confpercent = 100*confmat ./tot_rejection;
-
-selection = any( confmat > 0, 1) & ~contains(labels,'Cardiac');
-if all(confmat(contains(labels,'power'),:) == 0)  &&  any(confmat(contains(labels,'SCI'),:) > 0)
-    selection( find(contains(labels,'power'))) = 1;
-elseif all(confmat(contains(labels,'SCI'),:) == 0)  &&  any(confmat(contains(labels,'power'),:) > 0)
-    selection( find(contains(labels,'SCI'))) = 1;
-end    
-confpercent=confpercent(selection,selection);
-confmat = confmat(selection,selection);
-labels = labels(selection);
-numlabels= length(labels);
-
-% plotting the colors
-imagesc(confpercent);
-title(sprintf('Total rejected channel: %d', tot_rejection));
-ylabel('Rejection criteria'); xlabel('Rejection criteria');
-% set the colormap
-colormap(flipud(gray));
-% Create strings from the matrix values and remove spaces 
-textStrings = num2str([confpercent(:), confmat(:)], '%.1f%%\n%d\n');
-
-textStrings = strtrim(cellstr(textStrings));
-% Create x and y coordinates for the strings and plot them
-[x,y] = meshgrid(1:numlabels);
-hStrings = text(x(:),y(:),textStrings(:), ...
-    'HorizontalAlignment','center');
-% Get the middle value of the color range
-midValue = mean(get(gca,'CLim'));
-% Choose white or black for the text color of the strings so
-% they can be easily seen over the background color
-textColors = repmat(confpercent(:) > midValue,1,3);
-set(hStrings,{'Color'},num2cell(textColors,2));
-% Setting the axis labels
-set(gca,'XTick',1:numlabels,...
-    'XTickLabel',labels,...
-    'YTick',1:numlabels,...
-    'YTickLabel',labels,...
-    'TickLength',[0 0]);
-end
 
