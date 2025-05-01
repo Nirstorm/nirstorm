@@ -213,8 +213,8 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
 %    - channels_flags: array of int, size: nb_channels
 %        channel flags to update (1 is good, 0 is bad)
 %   [- do_remove_neg_channels: boolean], default: 1
-%        actually remove pair where at least one channel has negative
-%        values
+%        Remove pair where at least one channel has negative values
+%        This Step is skipped for optical density or concentrations
 %   [- max_sat_prop: double between 0 and 1], default: 1
 %        maximum proportion of saturating values.
 %        If 1 then all time series can be saturating -> ignore
@@ -243,7 +243,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     prev_channel_flags  = sData.ChannelFlag;
     channel_flags       = sData.ChannelFlag;
     nirs_flags          = strcmpi({channel_def.Channel.Type}, 'NIRS');
-    isRaw = ~contains(sData.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
+    isRaw = isempty(sData.DisplayUnits)  || ~contains(sData.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
 
     signal      = sData.F';
     nirs_signal = signal(:,nirs_flags);
@@ -296,7 +296,9 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         if isRaw
             [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
         else
-            [~,  CV ] = process_nst_quality_check('compute_std', sData.Time, nirs_signal', window_length);
+            [~,  mov_std ] = process_nst_quality_check('compute_std', sData.Time, nirs_signal', window_length);
+            % Multiply by log(10) to get same CV as for raw data : 
+            CV = log(10) * mov_std;
         end
 
         CV = median(CV,2) * 100;
@@ -347,7 +349,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         if max_separation_m > 0
              distances_flag(nirs_flags) = distances_flag(nirs_flags) | separations_m_by_chans >= max_separation_m;
         end
-        
+
         channel_flags(distances_flag) = -1;
         criteria(end+1,:)= {'Extrem separation', distances_flag, {} };
     end 

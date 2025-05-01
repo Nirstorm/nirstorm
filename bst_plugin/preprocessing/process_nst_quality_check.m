@@ -105,13 +105,21 @@ function OutputFiles = Run(sProcess, sInputs)
     
     window_length = sProcess.options.window_length.Value{1};
 
-    ChannelMat          = in_bst_channel(sInputs.ChannelFile);
-    nirs_ichans  = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
+    ChannelMat  = in_bst_channel(sInputs.ChannelFile);
+    nirs_ichans = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
+    isRaw       = isempty(sDataIn.DisplayUnits) || ~contains(sDataIn.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
+
     signals = sDataIn.F(nirs_ichans,:);
 
     if sProcess.options.option_coefficient_variation.Value
 
-        [Time, CV] = compute_CV(sDataIn.Time, signals, window_length);
+        if isRaw
+            [Time, CV] = compute_CV(sDataIn.Time, signals, window_length);
+        else
+            [Time, mov_std] = compute_std(sDataIn.Time, signals, window_length);
+            % Multiply by log(10) to get same CV as for raw data : 
+            CV = log(10) * mov_std;
+        end
 
         % Save time-series data
         data_out = zeros(size(sDataIn.F));
