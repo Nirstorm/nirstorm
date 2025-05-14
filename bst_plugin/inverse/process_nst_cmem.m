@@ -243,7 +243,6 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.MEMpaneloptions.solver.NoiseCov_recompute   = 1;
 
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
-    OPTIONS.flag_auto_nbo     = sProcess.options.auto_neighborhood_order.Value;
     
     OPTIONS.Comment         = 'MEM';
     OPTIONS.FunctionName    = 'mem';
