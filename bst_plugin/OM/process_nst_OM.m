@@ -19,7 +19,7 @@ function varargout = process_nst_OM( varargin )
 % =============================================================================@
 %
 % Authors: 
-% Edouard Delaire (2021)
+% Edouard Delaire (2021), Jean Bornert (2025)
 % Thomas Vincent, Alexis Machado, ZhengChen Cai (2017)
 
 eval(macro_method);
