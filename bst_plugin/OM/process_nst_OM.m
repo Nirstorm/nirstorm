@@ -395,392 +395,439 @@ end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options)
 
-if ~isfield(options, 'nb_sources')
-    bst_error('Number of sources is required');
-end
-
-if ~isfield(options, 'nb_detectors')
-    bst_error('Number of detectors is required');
-end
-
-if ~isfield(options, 'nAdjacentDet')
-    bst_error('Number of adjacent is required');
-end
-
-if ~isfield(options, 'sep_optode_min')
-    bst_error('Minimum distance of optodes is required');
-end
-if ~isfield(options, 'sep_optode_max')
-    bst_error('Maximum distance of optodes is required');
-end
-
-if ~isfield(options, 'weight_tables')
-    bst_error('Weight_tables is required');
-end
-
-holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
-nHolders = size(head_vertices_coords, 1);
-
-weight_table = options.weight_tables;
-
-
-nS = options.nb_sources; % number of sources
-nD = options.nb_detectors; % number of detectors
-
-flag_sep_optode_optode=1;
-thresh_sep_optode_optode=[options.sep_optode_min options.sep_optode_max]; % mm (1) no optodes sep below this thresh (2) Optodes above this thresholds do not form pairs
-
-flag_sep_src_det=1;
-thresh_min_sep_src_det = options.sep_SD_min; % mm (1) min sep between a source and a det %TODO: why not using thresh_sep_optode_optode(1)?
-
-flag_adjacency=1;
-nAdjacentDet= options.nAdjacentDet; % minimal number of adjacent detector in the given range
-
-flag_init=0; % provide an initial solution
-
-nH = nHolders; % number of holders
-xp=zeros(nH,1); nX=size(xp,1); % binary
-yq=zeros(nH,1); nY=size(yq,1); % binary
-wq_V=zeros(nH,1); nW_V=size(wq_V,1); % float
-v=[xp;yq;wq_V]; nVar=size(v,1);
-
-%..........................................................................
-% Aeq_1: Equation 11 Sum(xp)=nSrc
-%..........................................................................
-Aeq_1=zeros(1,nVar);
-Aeq_1(1,1:nH)=1;
-E_1=nS;
-
-%..........................................................................
-% Aeq_2: Equation 11 Sum(yq)=nDet
-%..........................................................................
-Aeq_2=zeros(1,nVar);
-Aeq_2(1,nH+1:2*nH)=1;
-E_2=nD;
-
-%..........................................................................
-% Display Equality matrix
-%..........................................................................
-if 0
-    matrixes2show={Aeq_1,Aeq_2,[Aeq_1;Aeq_2]};
-    for ii=1:2
-        figure ('name','equality matrix')
-        mat2show=matrixes2show{ii} ;
-        colormap(gray(3))
-        imagesc([mat2show]);
-        %set(gca,'PlotBoxAspectRatio',[size(mat2show,1) size(mat2show,2) 1])
-        ylim([0.5 size([mat2show],1)+0.5])
+    if ~isfield(options, 'nb_sources')
+        bst_error('Number of sources is required');
     end
-    clear ii
-end
-
-
- 
-%==========================================================================
-% Create inequality matrixes
-%==========================================================================
-M=realmax;
-%..........................................................................
-% Aineq1: Equation 12 : wq_V-Myq<=0
-%..........................................................................
-Aineq_1=zeros(nH,nVar);
-for iH=1:nH
-    Aineq_1(iH,nH+iH)=-M;
-    Aineq_1(iH,2*nH+iH)=1;
-end
-I_1=zeros(nH,1);
-
-
-ipair = 1;
-bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
-% eq 27 ??
-
-if 0 weight_table=weight_table/max(weight_table(:)); end % normalize weigth table
-
-%..........................................................................
-% Aineq2: Equation 13: wq_V-Sum(Vpq*xp)<=0
-%..........................................................................
-Aineq_2=zeros(nH,nVar);
-for iH=1:nH
-    Aineq_2(iH,2*nH+iH) = 1;
-    Aineq_2(iH,1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
-end
-I_2=zeros(nH,1);
     
-%..........................................................................
-% Aineq3: Optode/Optode minimal separation constraints
-%..........................................................................
-if flag_sep_optode_optode
-    separations=holder_distances;
-    forbid_sets=zeros(nH);
-    forbid_sets(separations<thresh_sep_optode_optode(1))=1; %TODO expose as separate parameter
-
-    M2=nS+nD;
-    Aineq_3=sparse(2*nH,nVar);
-    Aineq_3(1:nH,1:2*nH)=[(M2-1)*eye(nH) + forbid_sets  forbid_sets] ;
-    Aineq_3(nH +1:2*nH,1:2*nH)=[forbid_sets (M2-1)*eye(nH) + forbid_sets] ;
-    I_3=M2*ones(2*nH,1);
-    clear M2
-    clear forbid_sets separations
-else
-    Aineq_3=[];
-    I_3=[];
-end
-bst_progress('inc', 1);
-%..........................................................................
-% Aineq4: constraint source/det min separations
-%..........................................................................
-if flag_sep_src_det
-    separations=holder_distances;
-    forbid_sets=zeros(nH);
-    forbid_sets(separations<thresh_min_sep_src_det)=1;
-
-    M2=nD;
-    Aineq_4=sparse(nH,nVar);
-    Aineq_4(1:nH,1:2*nH)=[M2*eye(nH) forbid_sets] ;
-    I_4=M2*ones(nH,1);
-    clear M2
-    clear forbid_sets separations
-else
-    Aineq_4=[];
-    I_4=[];
-end
-    
-%..........................................................................
-% Aineq5: Adjacency constraints
-%..........................................................................
-if flag_adjacency
-    separations=holder_distances;
-    Allow_sets=zeros(nH);
-    Allow_sets(separations>=thresh_sep_optode_optode(1) & separations<=thresh_sep_optode_optode(2))=1;
-
-    Aineq_5=sparse(nH,nVar);
-    Aineq_5(1:nH,1:2*nH)=[eye(nH)*nAdjacentDet , -Allow_sets];
-    I_5=zeros(nH,1);
-else
-    Aineq_5=[];
-    I_5=[];
-end
-    
-%..........................................................................
-% Display InEquality matrix
-%..........................................................................
-if 0
-    matrixes2show={Aineq_1,Aineq_2,Aineq_3, Aineq_4,[Aineq_1;Aineq_2;Aineq_3; Aineq_4; Aineq_5]};
-    for ii=1:5
-        figure('name','inequality matrix')
-        %colormap(flipud(autumn(3)))
-        mat2show=matrixes2show{ii};
-        imagesc(mat2show);
-        %set(gca,'PlotBoxAspectRatio',[size(mat2show,1) size(mat2show,2) 1])
-        ylim([0.5 size(mat2show,1)+0.5])
+    if ~isfield(options, 'nb_detectors')
+        bst_error('Number of detectors is required');
     end
-    clear ii
-end
     
-bst_progress('inc', 1);
-%==========================================================================
-% initial condition: find sources whose pairs have maximum energy then
-% complete with detectors
-%==========================================================================
-xp_0=zeros(nH,1);
-yq_0=zeros(nH,1);
-[~,idx] = sort(weight_table(:),'descend');
-% Seems to only needed if holder list is not the same size as
-% weight_table
-if 0
-    inc=1; src_pos_idx=[];det_pos_idx=[];
-    while numel(src_pos_idx)~=nS
-        [ia,~]=ind2sub(size(weight_table),idx(inc));
-        if ~ismember(ia,src_pos_idx) && ismember(ia,find(ismember(mont.list_hold,holderList)))
-            src_pos_idx = [src_pos_idx ia];
-            inc=inc+1;
-        else
-            inc=inc+1;
-            continue
+    if ~isfield(options, 'nAdjacentDet')
+        bst_error('Number of adjacent is required');
+    end
+    
+    if ~isfield(options, 'sep_optode_min')
+        bst_error('Minimum distance of optodes is required');
+    end
+    if ~isfield(options, 'sep_optode_max')
+        bst_error('Maximum distance of optodes is required');
+    end
+    
+    if ~isfield(options, 'weight_tables')
+        bst_error('Weight_tables is required');
+    end
+    
+    holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
+    nHolders = size(head_vertices_coords, 1);
+    
+    weight_table = options.weight_tables;
+    
+    
+    nS = options.nb_sources; % number of sources
+    nD = options.nb_detectors; % number of detectors
+    
+    flag_sep_optode_optode = 1;
+    thresh_sep_optode_optode = [options.sep_optode_min options.sep_optode_max]; 
+    % mm (1) no optodes sep below this thresh (2) Optodes above this thresholds do not form pairs
+    
+    flag_sep_src_det = 1;
+    thresh_min_sep_src_det = options.sep_SD_min; 
+    % mm (1) min sep between a source and a det %TODO: why not using thresh_sep_optode_optode(1)?
+    
+    flag_adjacency = 1;
+    nAdjacentDet = options.nAdjacentDet; 
+    % minimal number of adjacent detector in the given range
+    
+    flag_init = 0; % provide an initial solution
+    
+    
+    %Enlever nX, nY, nW_V ??
+    
+    nH   = nHolders; % number of holders
+    xp   = zeros(nH,1) ; % binary
+    yq   = zeros(nH,1) ; % binary
+    wq_V = zeros(nH,1) ; % float
+    v    = [xp;yq;wq_V]; nVar = size(v,1);
+    
+    % Calls function for equation 1 : Sum(xp)=nSrc (11)
+    [Aeq_1, E_1] = add_constraint_nSrc(nVar, nH, nS);
+    
+    % Calls function for equation 2 : Sum(yq)=nDet (11)
+    [Aeq_2, E_2] = add_constraint_nDet(nVar, nH, nD);
+    
+    %......................................................................
+    % DEBUG FUNCTION : Display Equality matrix
+    % display_eq_matrix(Aeq_1, Aeq_2);
+    %......................................................................
+    
+    %======================================================================
+    % Create inequality matrixes
+    %======================================================================
+    % Calls function for inequation 1 : wq_V-Myq<=0 (12)
+    [Aineq_1, I_1] = create_ineq_matrix(nH, nVar);
+    
+    %C'est quoi ipair ?
+    ipair = 1;
+    
+    
+    bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
+    
+    %......................................................................
+    % DEBUG FUNCTION : normalize weigth table
+    % norm_w_table(weight_table);
+    %......................................................................
+    
+    % Calls function for inequation 2 : wq_V-Sum(Vpq*xp) <= 0 (13)
+    [Aineq_2, I_2] = detect_activ_constr(nH, nVar, weight_table);
+    
+    % Calls function for inequation 3 : Optode/Optode minimal separation constraints
+    [Aineq_3, I_3] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distances, nH, thresh_sep_optode_optode, nS, nD, nVar);
+    
+    % Calls function for inequation 4 : Source/det min separation constraints
+    [Aineq_4, I_4] = src_det_min_sep_constr(flag_sep_src_det, holder_distances, nH, thresh_min_sep_src_det, nD, nVar);
+    
+    % Calls function for inequation 5 : Adjacency constraints
+    [Aineq_5, I_5] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_optode_optode, nVar, nAdjacentDet);
+    
+    %......................................................................
+    % DEBUG FUNCTION : Display InEquality matrix Aineq_1 to 5
+    % display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5);
+    %......................................................................
+        
+    bst_progress('inc', 1);
+    %======================================================================
+    % initial condition : find sources whose pairs have maximum energy then
+    % complete with detectors
+    %======================================================================
+    xp_0 = zeros(nH, 1);
+    yq_0 = zeros(nH, 1);
+    [~,idx] = sort(weight_table(:), 'descend');
+    % Seems to only needed if holder list is not the same size as weight_table
+    
+    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
+    
+    red_weight_table = weight_table(src_pos_idx,:);
+    [~, idx] = sort(red_weight_table(:), 'descend');
+
+    bst_progress('inc', 1);
+    [~, det_pos_idx] = ind2sub(size(red_weight_table), idx(1:nD));
+    
+    xp_0(src_pos_idx) = 1;
+    yq_0(det_pos_idx) = 1;
+    
+    wq_V_O = zeros(nH, 1);
+    for ii = 1:numel(yq_0)
+        if yq_0(ii) == 1
+            wq_V_0(ii) = sum(weight_table(src_pos_idx, ii));
         end
     end
-    clear inc ia ib
-end
-[src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
+    incumbent_x0 = [];
+    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
+    display(sprintf('incumbent=%g', incumbent_x0))
+    clear src_pos_idx det_pos_idx
+    x0 = [xp_0 ; yq_0 ; wq_V_O];
+    
+    Aeq = [Aeq_1 ; Aeq_2];
+    E = [E_1 ; E_2];
+    
+    Aineq = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
+    I = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
+    
+    f  = [zeros(1, 2*nH) ones(1, nH)]';
+    lb = [];%[zeros(1,2*nH) zeros(1,nH)]';
+    ub = [];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
+    ctype = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
+    
+    prob = cplexcreateprob('cplexmilp');
+    prob.f = f;
+    prob.lb = lb; prob.ub = ub;
+    prob.ctype = ctype;
+    prob.Aineq = Aineq; prob.bineq = I;
+    prob.Aeq = Aeq; prob.beq = E;
+    prob.x0 = [];
+    prob.options = [];
+    bst_progress('inc', 1);
+    bst_progress('stop');
+    
+   
+    cplex=Cplex(prob);
+    cplex.Model.sense = 'maximize';
+    cplex.Param.timelimit.Cur=300;
 
-red_weight_table = weight_table(src_pos_idx,:);
-[~,idx] = sort(red_weight_table(:),'descend');
-if 0
-    inc=1;
-    while numel(det_pos_idx)~=nD
-        [~,ib]=ind2sub(size(red_weight_table),idx(inc));
-        if   ~ismember(ib,src_pos_idx) && ismember(ib,find(ismember(mont.list_hold,holderList)))
-            det_pos_idx=unique([det_pos_idx ib]);
-            inc=inc+1;
-        else
-            inc=inc+1;
-            continue
+    % Delete clone[number].log files created by Cplex
+    cplex.Param.output.clonelog.Cur = 0;
+    
+
+    % Reprendre ici
+
+    %Progress bar
+    cplex.Callback.handle = @myCplexProgressCallback;
+    cplex.Callback.func = 'generic';
+    cplex.Callback.info.set = 'all';
+    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 1000);
+    
+    if flag_init
+        cplex.MipStart(1).name='optim';
+        cplex.MipStart(1).effortlevel=1;
+        cplex.MipStart(1).x=x0;
+        cplex.MipStart( 1).xindices=int32([1:numel(x0)]');
+    end
+    
+    results = cplex.solve;
+    bst_progress('inc', 2);
+    bst_progress('stop');
+    
+    if ~isfield(results, 'x')
+        bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
+        return;
+    end
+    
+    x=results.x;
+    x=round(x);
+    isources = find(x(1:nH)==1);
+    idetectors = find(x(nH+1:2*nH)==1);
+    
+    
+    for isrc=1:length(isources)
+        for idet=1:length(idetectors)
+            if holder_distances(isources(isrc),idetectors(idet)) > thresh_sep_optode_optode(1) && ...
+                    holder_distances(isources(isrc),idetectors(idet)) < thresh_sep_optode_optode(2) && ...
+                    full(weight_table(isources(isrc),idetectors(idet)))
+                montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
+                montage_weight(ipair,:) = full(weight_table(isources(isrc),idetectors(idet)));
+                ipair = ipair + 1;
+            end
         end
     end
-    clear inc ia ib
-end
-bst_progress('inc', 1);
-[~, det_pos_idx] = ind2sub(size(red_weight_table), idx(1:nD));
-
-xp_0(src_pos_idx)=1;
-yq_0(det_pos_idx)=1;
-
-wq_V_O=zeros(nH,1);
-for ii=1:numel(yq_0)
-    if yq_0(ii)==1
-        wq_V_0(ii) = sum(weight_table(src_pos_idx,ii));
-    end
-end
-incumbent_x0=[];
-incumbent_x0=full(sum(reshape(weight_table(src_pos_idx,det_pos_idx),[],1)));
-display(sprintf('incumbent=%g',incumbent_x0))
-clear src_pos_idx det_pos_idx
-x0=[xp_0;yq_0; wq_V_O];
-
-Aeq=[Aeq_1;Aeq_2];
-E=[E_1;E_2];
-
-Aineq=[Aineq_1;Aineq_2;Aineq_3;Aineq_4,;Aineq_5];
-I=[I_1;I_2;I_3;I_4;I_5];
-
-f=[zeros(1,2*nH) ones(1,nH)]';
-lb=[];%[zeros(1,2*nH) zeros(1,nH)]';
-ub=[];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
-ctype=[repmat('B',1,2*nH) repmat('S',1,nH)];
-
-prob = cplexcreateprob('cplexmilp');
-prob.f = f;
-prob.lb = lb; prob.ub = ub;
-prob.ctype=ctype;
-prob.Aineq=Aineq; prob.bineq = I;
-prob.Aeq=Aeq; prob.beq = E;
-prob.x0=[];
-prob.options = [];
-bst_progress('inc', 1);
-bst_progress('stop');
-
-bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 1000);
-
-cplex=Cplex(prob);
-cplex.Model.sense = 'maximize';
-cplex.Param.timelimit.Cur=300;
-
-if flag_init
-    cplex.MipStart(1).name='optim';
-    cplex.MipStart(1).effortlevel=1;
-    cplex.MipStart(1).x=x0;
-    cplex.MipStart(1).xindices=int32([1:numel(x0)]');
-end
-
-results = cplex.solve;
-bst_progress('inc', 2);
-bst_progress('stop');
-
-if ~isfield(results, 'x')
-    bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
-    return;
-end
-
-x=results.x;
-x=round(x);
-isources = find(x(1:nH)==1);
-idetectors = find(x(nH+1:2*nH)==1);
-
-
-for isrc=1:length(isources)
-    for idet=1:length(idetectors)
-        if holder_distances(isources(isrc),idetectors(idet)) > thresh_sep_optode_optode(1) && ...
-                holder_distances(isources(isrc),idetectors(idet)) < thresh_sep_optode_optode(2) && ...
-                full(weight_table(isources(isrc),idetectors(idet)))
-            montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-            montage_weight(ipair,:) = full(weight_table(isources(isrc),idetectors(idet)));
-            ipair = ipair + 1;
-        end
-    end
-end
-
-%sensitivity_thresh = 0.05;
-%montage_pairs = montage_pairs(find(montage_weight > 0),:);
+    
+    %sensitivity_thresh = 0.05;
+    %montage_pairs = montage_pairs(find(montage_weight > 0),:);
 end
 
 
 function sSurfNew = extract_scout_surface(sSurf, sScouts)
 
-iRemoveVert = setdiff(1:size(sSurf.Vertices,1), [sScouts.Vertices]);
-tag = 'OM_scout_extract';
-
-% Unload everything
-bst_memory('UnloadAll', 'Forced');
-
-% === REMOVE VERTICES FROM SURFACE FILE ===
-% Remove vertices
-[Vertices, Faces, Atlas] = tess_remove_vert(sSurf.Vertices, sSurf.Faces, iRemoveVert, sSurf.Atlas);
-% Remove the handles of the scouts
-for iAtlas = 1:length(Atlas)
-    for is = 1:length(Atlas(iAtlas).Scouts)
-        Atlas(iAtlas).Scouts(is).Handles = [];
+    iRemoveVert = setdiff(1:size(sSurf.Vertices,1), [sScouts.Vertices]);
+    tag = 'OM_scout_extract';
+    
+    % Unload everything
+    bst_memory('UnloadAll', 'Forced');
+    
+    % === REMOVE VERTICES FROM SURFACE FILE ===
+    % Remove vertices
+    [Vertices, Faces, Atlas] = tess_remove_vert(sSurf.Vertices, sSurf.Faces, iRemoveVert, sSurf.Atlas);
+    % Remove the handles of the scouts
+    for iAtlas = 1:length(Atlas)
+        for is = 1:length(Atlas(iAtlas).Scouts)
+            Atlas(iAtlas).Scouts(is).Handles = [];
+        end
+        %         if isfield(Atlas(iAtlas).Scouts, 'Handles');
+        %             Atlas(iAtlas).Scouts = rmfield(Atlas(iAtlas).Scouts, 'Handles');
+        %         end
     end
-    %         if isfield(Atlas(iAtlas).Scouts, 'Handles');
-    %             Atlas(iAtlas).Scouts = rmfield(Atlas(iAtlas).Scouts, 'Handles');
-    %         end
-end
-% Build new surface
-sSurfNew = db_template('surfacemat');
-sSurfNew.Comment  = [sSurf.Comment '_' tag];
-sSurfNew.Vertices = Vertices;
-sSurfNew.Faces    = Faces;
-sSurfNew.Atlas    = Atlas;
-sSurfNew.iAtlas   = sSurf.iAtlas;
-
-% % === SAVE NEW FILE ===
-% % Output filename
-% NewTessFile = strrep(file_fullpath(sSurf.FileName), '.mat', ['_' tag '.mat']);
-% NewTessFile = file_unique(NewTessFile);
-% % Save file back
-% bst_save(NewTessFile, sSurfNew, 'v7');
-% % Get subject
-% [sSubject, iSubject] = bst_get('SurfaceFile', sSurf.FileName);
-% % Register this file in Brainstorm database
-% db_add_surface(iSubject, NewTessFile, sSurfNew.Comment);
+    % Build new surface
+    sSurfNew = db_template('surfacemat');
+    sSurfNew.Comment  = [sSurf.Comment '_' tag];
+    sSurfNew.Vertices = Vertices;
+    sSurfNew.Faces    = Faces;
+    sSurfNew.Atlas    = Atlas;
+    sSurfNew.iAtlas   = sSurf.iAtlas;
+    
+    % % === SAVE NEW FILE ===
+    % % Output filename
+    % NewTessFile = strrep(file_fullpath(sSurf.FileName), '.mat', ['_' tag '.mat']);
+    % NewTessFile = file_unique(NewTessFile);
+    % % Save file back
+    % bst_save(NewTessFile, sSurfNew, 'v7');
+    % % Get subject
+    % [sSubject, iSubject] = bst_get('SurfaceFile', sSurf.FileName);
+    % % Register this file in Brainstorm database
+    % db_add_surface(iSubject, NewTessFile, sSurfNew.Comment);
 
 end
 
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
 
-if nargin < 3
-    save_in_db = 0;
-end
-sSubject = cortex_scout.sSubject;
-sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
-dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
-head_vertices = find(min(dis2head,[],2) < extent_m); 
+    if nargin < 3
+        save_in_db = 0;
+    end
+    sSubject = cortex_scout.sSubject;
+    sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+    sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+    dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+    head_vertices = find(min(dis2head,[],2) < extent_m); 
+    
+    % TODO: properly select atlas
+    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+    if ~isempty(exclude_scout)
+        head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
+    end
+    
+    limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+    if ~isempty(limiting_scout)
+        head_vertices = intersect(head_vertices, limiting_scout.Vertices);
+    end
+    
+    if save_in_db && ...,
+       ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
+        ,{sHead.Atlas.Scouts.Label}))
+        scout_idx = size(sHead.Atlas.Scouts,2) + 1;
+        sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
+        sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
+        sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
+        sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
+        sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
+                                               '(' num2str(extent_m*100) ' cm)'];
+        bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+        db_save();
+    end
 
-% TODO: properly select atlas
-exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
-if ~isempty(exclude_scout)
-    head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
 end
 
-limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
-if ~isempty(limiting_scout)
-    head_vertices = intersect(head_vertices, limiting_scout.Vertices);
+
+function [A, E] = add_constraint_nSrc(nVar, nH, nS)
+% @========================================================================
+% add_constraint_nSrc Adds the constraint for the total number of sources.
+%   See equation 11 : Sum(xp) = nSrc
+% ========================================================================@
+
+    A = zeros(1, nVar);
+    A(1, 1:nH) = 1;
+
+    E = nS;
 end
 
-if save_in_db && ...,
-   ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
-    ,{sHead.Atlas.Scouts.Label}))
-    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
-    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
-    sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
-    sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
-    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
-    sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
-                                           '(' num2str(extent_m*100) ' cm)'];
-    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
-    db_save();
+function [A, E] = add_constraint_nDet(nVar, nH, nD)
+% @========================================================================
+% add_constraint_nDet Adds the constraint for the total number of detectors.
+%   See equation 11 : Sum(yq)=nDet
+% ========================================================================@
+
+    A = zeros(1, nVar);
+    A(1, nH+1:2*nH) = 1;
+
+    E = nD;
 end
 
+function [A, I] = create_ineq_matrix(nH, nVar)
+% @========================================================================
+% create_ineq_matrix Creates the inequality matrix. 
+%   See equation 12 : wq_V-Myq <= 0
+% ========================================================================@
+
+    M = realmax;
+    A = zeros(nH, nVar);
+    for iH = 1:nH
+        A(iH, nH+iH) = -M;
+        A(iH, 2*nH+iH) = 1;
+    end
+    I = zeros(nH, 1);
+end
+
+function [A, I] = detect_activ_constr(nH, nVar, weight_table)
+% @========================================================================
+% detect_activ_constr Generates inequality constraints for detector activation.
+%   See equation 13 : wq_V-Sum(Vpq*xp) <= 0
+% ========================================================================@
+
+    A=zeros(nH, nVar);
+    for iH = 1:nH
+        A(iH, 2*nH+iH) = 1;
+        A(iH, 1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
+    end
+    I = zeros(nH, 1);
+end
+
+function [A, I] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distances, nH, thresh_sep_optode_optode, nS, nD, nVar)
+% @========================================================================
+% opt_opt_min_sep_constr Optode/Optode minimal separation constraints
+% ========================================================================@
+
+    if flag_sep_optode_optode
+        separations = holder_distances;
+        forbid_sets = zeros(nH);
+        forbid_sets(separations < thresh_sep_optode_optode(1)) = 1; %TODO expose as separate parameter
+    
+        M2 = nS+nD;
+        A = sparse(2*nH, nVar);
+        A(1:nH, 1:2*nH) = [(M2-1)*eye(nH) + forbid_sets  forbid_sets] ;
+        A(nH +1:2*nH, 1:2*nH) = [forbid_sets (M2-1)*eye(nH) + forbid_sets] ;
+        I = M2*ones(2*nH, 1);
+    else
+        A = [];
+        I = [];
+    end
+    bst_progress('inc', 1);
+end
+
+function [A, I] = src_det_min_sep_constr(flag_sep_src_det, holder_distances, nH, thresh_min_sep_src_det, nD, nVar)
+% @========================================================================
+% src_det_min_sep_constr Source/det minimal separation constraints
+% ========================================================================@
+
+    if flag_sep_src_det
+        separations = holder_distances;
+        forbid_sets = zeros(nH);
+        forbid_sets(separations < thresh_min_sep_src_det) = 1;
+    
+        M2 = nD;
+        A = sparse(nH, nVar);
+        A(1:nH, 1:2*nH) = [M2*eye(nH) forbid_sets] ;
+        I = M2*ones(nH, 1);
+    else
+        A = [];
+        I = [];
+    end
+end
+
+function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_optode_optode, nVar, nAdjacentDet)
+% @========================================================================
+% adj_constr Adjacency constraints
+% ========================================================================@
+
+    if flag_adjacency
+        separations = holder_distances;
+        Allow_sets = zeros(nH);
+        Allow_sets(separations >= thresh_sep_optode_optode(1) & separations <= thresh_sep_optode_optode(2)) = 1;
+    
+        A = sparse(nH,nVar);
+        A(1:nH,1:2*nH) = [eye(nH)*nAdjacentDet, -Allow_sets];
+        I = zeros(nH, 1);
+    else
+        A = [];
+        I = [];
+    end
+end
+
+%==========================================================================
+% DEBUG FUNCTIONS
+%==========================================================================
+function display_eq_matrix(Aeq_1, Aeq_2)
+    matrixes2show={Aeq_1, Aeq_2, [Aeq_1 ; Aeq_2]};
+    for ii=1:2
+        figure ('name', 'equality matrix')
+        mat2show=matrixes2show{ii} ;
+        colormap(gray(3))
+        imagesc([mat2show]);
+        %set(gca, 'PlotBoxAspectRatio', [size(mat2show, 1) size(mat2show, 2) 1])
+        ylim([0.5 size([mat2show], 1)+0.5])
+    end
+end
+
+function weight_table = norm_w_table(weight_table)
+weight_table=weight_table/max(weight_table(:));
+end
+
+function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
+    matrixes2show={Aineq_1, Aineq_2, Aineq_3, Aineq_4, [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4 ; Aineq_5]};
+    for ii=1:5
+        figure('name','inequality matrix')
+        %colormap(flipud(autumn(3)))
+        mat2show=matrixes2show{ii};
+        imagesc(mat2show);
+        %set(gca, 'PlotBoxAspectRatio', [size(mat2show, 1) size(mat2show, 2) 1])
+        ylim([0.5 size(mat2show, 1)+0.5])
+    end
 end
