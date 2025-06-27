@@ -25,7 +25,7 @@ function varargout = process_nst_OM( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
@@ -58,12 +58,12 @@ function s = str_pad(s,padsize)
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
 Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFile = Run(sProcess, ~) 
 OutputFile = {};
 
 if bst_iscompiled()
@@ -195,8 +195,13 @@ end
 weight_table = [];
 weight_cache = struct();
 
-if exist(fullfile(options.outputdir , 'weight_tables.mat'))
-    load (fullfile(options.outputdir, 'weight_tables.mat'));
+if exist(fullfile(options.outputdir , 'weight_tables.mat'), 'file')
+    tmp = load (fullfile(options.outputdir, 'weight_tables.mat'));
+    
+    if isfield(tmp,'weight_cache') && ~isempty(tmp.weight_cache)
+        weight_cache = tmp.weight_cache;
+    end
+
     if options.exist_weight && isfield(weight_cache,  strrep(ROI_cortex.Label,' ','_'))
         tmp = weight_cache.(strrep(ROI_cortex.Label,' ','_'));    
         if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
@@ -314,7 +319,7 @@ iStudy = db_add_condition(sSubject.Name, condition_name);
 sStudy = bst_get('Study', iStudy);
 
 % Save channel definition
-[tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+[~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
 db_set_channel(iChannelStudy, ChannelMat, 1, 0);
     
 
@@ -324,7 +329,7 @@ sDataOut              = db_template('data');
 sDataOut.F            = separations;
 sDataOut.Comment      = 'Separations';
 sDataOut.ChannelFlag  = ones(length(separations),1);
-sDataOut.Time         = [1];
+sDataOut.Time         = (1);
 sDataOut.DataType     = 'recordings';
 sDataOut.nAvg         = 1;
 sDataOut.DisplayUnits = 'cm';
@@ -394,162 +399,9 @@ end
 
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options)
-
-    if ~isfield(options, 'nb_sources')
-        bst_error('Number of sources is required');
-    end
     
-    if ~isfield(options, 'nb_detectors')
-        bst_error('Number of detectors is required');
-    end
-    
-    if ~isfield(options, 'nAdjacentDet')
-        bst_error('Number of adjacent is required');
-    end
-    
-    if ~isfield(options, 'sep_optode_min')
-        bst_error('Minimum distance of optodes is required');
-    end
-    if ~isfield(options, 'sep_optode_max')
-        bst_error('Maximum distance of optodes is required');
-    end
-    
-    if ~isfield(options, 'weight_tables')
-        bst_error('Weight_tables is required');
-    end
-    
-    holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
-    nHolders = size(head_vertices_coords, 1);
-    
-    weight_table = options.weight_tables;
-    
-    
-    nS = options.nb_sources; % number of sources
-    nD = options.nb_detectors; % number of detectors
-    
-    flag_sep_optode_optode = 1;
-    thresh_sep_optode_optode = [options.sep_optode_min options.sep_optode_max]; 
-    % mm (1) no optodes sep below this thresh (2) Optodes above this thresholds do not form pairs
-    
-    flag_sep_src_det = 1;
-    thresh_min_sep_src_det = options.sep_SD_min; 
-    % mm (1) min sep between a source and a det %TODO: why not using thresh_sep_optode_optode(1)?
-    
-    flag_adjacency = 1;
-    nAdjacentDet = options.nAdjacentDet; 
-    % minimal number of adjacent detector in the given range
-    
-    flag_init = 0; % provide an initial solution
-    
-    
-    %Enlever nX, nY, nW_V ??
-    
-    nH   = nHolders; % number of holders
-    xp   = zeros(nH,1) ; % binary
-    yq   = zeros(nH,1) ; % binary
-    wq_V = zeros(nH,1) ; % float
-    v    = [xp;yq;wq_V]; nVar = size(v,1);
-    
-    % Calls function for equation 1 : Sum(xp)=nSrc (11)
-    [Aeq_1, E_1] = add_constraint_nSrc(nVar, nH, nS);
-    
-    % Calls function for equation 2 : Sum(yq)=nDet (11)
-    [Aeq_2, E_2] = add_constraint_nDet(nVar, nH, nD);
-    
-    %......................................................................
-    % DEBUG FUNCTION : Display Equality matrix
-    % display_eq_matrix(Aeq_1, Aeq_2);
-    %......................................................................
-    
-    %======================================================================
-    % Create inequality matrixes
-    %======================================================================
-    % Calls function for inequation 1 : wq_V-Myq<=0 (12)
-    [Aineq_1, I_1] = create_ineq_matrix(nH, nVar);
-    
-    %C'est quoi ipair ?
-    ipair = 1;
-    
-    
-    bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
-    
-    %......................................................................
-    % DEBUG FUNCTION : normalize weigth table
-    % norm_w_table(weight_table);
-    %......................................................................
-    
-    % Calls function for inequation 2 : wq_V-Sum(Vpq*xp) <= 0 (13)
-    [Aineq_2, I_2] = detect_activ_constr(nH, nVar, weight_table);
-    
-    % Calls function for inequation 3 : Optode/Optode minimal separation constraints
-    [Aineq_3, I_3] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distances, nH, thresh_sep_optode_optode, nS, nD, nVar);
-    
-    % Calls function for inequation 4 : Source/det min separation constraints
-    [Aineq_4, I_4] = src_det_min_sep_constr(flag_sep_src_det, holder_distances, nH, thresh_min_sep_src_det, nD, nVar);
-    
-    % Calls function for inequation 5 : Adjacency constraints
-    [Aineq_5, I_5] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_optode_optode, nVar, nAdjacentDet);
-    
-    %......................................................................
-    % DEBUG FUNCTION : Display InEquality matrix Aineq_1 to 5
-    % display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5);
-    %......................................................................
-        
-    bst_progress('inc', 1);
-    %======================================================================
-    % initial condition : find sources whose pairs have maximum energy then
-    % complete with detectors
-    %======================================================================
-    xp_0 = zeros(nH, 1);
-    yq_0 = zeros(nH, 1);
-    [~,idx] = sort(weight_table(:), 'descend');
-    % Seems to only needed if holder list is not the same size as weight_table
-    
-    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
-    
-    red_weight_table = weight_table(src_pos_idx,:);
-    [~, idx] = sort(red_weight_table(:), 'descend');
-
-    bst_progress('inc', 1);
-    [~, det_pos_idx] = ind2sub(size(red_weight_table), idx(1:nD));
-    
-    xp_0(src_pos_idx) = 1;
-    yq_0(det_pos_idx) = 1;
-    
-    wq_V_O = zeros(nH, 1);
-    for ii = 1:numel(yq_0)
-        if yq_0(ii) == 1
-            wq_V_0(ii) = sum(weight_table(src_pos_idx, ii));
-        end
-    end
-    incumbent_x0 = [];
-    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
-    display(sprintf('incumbent=%g', incumbent_x0))
-    clear src_pos_idx det_pos_idx
-    x0 = [xp_0 ; yq_0 ; wq_V_O];
-    
-    Aeq = [Aeq_1 ; Aeq_2];
-    E = [E_1 ; E_2];
-    
-    Aineq = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
-    I = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
-    
-    f  = [zeros(1, 2*nH) ones(1, nH)]';
-    lb = [];%[zeros(1,2*nH) zeros(1,nH)]';
-    ub = [];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
-    ctype = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
-    
-    prob = cplexcreateprob('cplexmilp');
-    prob.f = f;
-    prob.lb = lb; prob.ub = ub;
-    prob.ctype = ctype;
-    prob.Aineq = Aineq; prob.bineq = I;
-    prob.Aeq = Aeq; prob.beq = E;
-    prob.x0 = [];
-    prob.options = [];
-    bst_progress('inc', 1);
-    bst_progress('stop');
-    
+    %Define the cplex problem
+    [prob, options] = define_prob_simple(head_vertices_coords, options);
    
     cplex=Cplex(prob);
     cplex.Model.sense = 'maximize';
@@ -557,52 +409,33 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
 
     % Delete clone[number].log files created by Cplex
     cplex.Param.output.clonelog.Cur = 0;
-    
-
-    % Reprendre ici
 
     %Progress bar
-    cplex.Callback.handle = @myCplexProgressCallback;
-    cplex.Callback.func = 'generic';
-    cplex.Callback.info.set = 'all';
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 1000);
     
-    if flag_init
-        cplex.MipStart(1).name='optim';
-        cplex.MipStart(1).effortlevel=1;
-        cplex.MipStart(1).x=x0;
-        cplex.MipStart( 1).xindices=int32([1:numel(x0)]');
-    end
-    
+    %======================================================================
+    % initial condition : find sources whose pairs have maximum energy then
+    % complete with detectors
+    % Uncomment the line to use initial condition
+    % cplex = init_solution(cplex, options.weight_tables, options.nH, options.nb_sources, options.nb_detectors);
+    %======================================================================
+  
     results = cplex.solve;
-    bst_progress('inc', 2);
-    bst_progress('stop');
-    
     if ~isfield(results, 'x')
         bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
         return;
     end
-    
-    x=results.x;
-    x=round(x);
-    isources = find(x(1:nH)==1);
-    idetectors = find(x(nH+1:2*nH)==1);
-    
-    
-    for isrc=1:length(isources)
-        for idet=1:length(idetectors)
-            if holder_distances(isources(isrc),idetectors(idet)) > thresh_sep_optode_optode(1) && ...
-                    holder_distances(isources(isrc),idetectors(idet)) < thresh_sep_optode_optode(2) && ...
-                    full(weight_table(isources(isrc),idetectors(idet)))
-                montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                montage_weight(ipair,:) = full(weight_table(isources(isrc),idetectors(idet)));
-                ipair = ipair + 1;
-            end
-        end
+   
+    addConstraint = 0;
+    if addConstraint
+       
     end
-    
-    %sensitivity_thresh = 0.05;
-    %montage_pairs = montage_pairs(find(montage_weight > 0),:);
+
+    bst_progress('stop');
+
+    %Calculation of montage_pairs matrix and montage_weight vector
+    [montage_pairs, montage_weight] = montage_pairs_and_weight(results, options.nH, options.holder_distances, ...
+        options.thresh_sep_optode_optode, options.weight_tables);
 end
 
 
@@ -686,6 +519,109 @@ function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_sc
 
 end
 
+function [prob, options] = define_prob_simple(head_vertices_coords, options)
+% @========================================================================
+% define_prob_simple Initializes the problem
+% Added in options by function : holder_distances, nH, thresh_sep_optode_optode 
+% ========================================================================@
+    
+    holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
+
+    nHolders = size(head_vertices_coords, 1);
+    weight_table = options.weight_tables;
+    
+    nS = options.nb_sources; % number of sources
+    nD = options.nb_detectors; % number of detectors
+    
+    flag_sep_optode_optode = 1;
+    thresh_sep_optode_optode = [options.sep_optode_min options.sep_optode_max]; 
+    % mm (1) no optodes sep below this thresh (2) Optodes above this thresholds do not form pairs
+    
+    flag_sep_src_det = 1;
+    thresh_min_sep_src_det = options.sep_SD_min; 
+    % mm (1) min sep between a source and a det %TODO: why not using thresh_sep_optode_optode(1)?
+    
+    flag_adjacency = 1;
+    nAdjacentDet = options.nAdjacentDet; 
+    % minimal number of adjacent detector in the given range
+    
+    nH   = nHolders; % number of holders
+    xp   = zeros(nH,1) ; % binary
+    yq   = zeros(nH,1) ; % binary
+    wq_V = zeros(nH,1) ; % float
+    v    = [xp;yq;wq_V]; nVar = size(v,1);
+    
+    % Calls function for equation 1 : Sum(xp)=nSrc (11)
+    [Aeq_1, E_1] = add_constraint_nSrc(nVar, nH, nS);
+    
+    % Calls function for equation 2 : Sum(yq)=nDet (11)
+    [Aeq_2, E_2] = add_constraint_nDet(nVar, nH, nD);
+    
+    %......................................................................
+    % DEBUG FUNCTION : Display Equality matrix
+    % display_eq_matrix(Aeq_1, Aeq_2);
+    %......................................................................
+    
+    %======================================================================
+    % Create inequality matrixes
+    %======================================================================
+    % Calls function for inequation 1 : wq_V-Myq<=0 (12)
+    [Aineq_1, I_1] = create_ineq_matrix(nH, nVar);
+    
+    
+    bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
+    
+    %......................................................................
+    % DEBUG FUNCTION : normalize weigth table
+    % norm_w_table(weight_table);
+    %......................................................................
+    
+    % Calls function for inequation 2 : wq_V-Sum(Vpq*xp) <= 0 (13)
+    [Aineq_2, I_2] = detect_activ_constr(nH, nVar, weight_table);
+    
+    % Calls function for inequation 3 : Optode/Optode minimal separation constraints
+    [Aineq_3, I_3] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distances, nH, thresh_sep_optode_optode, nS, nD, nVar);
+    
+    % Calls function for inequation 4 : Source/det min separation constraints
+    [Aineq_4, I_4] = src_det_min_sep_constr(flag_sep_src_det, holder_distances, nH, thresh_min_sep_src_det, nD, nVar);
+    
+    % Calls function for inequation 5 : Adjacency constraints
+    [Aineq_5, I_5] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_optode_optode, nVar, nAdjacentDet);
+    
+    %......................................................................
+    % DEBUG FUNCTION : Display InEquality matrix Aineq_1 to 5
+    % display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5);
+    %......................................................................
+    
+    bst_progress('inc', 1);
+    
+    Aeq = [Aeq_1 ; Aeq_2];
+    E = [E_1 ; E_2];
+    
+    Aineq = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
+    I = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
+    
+    f  = [zeros(1, 2*nH) ones(1, nH)]';
+    lb = [];%[zeros(1,2*nH) zeros(1,nH)]';
+    ub = [];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
+    ctype = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
+    
+    %Cplex optimisation
+    prob = cplexcreateprob('cplexmilp');
+    prob.f = f;
+    prob.lb = lb; prob.ub = ub;
+    prob.ctype = ctype;
+    prob.Aineq = Aineq; prob.bineq = I;
+    prob.Aeq = Aeq; prob.beq = E;
+    prob.x0 = [];
+    prob.options = [];
+    bst_progress('inc', 1);
+    bst_progress('stop');
+    
+    options.holder_distances = holder_distances;
+    options.thresh_sep_optode_optode = thresh_sep_optode_optode; 
+    options.nH = nH;
+end
 
 function [A, E] = add_constraint_nSrc(nVar, nH, nS)
 % @========================================================================
@@ -698,6 +634,10 @@ function [A, E] = add_constraint_nSrc(nVar, nH, nS)
 
     E = nS;
 end
+
+%==========================================================================
+% FUNCTIONS USED BY "compute_optimal_montage" FUNCTION
+%==========================================================================
 
 function [A, E] = add_constraint_nDet(nVar, nH, nD)
 % @========================================================================
@@ -801,23 +741,102 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
     end
 end
 
+function cplex = init_solution(cplex, weight_table, nH, nS, nD)
+%@=========================================================================
+% INITIAL SOLUTION FUNCTIONS (cplex)
+%=========================================================================@
+    
+    xp_0 = zeros(nH, 1);
+    yq_0 = zeros(nH, 1);
+    [~,idx] = sort(weight_table(:), 'descend');
+    % Seems to only needed if holder list is not the same size as weight_table
+    
+    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
+    
+    src_weight_table = weight_table(src_pos_idx,:);
+    [~, idx] = sort(src_weight_table(:), 'descend');
+    
+    bst_progress('inc', 1);
+    [~, det_pos_idx] = ind2sub(size(src_weight_table), idx(1:nD));
+    
+    xp_0(src_pos_idx) = 1;
+    yq_0(det_pos_idx) = 1;
+    
+    wq_V_O = zeros(nH, 1);
+    for ii = 1:numel(yq_0)
+        if yq_0(ii) == 1
+            wq_V_O(ii) = sum(weight_table(src_pos_idx, ii));
+        end
+    end
+    
+    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
+    fprintf('incumbent=%g\n', incumbent_x0)
+    x0 = [xp_0 ; yq_0 ; wq_V_O];
+
+    cplex.MipStart(1).name='optim';
+    cplex.MipStart(1).effortlevel=1;
+    cplex.MipStart(1).x=x0;
+    cplex.MipStart(1).xindices=int32((1:numel(x0))');
+end
+
+function [montage_pairs, montage_weight] = montage_pairs_and_weight(results, nH, holder_distances, thresh_sep_optode_optode, weight_table)
+% @========================================================================
+% montage_pairs_and_weight Calculation of montage pairs matrix and montage
+% weight vector
+% ========================================================================@
+
+    x=results.x;
+    x=round(x);
+    isources = find(x(1:nH)==1);
+    idetectors = find(x(nH+1:2*nH)==1);
+    
+    ipair = 1;
+    
+    % Memory management
+    max_pairs = length(isources) * length(idetectors) -1;
+    montage_pairs = zeros(max_pairs, 2);
+    montage_weight = zeros(max_pairs, 1);
+    
+    for isrc = 1:length(isources)
+        for idet = 1:length(idetectors)
+            if holder_distances(isources(isrc), idetectors(idet)) > thresh_sep_optode_optode(1) && ...
+                    holder_distances(isources(isrc), idetectors(idet)) < thresh_sep_optode_optode(2) && ...
+                    full(weight_table(isources(isrc), idetectors(idet)))
+                
+                if ipair <= max_pairs
+                    montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
+                    montage_weight(ipair,:) = full(weight_table(isources(isrc), idetectors(idet)));
+                    ipair = ipair + 1;
+                else
+                    warning('Memory management error : The variables are not correctly sized. ');   
+                end
+            end
+        end
+    end
+    
+    % Make sure the matrix is the right size
+    montage_pairs = montage_pairs(1:ipair-1, :);
+    montage_weight = montage_weight(1:ipair-1, :);
+end
+
 %==========================================================================
 % DEBUG FUNCTIONS
 %==========================================================================
+
 function display_eq_matrix(Aeq_1, Aeq_2)
     matrixes2show={Aeq_1, Aeq_2, [Aeq_1 ; Aeq_2]};
     for ii=1:2
         figure ('name', 'equality matrix')
         mat2show=matrixes2show{ii} ;
         colormap(gray(3))
-        imagesc([mat2show]);
+        imagesc((mat2show));
         %set(gca, 'PlotBoxAspectRatio', [size(mat2show, 1) size(mat2show, 2) 1])
-        ylim([0.5 size([mat2show], 1)+0.5])
+        ylim([0.5 size((mat2show), 1)+0.5])
     end
 end
 
 function weight_table = norm_w_table(weight_table)
-weight_table=weight_table/max(weight_table(:));
+    weight_table = weight_table/max(weight_table(:));
 end
 
 function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
