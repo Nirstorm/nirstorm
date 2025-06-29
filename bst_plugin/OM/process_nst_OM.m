@@ -26,20 +26,18 @@ eval(macro_method);
 end
 
 function sProcess = GetDescription() 
+
 % Description the process
 sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1406;
 sProcess.Description = '';
-% Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
-% Definition of the outputs of this process
 sProcess.OutputTypes = {'import'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
-% Subject name
 sProcess.options.subjectname.Comment = 'Subject name:';
 sProcess.options.subjectname.Type    = 'subjectname';
 sProcess.options.subjectname.Value   = '';
@@ -47,6 +45,7 @@ sProcess.options.subjectname.Value   = '';
 sProcess.options.fluencesCond.Comment = {'panel_nst_OM', 'Optimal montage parameters'};
 sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
+
 end
 
 
@@ -63,288 +62,200 @@ Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, ~) 
-OutputFile = {};
+function OutputFile = Run(sProcess, sInput) 
 
-if bst_iscompiled()
-    bst_error('Optimum montage is not available in the compiled version of brainstorm');
-    return;
-end        
-
-cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-try
-    cplx = Cplex();
-    if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
+    OutputFile = {};
+    
+    if bst_iscompiled()
+        bst_error('Optimum montage is not available in the compiled version of brainstorm');
+        return;
+    end        
+    
+    cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+    try
+        cplx = Cplex();
+        if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
+            bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+            return
+        end
+    catch
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
         return
     end
-catch
-    bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    return
-end
-
-options = sProcess.options.fluencesCond.Value;
     
-SubjectName =  options.SubjectName;
-sProcess.options.subjectname.Value = SubjectName;
-sSubject = bst_get('Subject',SubjectName);
-
-if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
-    bst_error('No available Cortex and Head surface for this subject.');
-    return;
-end    
-
-sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
-
-i_atlas_cortex = strcmp({sCortex.Atlas.Name},options.Atlas_cortex);
-i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, options.ROI_cortex);
-ROI_cortex = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
-
-if isempty(options.Atlas_head) && isempty(options.ROI_head)
-    
-    cortex_to_scalp_extent = options.Extent;
-    cortex_scout.sSubject = sSubject;
-    cortex_scout.sScout   = ROI_cortex;
-
-    [head_vertex_ids, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout,cortex_to_scalp_extent.*0.01, 1); 
-else    
-    i_atlas_head = strcmp({sHead.Atlas.Name},options.Atlas_head);
-    i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
-    head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;  
-    
-exclude_scout = sHead.Atlas(i_atlas_head).Scouts(strcmp('FluenceExclude', {sHead.Atlas(i_atlas_head).Scouts.Label}));
-    if ~isempty(exclude_scout)
-        head_vertex_ids = setdiff(head_vertex_ids, exclude_scout.Vertices);
+    options     = sProcess.options.fluencesCond.Value;
+    if ~isfield(options, 'condition_name') || isempty(options.condition_name)
+        options.condition_name = 'planning_optimal_montage';
     end
     
-end
-
-
-condition_name = options.condition_name;
-if isempty(condition_name)
-    condition_name = 'planning_optimal_montage';
-end
-
-% Extract head point coordinates
-head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
-
-try
-    wavelengths = str2double(strsplit(options.wavelengths,','));
-catch
-    bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
-    return
-end
-
-if(length(wavelengths) < 1) % TODO: at least 2 wavelengths ?
-    bst_report('Error', sProcess, [], 'List of wavelengths must not be empty');
-    return
-end
-
-% Obtain the anatomical MRI
-sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-cubeSize = size(sMri.Cube);
-
-options.sep_optode_min = options.sep_optode(1);
-options.sep_optode_max  = options.sep_optode(2);
-options.sep_SD_min = options.sepmin_SD;
-options.cubeSize = cubeSize;
-if options.sep_optode_min > options.sep_SD_min
-    bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
-    return;
-end
-
-
-sROI = extract_scout_surface(sCortex, ROI_cortex);
-sROI.Vertices = cs_convert(sMri, 'scs', 'voxel', sROI.Vertices');
     
-voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-
-if ~exist(voronoi_fn, 'file')
-    voronoi_fn = bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
-                'subjectname',        sSubject.Name, ...
-                'segmentation_label', options.segmentation_label);
-end
+    SubjectName = options.SubjectName;
+    sProcess.options.subjectname.Value = SubjectName;
     
-    
-voronoi_bst = in_mri_bst(voronoi_fn);
-voronoi     = voronoi_bst.Cube;
-    
-% Load segmentation
-segmentation_name = 'segmentation_5tissues';
-iseg = find(strcmp({sSubject.Anatomy.Comment},segmentation_name));
-if isempty(iseg)
-    bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
-    return;
-end
-
-GM_mask = process_nst_compute_voronoi('get_grey_matter_mask',sSubject.Anatomy(iseg).FileName);
-voronoi_mask = (voronoi > -1) &  ~isnan(voronoi) & GM_mask & ismember(voronoi,ROI_cortex.Vertices);
-
-voi               = zeros(cubeSize(1), cubeSize(2), cubeSize(3));
-voi(voronoi_mask) = 1;
-
-voi_flat    = voi(:);
-vois        = sparse(voi_flat > 0);
-
-if nnz(vois)==0
-    bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
-    return;
-end
-
-weight_table = [];
-weight_cache = struct();
-
-if exist(fullfile(options.outputdir , 'weight_tables.mat'), 'file')
-    tmp = load (fullfile(options.outputdir, 'weight_tables.mat'));
-    
-    if isfield(tmp,'weight_cache') && ~isempty(tmp.weight_cache)
-        weight_cache = tmp.weight_cache;
-    end
-
-    if options.exist_weight && isfield(weight_cache,  strrep(ROI_cortex.Label,' ','_'))
-        tmp = weight_cache.(strrep(ROI_cortex.Label,' ','_'));    
-        if isequal(tmp.options.head_vertex_ids,head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
-            weight_table = tmp.weight_table;
-        end    
-    end    
-end
-
-if isempty(weight_table)
-    % Compute weight table
-    sparse_threshold = 1e-6;
-    fluence_data_source = options.data_source;
-
-    [fluence_volumes,reference] = process_nst_import_head_model('request_fluences', head_vertex_ids, ...
-        sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
-        wavelengths, fluence_data_source, sparse_threshold,vois,cubeSize);
-    if isempty(fluence_volumes)
+    sSubject    = bst_get('Subject',SubjectName);
+    if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
+        bst_error('No available Cortex and Head surface for this subject.');
         return;
-   end
+    end    
     
-    weight_table = compute_weights(fluence_volumes,head_vertices_coords,reference, options);
+    [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options);
+        
     
-    if(nnz(weight_table) == 0)
+    try
+        wavelengths = str2double(strsplit(options.wavelengths,','));
+    catch
+        bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
+        return
+    end
+    
+    if(length(wavelengths) < 1) % TODO: at least 2 wavelengths ?
+        bst_report('Error', sProcess, [], 'List of wavelengths must not be empty');
+        return
+    end
+    
+    % Obtain the anatomical MRI
+    sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    cubeSize = size(sMri.Cube);
+    
+    options.sep_optode_min  = options.sep_optode(1);
+    options.sep_optode_max  = options.sep_optode(2);
+    options.sep_SD_min      = options.sepmin_SD;
+    options.cubeSize        = cubeSize;
+    options.wavelengths     = wavelengths;
+    
+    if options.sep_optode_min > options.sep_SD_min
+        bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
+        return;
+    end
+    
+    options.weight_tables = load_weight_table(sSubject, options, ROI_cortex, ROI_head);
+    if isempty(options.weight_tables) || nnz(options.weight_tables) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
-    if ~isempty(options.outputdir)
-        options_out = options;
-        options_out.head_vertex_ids = head_vertex_ids;
-        tmp = struct('weight_table',weight_table,'options',options_out);
-        weight_cache.(strrep(ROI_cortex.Label,' ','_')) = tmp;
-        save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
-    end
+    
+    % Experimental : Denoise the weight table. (be carefull)
+    % options.weight_tables = denoise_weight_table(weight_table, threshold);
+    
+    % Compute Optimal Montage
+    [montage_pairs, montage_weight] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
+    
+    % Convert Montage to Brainstorm structure
+    ChannelMat                      = create_channelMat_from_montage(montage_pairs, montage_weight, ROI_head.head_vertices_coords, options.wavelengths);
+    
+    
+    sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
+    options.condition_name    = file_unique(options.condition_name, {sSubjStudies.Name}, 1);
+    
+    iStudy = db_add_condition(sSubject.Name, options.condition_name);
+    sStudy = bst_get('Study', iStudy);
+    
+    % Save channel definition
+    [~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+    db_set_channel(iChannelStudy, ChannelMat, 1, 0);
+        
+    % Save time-series data
+    sDataOut              = db_template('data');
+    sDataOut.F            = process_nst_separations('Compute',ChannelMat.Channel) * 100;
+    sDataOut.Comment      = 'Separations';
+    sDataOut.ChannelFlag  = ones(length(ChannelMat.Channel),1);
+    sDataOut.Time         = (1);
+    sDataOut.DataType     = 'recordings';
+    sDataOut.nAvg         = 1;
+    sDataOut.DisplayUnits = 'cm';
+    
+    % Generate a new file name in the same folder
+    OutputFile{1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
+    bst_save(OutputFile{1} , sDataOut, 'v7');
+    
+    % Register in database
+    db_add_data(iStudy, OutputFile{1} , sDataOut);
+    
 end
 
-% weight_table_new = weight_table;
-% nrqr = 5;
-% spurious = median(weight_table(weight_table>0)) + nrqr* iqr(weight_table(weight_table>0));
-% weight_table_new(weight_table > spurious) = 0;
-%     
-% figure;
-% subplot(221)
-% imagesc(full(weight_table))
-% title('Before Removing supirous node')
-% subplot(222)
-% imagesc(full(weight_table_new))
-% title('After Removing supirous node')
-% subplot(223); hist(weight_table(weight_table < spurious)); subplot(224); hist(weight_table(weight_table > spurious));
-% title(sprintf('Threshold %.f (M interquartile %d)',spurious,nrqr))
-% 
-% weight_table = weight_table_new;
+function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_head)
 
-options.weight_tables = weight_table;
-[montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options);
+    weight_table = [];
 
-% montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
-src_indexes = zeros(max(montage_pairs(:, 1)), 1);
-det_indexes = zeros(max(montage_pairs(:, 2)), 1);
-
-
-% Forge channels from head points pairs & wavelengths
-nChannels = size(montage_pairs, 1) * length(wavelengths);
-ChannelMat = db_template('channelmat');
-ChannelMat.Comment = 'NIRS-BRS channels';
-ChannelMat.Channel = repmat(db_template('channeldesc'), [1, nChannels]);
-ChannelMat.Nirs.Wavelengths = wavelengths;
-iChan = 1;
-det_next_idx = 1;
-src_next_idx = 1;
-
-for ipair=1:size(montage_pairs, 1)
-    ihead_vertex_src = montage_pairs(ipair, 1);
-    ihead_vertex_det = montage_pairs(ipair, 2);
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
     
-    if src_indexes(ihead_vertex_src) == 0
-        idx_src = src_next_idx;
-        src_indexes(ihead_vertex_src) = src_next_idx;
-        src_next_idx = src_next_idx + 1;
-    else
-        idx_src = src_indexes(ihead_vertex_src);
+    if ~exist(voronoi_fn, 'file')
+        voronoi_fn = bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
+                    'subjectname',        sSubject.Name, ...
+                    'segmentation_label', options.segmentation_label);
     end
-    if det_indexes(ihead_vertex_det) == 0
-        idx_det = det_next_idx;
-        det_indexes(ihead_vertex_det) = det_next_idx;
-        det_next_idx = det_next_idx + 1;
-    else
-        idx_det = det_indexes(ihead_vertex_det);
+        
+        
+    voronoi_bst = in_mri_bst(voronoi_fn);
+    voronoi     = voronoi_bst.Cube;
+        
+    % Load segmentation
+    segmentation_name = 'segmentation_5tissues';
+    iseg = find(strcmp({sSubject.Anatomy.Comment}, segmentation_name));
+    if isempty(iseg)
+        bst_error(sprintf('ERROR: Please import segmentation file as MRI and rename it as "%s"', segmentation_name));
+        return;
     end
     
-    disp(['Channel S', num2str(idx_src), 'D' num2str(idx_det) ' >>> Distance: ',...
-        num2str(round(nst_pdist(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', 'Weight: ',...
-        num2str(round(montage_weight(ipair,:),3))]);
+    GM_mask = process_nst_compute_voronoi('get_grey_matter_mask',sSubject.Anatomy(iseg).FileName);
+    voronoi_mask = (voronoi > -1) &  ~isnan(voronoi) & GM_mask & ismember(voronoi, ROI_cortex.Vertices);
     
-    for iwl=1:length(wavelengths)
-        
-        ChannelMat.Channel(iChan).Name    = sprintf('S%dD%dWL%d', idx_src, idx_det, ...
-        ChannelMat.Nirs.Wavelengths(iwl));
-        ChannelMat.Channel(iChan).Type    = 'NIRS';
-        
-        ChannelMat.Channel(iChan).Loc(:,1)  = head_vertices_coords(ihead_vertex_src, :);
-        ChannelMat.Channel(iChan).Loc(:,2)  = head_vertices_coords(ihead_vertex_det, :);
-        ChannelMat.Channel(iChan).Orient  = [];
-        ChannelMat.Channel(iChan).Weight  = 1;
-        ChannelMat.Channel(iChan).Comment = [];
-        ChannelMat.Channel(iChan).Group = sprintf('WL%d', round(ChannelMat.Nirs.Wavelengths(iwl)));
-        
-        iChan = iChan + 1;
+    voi               = zeros(options.cubeSize(1), options.cubeSize(2), options.cubeSize(3));
+    voi(voronoi_mask) = 1;
+    
+    voi_flat    = voi(:);
+    vois        = sparse(voi_flat > 0);
+    
+    if nnz(vois) == 0
+        bst_error('VOI mask is empty after intersecting with Voronoi and GM masks');
+        return;
     end
-end
 
-[sSubjStudies, ~] = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
-condition_name    = file_unique(condition_name, {sSubjStudies.Name}, 1);
-
-iStudy = db_add_condition(sSubject.Name, condition_name);
-sStudy = bst_get('Study', iStudy);
-
-% Save channel definition
-[~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-db_set_channel(iChannelStudy, ChannelMat, 1, 0);
+    weight_cache = struct();
     
-
-separations = process_nst_separations('Compute',ChannelMat.Channel) * 100; %convert to cm
-% Save time-series data
-sDataOut              = db_template('data');
-sDataOut.F            = separations;
-sDataOut.Comment      = 'Separations';
-sDataOut.ChannelFlag  = ones(length(separations),1);
-sDataOut.Time         = (1);
-sDataOut.DataType     = 'recordings';
-sDataOut.nAvg         = 1;
-sDataOut.DisplayUnits = 'cm';
-
-% Generate a new file name in the same folder
-OutputFile{1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
-sDataOut.FileName = OutputFile{1} ;
-bst_save(OutputFile{1} , sDataOut, 'v7');
-% Register in database
-db_add_data(iStudy, OutputFile{1} , sDataOut);
+    if exist(fullfile(options.outputdir , 'weight_tables.mat'), 'file')
+        tmp = load (fullfile(options.outputdir, 'weight_tables.mat'));
+        
+        if isfield(tmp,'weight_cache') && ~isempty(tmp.weight_cache)
+            weight_cache = tmp.weight_cache;
+        end
+        
+        if options.exist_weight && isfield(weight_cache,  matlab.lang.makeValidName(ROI_cortex.Label))
+            tmp = weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label));    
+            if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
+                weight_table = tmp.weight_table;
+            end    
+        end    
+    end
     
+    if isempty(weight_table)
+        
+        % Compute weight table
+        [fluence_volumes, reference] = process_nst_import_head_model('request_fluences', ...
+            ROI_head.head_vertex_ids, ...
+            sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
+            options.wavelengths, ...
+            options.data_source, ...
+            [], ...
+            vois, ...
+            options.cubeSize);
+        
+        weight_table = compute_weights(fluence_volumes, ROI_head.head_vertices_coords, reference, options);
+        
+        if ~isempty(options.outputdir)
+            options_out = options;
+            options_out.head_vertex_ids = ROI_head.head_vertex_ids;
+            tmp = struct('weight_table',weight_table,'options',options_out);
+            weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label)) = tmp;
+            save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
+        end
+        
+    end
 
 end
 
-function weight_tables = compute_weights(fluence_volumes,head_vertices_coords,reference, options)
+function weight_tables = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
+
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
@@ -398,7 +309,7 @@ function weight_tables = compute_weights(fluence_volumes,head_vertices_coords,re
 end
 
 
-function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords,options)
+function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, options)
     
     %Define the cplex problem
     [prob, options] = define_prob_simple(head_vertices_coords, options);
@@ -486,35 +397,43 @@ function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_sc
     if nargin < 3
         save_in_db = 0;
     end
-    sSubject = cortex_scout.sSubject;
-    sHead = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-    sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
-    dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
-    head_vertices = find(min(dis2head,[],2) < extent_m); 
+
+    sSubject        = cortex_scout.sSubject;
+    sHead           = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+    sCortex         = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+
+    dis2head        = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
+    head_vertices   = find(min(dis2head,[],2) < extent_m); 
     
-    % TODO: properly select atlas
-    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+    iAtlasHead = find(strcmp('User scouts', {sHead.Atlas.Name}));
+    exclude_scout = sHead.Atlas(iAtlasHead).Scouts(strcmp('FluenceExclude', {sHead.Atlas(iAtlasHead).Scouts.Label}));
     if ~isempty(exclude_scout)
         head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
     end
     
-    limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+    limiting_scout = sHead.Atlas(iAtlasHead).Scouts(strcmp('FluenceRegion', {sHead.Atlas(iAtlasHead).Scouts.Label}));
     if ~isempty(limiting_scout)
         head_vertices = intersect(head_vertices, limiting_scout.Vertices);
     end
     
-    if save_in_db && ...,
-       ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
-        ,{sHead.Atlas.Scouts.Label}))
-        scout_idx = size(sHead.Atlas.Scouts,2) + 1;
-        sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
-        sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
-        sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
-        sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
-        sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
-                                               '(' num2str(extent_m*100) ' cm)'];
+    if save_in_db 
+
+        new_scout_name = ['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)'];
+        scout_idx = find(strcmp(new_scout_name, {sHead.Atlas(iAtlasHead).Scouts.Label}));
+
+        if isempty(scout_idx)
+            scout_idx = size(sHead.Atlas(iAtlasHead).Scouts,2) + 1;
+        end
+
+        sHead.Atlas(iAtlasHead).Scouts(scout_idx) = db_template('Scout');
+        sHead.Atlas(iAtlasHead).Scouts(scout_idx).Vertices = head_vertices';
+        sHead.Atlas(iAtlasHead).Scouts(scout_idx).Seed = head_vertices(1);
+        sHead.Atlas(iAtlasHead).Scouts(scout_idx).Color = [0,0,0];
+        sHead.Atlas(iAtlasHead).Scouts(scout_idx).Label = new_scout_name;
         bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
+
         db_save();
+
     end
 
 end
@@ -567,10 +486,7 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     %======================================================================
     % Calls function for inequation 1 : wq_V-Myq<=0 (12)
     [Aineq_1, I_1] = create_ineq_matrix(nH, nVar);
-    
-    
-    bst_progress('start', 'Optimization setup', 'Setting up optimization...', 1, 4);
-    
+        
     %......................................................................
     % DEBUG FUNCTION : normalize weigth table
     % norm_w_table(weight_table);
@@ -593,7 +509,6 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     % display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5);
     %......................................................................
     
-    bst_progress('inc', 1);
     
     Aeq = [Aeq_1 ; Aeq_2];
     E = [E_1 ; E_2];
@@ -615,7 +530,7 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     prob.Aeq = Aeq; prob.beq = E;
     prob.x0 = [];
     prob.options = [];
-    bst_progress('inc', 1);
+
     bst_progress('stop');
     
     options.holder_distances = holder_distances;
@@ -699,7 +614,6 @@ function [A, I] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distance
         A = [];
         I = [];
     end
-    bst_progress('inc', 1);
 end
 
 function [A, I] = src_det_min_sep_constr(flag_sep_src_det, holder_distances, nH, thresh_min_sep_src_det, nD, nVar)
@@ -756,7 +670,6 @@ function cplex = init_solution(cplex, weight_table, nH, nS, nD)
     src_weight_table = weight_table(src_pos_idx,:);
     [~, idx] = sort(src_weight_table(:), 'descend');
     
-    bst_progress('inc', 1);
     [~, det_pos_idx] = ind2sub(size(src_weight_table), idx(1:nD));
     
     xp_0(src_pos_idx) = 1;
@@ -849,4 +762,128 @@ function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
         %set(gca, 'PlotBoxAspectRatio', [size(mat2show, 1) size(mat2show, 2) 1])
         ylim([0.5 size(mat2show, 1)+0.5])
     end
+end
+
+
+function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_weight, head_vertices_coords, wavelengths)
+
+
+    % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
+    src_indexes = zeros(max(montage_pairs(:, 1)), 1);
+    det_indexes = zeros(max(montage_pairs(:, 2)), 1);
+    
+    
+    % Forge channels from head points pairs & wavelengths
+    nChannels       = size(montage_pairs, 1) * length(wavelengths);
+    iChan           = 1;
+    det_next_idx    = 1;
+    src_next_idx    = 1;
+
+    ChannelMat = db_template('channelmat');
+    ChannelMat.Comment = 'NIRS-BRS channels';
+    ChannelMat.Channel = repmat(db_template('channeldesc'), [1, nChannels]);
+    ChannelMat.Nirs.Wavelengths = wavelengths;
+
+    for ipair=1:size(montage_pairs, 1)
+        ihead_vertex_src = montage_pairs(ipair, 1);
+        ihead_vertex_det = montage_pairs(ipair, 2);
+        
+        if src_indexes(ihead_vertex_src) == 0
+            idx_src = src_next_idx;
+            src_indexes(ihead_vertex_src) = src_next_idx;
+            src_next_idx = src_next_idx + 1;
+        else
+            idx_src = src_indexes(ihead_vertex_src);
+        end
+        if det_indexes(ihead_vertex_det) == 0
+            idx_det = det_next_idx;
+            det_indexes(ihead_vertex_det) = det_next_idx;
+            det_next_idx = det_next_idx + 1;
+        else
+            idx_det = det_indexes(ihead_vertex_det);
+        end
+        
+        disp(['Channel S', num2str(idx_src), 'D' num2str(idx_det) ' >>> Distance: ',...
+            num2str(round(nst_pdist(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', 'Weight: ',...
+            num2str(round(montage_weight(ipair,:),3))]);
+        
+        for iwl=1:length(wavelengths)
+            
+            ChannelMat.Channel(iChan).Name      = sprintf('S%dD%dWL%d', idx_src, idx_det, ChannelMat.Nirs.Wavelengths(iwl));
+            ChannelMat.Channel(iChan).Type      = 'NIRS';
+            ChannelMat.Channel(iChan).Loc(:,1)  = head_vertices_coords(ihead_vertex_src, :);
+            ChannelMat.Channel(iChan).Loc(:,2)  = head_vertices_coords(ihead_vertex_det, :);
+            ChannelMat.Channel(iChan).Orient    = [];
+            ChannelMat.Channel(iChan).Weight    = 1;
+            ChannelMat.Channel(iChan).Comment   = [];
+            ChannelMat.Channel(iChan).Group     = sprintf('WL%d', round(ChannelMat.Nirs.Wavelengths(iwl)));
+            
+            iChan = iChan + 1;
+        end
+    end
+
+end
+
+function weight_table = denoise_weight_table(weight_table, threshold)
+    
+    if nargin < 2 || isempty(threshold)
+        nrqr = 5;
+        threshold = median(weight_table(weight_table>0)) + nrqr* iqr(weight_table(weight_table>0));
+    end
+
+    weight_table_new = weight_table;
+    weight_table_new(weight_table > threshold) = 0;
+
+    figure;
+    subplot(221)
+    imagesc(full(weight_table))
+    title('Before Removing supirous node')
+
+    subplot(222)
+    imagesc(full(weight_table_new))
+    title('After Removing supirous node')
+
+    subplot(223); histogram(weight_table(weight_table <= threshold)); 
+    subplot(224); histogram(weight_table(weight_table > threshold));
+    title(sprintf('Threshold %.f ', threshold))
+
+
+    weight_table  = weight_table_new;
+    
+end
+
+function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
+
+    sHead   = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+    sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
+
+    i_atlas_cortex = strcmp({sCortex.Atlas.Name},options.Atlas_cortex);
+    i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, options.ROI_cortex);
+    ROI_cortex     = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
+    
+    if isempty(options.Atlas_head) && isempty(options.ROI_head)
+        
+        cortex_to_scalp_extent = options.Extent;
+        cortex_scout.sSubject = sSubject;
+        cortex_scout.sScout   = ROI_cortex;
+        
+        [head_vertex_ids, ~, ~] = proj_cortex_scout_to_scalp(cortex_scout, cortex_to_scalp_extent.*0.01, 1); 
+
+    else    
+
+        i_atlas_head = strcmp({sHead.Atlas.Name},options.Atlas_head);
+        i_scout_head = strcmp({sHead.Atlas(i_atlas_head).Scouts.Label}, options.ROI_head);
+        head_vertex_ids = sHead.Atlas(i_atlas_head).Scouts(i_scout_head).Vertices;  
+        
+        exclude_scout = sHead.Atlas(i_atlas_head).Scouts(strcmp('FluenceExclude', {sHead.Atlas(i_atlas_head).Scouts.Label}));
+        if ~isempty(exclude_scout)
+            head_vertex_ids = setdiff(head_vertex_ids, exclude_scout.Vertices);
+        end
+        
+    end
+    
+    % Extract head point coordinates
+    head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
+    
+    ROI_head = struct('head_vertex_ids',head_vertex_ids, 'head_vertices_coords', head_vertices_coords);
 end
