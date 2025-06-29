@@ -322,7 +322,7 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     cplex.Param.output.clonelog.Cur = 0;
 
     %Progress bar
-    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...', 1, 1000);
+    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
     
     %======================================================================
     % initial condition : find sources whose pairs have maximum energy then
@@ -336,17 +336,11 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
         bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
         return;
     end
-   
-    addConstraint = 0;
-    if addConstraint
-       
-    end
 
     bst_progress('stop');
 
     %Calculation of montage_pairs matrix and montage_weight vector
-    [montage_pairs, montage_weight] = montage_pairs_and_weight(results, options.nH, options.holder_distances, ...
-        options.thresh_sep_optode_optode, options.weight_tables);
+    [montage_pairs, montage_weight] = montage_pairs_and_weight(results, options.nH, options.holder_distances, options.thresh_sep_optode_optode, options.weight_tables);
 end
 
 
@@ -511,31 +505,31 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     
     
     Aeq = [Aeq_1 ; Aeq_2];
-    E = [E_1 ; E_2];
+    E   = [E_1 ; E_2];
     
-    Aineq = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
-    I = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
+    Aineq   = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
+    I       = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
     
-    f  = [zeros(1, 2*nH) ones(1, nH)]';
-    lb = [];%[zeros(1,2*nH) zeros(1,nH)]';
-    ub = [];%[ones(1,2*nH)  realmax.*ones(1,nH)]';
-    ctype = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
+    f       = [zeros(1, 2*nH) ones(1, nH)]';
+    lb      = []; 
+    ub      = []; 
+    ctype   = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
     
     %Cplex optimisation
-    prob = cplexcreateprob('cplexmilp');
-    prob.f = f;
-    prob.lb = lb; prob.ub = ub;
-    prob.ctype = ctype;
-    prob.Aineq = Aineq; prob.bineq = I;
-    prob.Aeq = Aeq; prob.beq = E;
-    prob.x0 = [];
-    prob.options = [];
+    prob        = cplexcreateprob('cplexmilp');
+    prob.f      = f;
+    prob.lb     = lb;       prob.ub = ub;
+    prob.ctype  = ctype;
+    prob.Aineq  = Aineq;    prob.bineq = I;
+    prob.Aeq    = Aeq;      prob.beq = E;
+    prob.x0         = [];
+    prob.options    = [];
 
-    bst_progress('stop');
     
     options.holder_distances = holder_distances;
     options.thresh_sep_optode_optode = thresh_sep_optode_optode; 
     options.nH = nH;
+    
 end
 
 function [A, E] = add_constraint_nSrc(nVar, nH, nS)
