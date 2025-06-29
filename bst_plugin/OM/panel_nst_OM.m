@@ -422,6 +422,10 @@ function AtlasSelection_Callback(AtlasList, jCombo, jList, ev)
     end
     % Get current scouts
     ScoutNames = AtlasList{iAtlasList,2};
+    if ~isempty(ScoutNames)
+        ScoutNames  =  ScoutNames( ~strcmp(ScoutNames, 'FluenceRegion') & ~strcmp(ScoutNames, 'FluenceExclude'));
+    end
+
     % Temporality disables JList selection callback
     jListCallback_bak = java_getcb(jList, 'ValueChangedCallback');
     java_setcb(jList, 'ValueChangedCallback', []);
