@@ -340,7 +340,7 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     bst_progress('stop');
 
     %Calculation of montage_pairs matrix and montage_weight vector
-    [montage_pairs, montage_weight] = montage_pairs_and_weight(results, options.nH, options.holder_distances, options.thresh_sep_optode_optode, options.weight_tables);
+    [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options);
 end
 
 
@@ -686,16 +686,16 @@ function cplex = init_solution(cplex, weight_table, nH, nS, nD)
     cplex.MipStart(1).xindices=int32((1:numel(x0))');
 end
 
-function [montage_pairs, montage_weight] = montage_pairs_and_weight(results, nH, holder_distances, thresh_sep_optode_optode, weight_table)
+function [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options)
 % @========================================================================
 % montage_pairs_and_weight Calculation of montage pairs matrix and montage
 % weight vector
 % ========================================================================@
-
+    
     x=results.x;
     x=round(x);
-    isources = find(x(1:nH)==1);
-    idetectors = find(x(nH+1:2*nH)==1);
+    isources = find(x(1:options.nH)==1);
+    idetectors = find(x(options.nH+1:2*options.nH)==1);
     
     ipair = 1;
     
@@ -706,13 +706,13 @@ function [montage_pairs, montage_weight] = montage_pairs_and_weight(results, nH,
     
     for isrc = 1:length(isources)
         for idet = 1:length(idetectors)
-            if holder_distances(isources(isrc), idetectors(idet)) > thresh_sep_optode_optode(1) && ...
-                    holder_distances(isources(isrc), idetectors(idet)) < thresh_sep_optode_optode(2) && ...
-                    full(weight_table(isources(isrc), idetectors(idet)))
+            if options.holder_distances(isources(isrc), idetectors(idet)) > options.thresh_sep_optode_optode(1) && ...
+                    options.holder_distances(isources(isrc), idetectors(idet)) < options.thresh_sep_optode_optode(2) && ...
+                    full(options.weight_tables(isources(isrc), idetectors(idet)))
                 
                 if ipair <= max_pairs
                     montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                    montage_weight(ipair,:) = full(weight_table(isources(isrc), idetectors(idet)));
+                    montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
                     ipair = ipair + 1;
                 else
                     warning('Memory management error : The variables are not correctly sized. ');   
