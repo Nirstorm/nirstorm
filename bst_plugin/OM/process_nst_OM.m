@@ -19,7 +19,7 @@ function varargout = process_nst_OM( varargin )
 % =============================================================================@
 %
 % Authors: 
-% Edouard Delaire (2021), Jean-Eudes Bornert (2025)
+% Edouard Delaire (2021-2025), Jean-Eudes Bornert (2025)
 % Thomas Vincent, Alexis Machado, ZhengChen Cai (2017)
 
 eval(macro_method);
@@ -289,13 +289,10 @@ function weight_tables = compute_weights(fluence_volumes, head_vertices_coords, 
         fluenceSrc = fluences(:,isrc);
         for idet=1:nHolders
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
-                %A=normFactor*fluenceSrc.*fluenceDet./diff_mask(idx_vox);
                 fluenceDet = fluences(:,idet);
 
                 if ref(isrc,idet) ~=0 
-                    % sensitivity = fluenceSrc .* fluenceDet ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
-                    % ED: fluenceSrc' * fluenceDet is slighty faster than sum ( fluenceSrc .* fluenceDet )
-                    sensitivity = fluenceSrc' * fluenceDet; % ./ fluence_volumes{isrc}{iwl}(ref_det_pos); % Asymmetry
+                    sensitivity = fluenceSrc' * fluenceDet; 
                     
                     mat_idx(1,n_val) = isrc;mat_idx(2,n_val) = idet; mat_val(n_val) = sensitivity / ref(isrc,idet);
                     n_val = n_val +1;
@@ -304,6 +301,7 @@ function weight_tables = compute_weights(fluence_volumes, head_vertices_coords, 
         end
         bst_progress('inc', nHolders);
     end
+
     weight_tables = sparse(mat_idx(1,1:n_val-1),mat_idx(2,1:n_val-1), mat_val(1:n_val-1),nHolders,nHolders); 
     bst_progress('stop');
 end
@@ -342,49 +340,6 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     %Calculation of montage_pairs matrix and montage_weight vector
     [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options);
 end
-
-
-function sSurfNew = extract_scout_surface(sSurf, sScouts)
-
-    iRemoveVert = setdiff(1:size(sSurf.Vertices,1), [sScouts.Vertices]);
-    tag = 'OM_scout_extract';
-    
-    % Unload everything
-    bst_memory('UnloadAll', 'Forced');
-    
-    % === REMOVE VERTICES FROM SURFACE FILE ===
-    % Remove vertices
-    [Vertices, Faces, Atlas] = tess_remove_vert(sSurf.Vertices, sSurf.Faces, iRemoveVert, sSurf.Atlas);
-    % Remove the handles of the scouts
-    for iAtlas = 1:length(Atlas)
-        for is = 1:length(Atlas(iAtlas).Scouts)
-            Atlas(iAtlas).Scouts(is).Handles = [];
-        end
-        %         if isfield(Atlas(iAtlas).Scouts, 'Handles');
-        %             Atlas(iAtlas).Scouts = rmfield(Atlas(iAtlas).Scouts, 'Handles');
-        %         end
-    end
-    % Build new surface
-    sSurfNew = db_template('surfacemat');
-    sSurfNew.Comment  = [sSurf.Comment '_' tag];
-    sSurfNew.Vertices = Vertices;
-    sSurfNew.Faces    = Faces;
-    sSurfNew.Atlas    = Atlas;
-    sSurfNew.iAtlas   = sSurf.iAtlas;
-    
-    % % === SAVE NEW FILE ===
-    % % Output filename
-    % NewTessFile = strrep(file_fullpath(sSurf.FileName), '.mat', ['_' tag '.mat']);
-    % NewTessFile = file_unique(NewTessFile);
-    % % Save file back
-    % bst_save(NewTessFile, sSurfNew, 'v7');
-    % % Get subject
-    % [sSubject, iSubject] = bst_get('SurfaceFile', sSurf.FileName);
-    % % Register this file in Brainstorm database
-    % db_add_surface(iSubject, NewTessFile, sSurfNew.Comment);
-
-end
-
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
 
