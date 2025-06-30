@@ -22,7 +22,7 @@ function varargout = panel_nst_OM(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2020
+% Authors: Francois Tadel, 2020, Edouard Delaire, 2025
 
 eval(macro_method);
 end
@@ -36,11 +36,12 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     import javax.swing.*;
     import org.brainstorm.list.*;
 
+
     ctrl = struct();
-    % GUI CALL:  panel_femcond('CreatePanel', OPTIONS)
+    % GUI CALL:  panel_nst_OM('CreatePanel', OPTIONS)
     if (nargin == 1)
         OPTIONS = sProcess;
-    % PROCESS CALL:  panel_femcond('CreatePanel', sProcess, sFiles)
+    % PROCESS CALL:  panel_nst_OM('CreatePanel', sProcess, sFiles)
     else
         sSubject = bst_get('Subject', sProcess.options.subjectname.Value);
         OPTIONS.SubjectName = sProcess.options.subjectname.Value;
@@ -51,14 +52,33 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         OPTIONS.CortexFile = file_fullpath(sSubject.Surface(sSubject.iCortex).FileName);
     end
     
+    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions());
+
+    if isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
+        OPTIONS = struct_copy_fields(OPTIONS,  sProcess.options.fluencesCond.Value, 1);
+    end
+
     ctrl.SubjectName = OPTIONS.SubjectName;
     % Load head atlases
     AtlasHead = load(OPTIONS.HeadFile,  'Atlas', 'iAtlas');
     ctrl.HeadAtlasName = {AtlasHead.Atlas.Name};
+    
+    if ~isempty(OPTIONS.Atlas_head)
+        AtlasHead.iAtlas = find(strcmp({AtlasHead.Atlas.Name}, OPTIONS.Atlas_head));
+        AtlasHead.iScout = find(strcmp({AtlasHead.Atlas(AtlasHead.iAtlas).Scouts.Label}, OPTIONS.ROI_head));
+    else
+        AtlasHead.iScout = 1;
+    end
+
     % Load cortex atlases
     AtlasCortex = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
     ctrl.CortexAtlasName = {AtlasCortex.Atlas.Name};
-        
+    if ~isempty(OPTIONS.Atlas_cortex)
+        AtlasCortex.iAtlas = find(strcmp({AtlasCortex.Atlas.Name}, OPTIONS.Atlas_cortex));
+        AtlasCortex.iScout = find(strcmp({AtlasCortex.Atlas(AtlasCortex.iAtlas).Scouts.Label}, OPTIONS.ROI_cortex));
+    else
+        AtlasCortex.iScout = 1;
+    end
     
     % ==== FRAME STRUCTURE ====
     % Create main panel
@@ -109,7 +129,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Create panel
     jPanelUseDefault = gui_river([2,2], [3,3,3,3], '');
     jUseDefaultSpace = gui_component('checkbox', jPanelUseDefault, 'br', 'Use default search space', [], [], @(h,ev)UpdatePanel(), []);
-    jUseDefaultSpace.setSelected(1);    
+    jUseDefaultSpace.setSelected(isempty(OPTIONS.ROI_head));    
     gui_component('label', jPanelUseDefault, 'br', '', [], [], [], []);
     jPanelLeft.add('br hfill vfill', jPanelUseDefault);
     ctrl.jUseDefaultSpace = jUseDefaultSpace;
@@ -117,7 +137,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
         % Extent label
     jExtentTitle = gui_component('label', jPanelUseDefault, 'br', 'Extent of scalp projection:', [], [], [], []);
-    jExtent = gui_component('text', jPanelUseDefault, 'hfill', '4', [], [], [], []);
+    jExtent = gui_component('text', jPanelUseDefault, 'hfill', num2str(OPTIONS.Extent), [], [], [], []);
     jExtentTitle2 = gui_component('label', jPanelUseDefault, 'hfill', 'cm', [], [], [], []);
     ctrl.jExtent= jExtent;
         
@@ -151,31 +171,31 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % === PANEL: Montage information ====
     jPanelMontage = gui_river([2,2], [3,5,3,5], 'Montage');
     gui_component('label', jPanelMontage, 'br', 'Number of sources:', [], [], [], []);
-    jSources = gui_component('text', jPanelMontage, 'hfill', '3', [], [], [], []);
+    jSources = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.nb_sources), [], [], [], []);
     ctrl.jSources = jSources;
 
     
     gui_component('label', jPanelMontage, 'br', 'Number of detectors:', [], [], [], []);
-    jDetectors = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
+    jDetectors = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.nb_detectors), [], [], [], []);
     ctrl.jDetectors = jDetectors;
     
     
     gui_component('label', jPanelMontage, 'br', 'Number of Adjacent:', [], [], [], []);
-    jAdjacent = gui_component('text', jPanelMontage, 'hfill', '7', [], [], [], []);
+    jAdjacent = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.nAdjacentDet), [], [], [], []);
     ctrl.jAdjacent = jAdjacent;
 
         
     gui_component('label', jPanelMontage, 'br', 'Range of optodes distance', [], [], [], []);
-    jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);       
+    jSepOptodeMin = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.sep_optode(1)), [], [], [], []);       
     gui_component('label', jPanelMontage, '', ' - ', [], [], [], []);
-    jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', '40', [], [], [], []);
+    jSepOptodeMax = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.sep_optode(2)), [], [], [], []);
     gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
     ctrl.jSepOptodeMin = jSepOptodeMin;
     ctrl.jSepOptodeMax = jSepOptodeMax;
 
 
     gui_component('label', jPanelMontage, 'br', 'Minimum source detector distance:', [], [], [], []);
-    jSepmin_SD = gui_component('text', jPanelMontage, 'hfill', '15', [], [], [], []);    
+    jSepmin_SD = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.sepmin_SD), [], [], [], []);    
     gui_component('label', jPanelMontage, 'hfill', ' mm', [], [], [], []);
     ctrl.jSepmin_SD = jSepmin_SD;
 
@@ -184,11 +204,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % === PANEL: Fluence  ====
     jPanelFluence = gui_river([2,2], [3,5,3,5], 'Fluence information');
     gui_component('label', jPanelFluence, 'br', 'Fluence Data Source (URL or path):', [], [], [], []);
-    jFluenceSource = gui_component('text', jPanelFluence, 'hfill', [nst_get_repository_url() '/fluence/'], [], [], [], []);
+    jFluenceSource = gui_component('text', jPanelFluence, 'hfill', OPTIONS.data_source, [], [], [], []);
     ctrl.jFluenceSource = jFluenceSource;
 
-    gui_component('label', jPanelFluence, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
-    jWavelengths = gui_component('text', jPanelFluence, 'hfill', '685', [], [], [], []);
+    gui_component('label', jPanelFluence, 'br', 'Wavelength (nm)', [], [], [], []);
+    jWavelengths = gui_component('text', jPanelFluence, 'hfill', num2str(OPTIONS.wavelengths), [], [], [], []);
     ctrl.jWavelengths = jWavelengths;
 
     prefPanelSize = java_scaled('dimension', 800,100);
@@ -198,12 +218,12 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
-    jOutputCondition = gui_component('text', jPanelOutput, 'hfill', 'planning_optimal_montage', [], [], [], []);
+    jOutputCondition = gui_component('text', jPanelOutput, 'hfill', OPTIONS.condition_name, [], [], [], []);
     ctrl.jOutputCondition   = jOutputCondition;
 
     
     gui_component('label', jPanelOutput, 'br', 'Folder for weight table:', [], [], [], []);
-    jWeightFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
+    jWeightFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
     ctrl.jWeightFolder   = jWeightFolder;
 
     jPanelRight.add('br hfill', jPanelOutput);
@@ -227,10 +247,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Return a mutex to wait for panel close
     bst_mutex('create', panelName);
     % Create the BstPanel object that is returned by the function
-    bstPanelNew = BstPanel(panelName, jPanelMain, ctrl);    
+    bstPanelNew = BstPanel(panelName, jPanelMain, ctrl); 
+
     % Redraw panel
-    UpdateScoutList(jComboHead,jListHead, AtlasHead.Atlas, AtlasHead.iAtlas);
-    UpdateScoutList(jComboCortex,jListCortex, AtlasCortex.Atlas, AtlasCortex.iAtlas);
+    UpdateScoutList(jComboHead, jListHead, AtlasHead.Atlas, AtlasHead.iAtlas, AtlasHead.iScout);
+    UpdateScoutList(jComboCortex,jListCortex, AtlasCortex.Atlas, AtlasCortex.iAtlas, AtlasCortex.iScout);
     UpdatePanel();
     
     
@@ -271,7 +292,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
 
     %% ===== UPDATE SCOUT LIST =====
-    function UpdateScoutList(jCombo,jList, Atlas, iAtlas)
+    function UpdateScoutList(jCombo, jList, Atlas, iAtlas, iScout)
         import org.brainstorm.list.*;
         % Empty the atlas list
         jCombo.removeAllItems();
@@ -306,6 +327,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
         % Set current atlas
         AtlasSelection_Callback(AtlasList, jCombo, jList, []);
+        
+        if ~isempty(iScout)
+            jList.setSelectedIndex(iScout - 1);
+        end
+
         % Set callbacks
         java_setcb(jCombo, 'ItemStateChangedCallback', @(h,ev)AtlasSelection_Callback(AtlasList, jCombo, jList, ev));
     end
@@ -315,6 +341,34 @@ end
 %% =================================================================================
 %  === EXTERNAL CALLBACKS  =========================================================
 %  =================================================================================
+
+function options = getDefaultOptions()
+    options = struct();
+    
+    options.surface         = 'cortex';
+    options.ROI_cortex      = [];
+    options.Atlas_cortex    = [];
+    
+    options.ROI_head        = [];
+    options.Atlas_head      = [];
+
+    options.Extent          = 5;
+
+    options.nb_sources      = 3;
+    options.nb_detectors    = 7;
+    options.nAdjacentDet    = 7;
+    options.sep_optode      = [ 15, 40];
+    options.sepmin_SD       =  15;
+
+    options.wavelengths     = 685;
+    
+    options.condition_name  = 'planning_optimal_montage';
+    options.data_source     = [nst_get_repository_url() '/fluence/'];
+    options.outputdir       = '';
+    options.exist_weight    = 1;  
+end
+
+
 %% ===== GET PANEL CONTENTS =====
 function s = GetPanelContents() %#ok<DEFNU>
     % Get panel controls handles
@@ -368,6 +422,10 @@ function AtlasSelection_Callback(AtlasList, jCombo, jList, ev)
     end
     % Get current scouts
     ScoutNames = AtlasList{iAtlasList,2};
+    if ~isempty(ScoutNames)
+        ScoutNames  =  ScoutNames( ~strcmp(ScoutNames, 'FluenceRegion') & ~strcmp(ScoutNames, 'FluenceExclude'));
+    end
+
     % Temporality disables JList selection callback
     jListCallback_bak = java_getcb(jList, 'ValueChangedCallback');
     java_setcb(jList, 'ValueChangedCallback', []);
