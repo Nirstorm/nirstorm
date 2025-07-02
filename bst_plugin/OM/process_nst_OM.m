@@ -128,8 +128,9 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    options.weight_tables = load_weight_table(sSubject, options, ROI_cortex, ROI_head);
-    if isempty(options.weight_tables) || nnz(options.weight_tables) == 0
+    % A MODIFIER
+    [options.sensitivity_mat, options.coverage_mat] = get_weight_tables(sSubject, options, ROI_cortex, ROI_head);
+    if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
@@ -173,9 +174,10 @@ function OutputFile = Run(sProcess, sInput)
     
 end
 
-function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_head)
+function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, ROI_cortex, ROI_head)
 
-    weight_table = [];
+    sensitivity_mat = [];
+    coverage_mat    = [];
 
     voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
     
@@ -184,7 +186,6 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
                     'subjectname',        sSubject.Name, ...
                     'segmentation_label', options.segmentation_label);
     end
-        
         
     voronoi_bst = in_mri_bst(voronoi_fn);
     voronoi     = voronoi_bst.Cube;
@@ -223,12 +224,14 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
         if options.exist_weight && isfield(weight_cache,  matlab.lang.makeValidName(ROI_cortex.Label))
             tmp = weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label));    
             if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
-                weight_table = tmp.weight_table;
+                sensitivity_mat = tmp.sensitivity_mat;
+                coverage_mat = tmp.coverage_mat;
+
             end    
         end    
     end
     
-    if isempty(weight_table)
+    if isempty(sensitivity_mat)
         
         % Compute weight table
         [fluence_volumes, reference] = process_nst_import_head_model('request_fluences', ...
@@ -240,12 +243,12 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
             vois, ...
             options.cubeSize);
         
-        weight_table = compute_weights(fluence_volumes, ROI_head.head_vertices_coords, reference, options);
+        [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, ROI_head.head_vertices_coords, reference, options);
         
         if ~isempty(options.outputdir)
             options_out = options;
             options_out.head_vertex_ids = ROI_head.head_vertex_ids;
-            tmp = struct('weight_table',weight_table,'options',options_out);
+            tmp = struct('sensitivity_mat', sensitivity_mat,'coverage_mat', coverage_mat,'options',options_out);
             weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label)) = tmp;
             save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
         end
@@ -254,15 +257,23 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
 
 end
 
-function weight_tables = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
+function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
+    %Rajouter un if avec "si le cW > 0 alors flag vaut 1
+    flag_coverage = 1;
 
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
     iwl = 1;
 
-    mat_idx = zeros(2,nHolders);
-    mat_val = zeros(1,nHolders);
-    n_val = 1;
+    mat_sensitivity_idx = zeros(2,nHolders);
+    mat_sensitivity_val = zeros(1,nHolders);
+    n_sensitivity_val   = 1;
+    
+    if flag_coverage
+        mat_coverage_idx = zeros(2, nHolders);
+        mat_coverage_val = zeros(1, nHolders);
+        n_coverage_val   = 1;
+    end
     
     bst_progress('start', 'Compute weights','Preparation of fluences...', 1, 2);
 
@@ -283,34 +294,48 @@ function weight_tables = compute_weights(fluence_volumes, head_vertices_coords, 
     end
     
     bst_progress('inc', 1);
-
-    bst_progress('start', 'Compute weights','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
+    
+    
+    bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
     for isrc=1:nHolders
         fluenceSrc = fluences(:,isrc);
         for idet=1:nHolders
-            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max
-                fluenceDet = fluences(:,idet);
-
+            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet) < options.sep_optode_max
                 if ref(isrc,idet) ~=0 
+                    fluenceDet = fluences(:,idet);
                     sensitivity = fluenceSrc' * fluenceDet; 
                     
-                    mat_idx(1,n_val) = isrc;mat_idx(2,n_val) = idet; mat_val(n_val) = sensitivity / ref(isrc,idet);
-                    n_val = n_val +1;
+                    mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sensitivity / ref(isrc,idet);
+                    n_sensitivity_val = n_sensitivity_val + 1;
+                    
+                    if flag_coverage
+                        % A REVOIR
+                        coverage = fluenceSrc .* fluenceDet; 
+                        coverage_volume = sum(sqrt(max(coverage, 0)));
+                        
+                        mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage_volume / ref(isrc,idet);
+                        n_coverage_val = n_coverage_val + 1;
+                    end
                 end
             end    
         end
         bst_progress('inc', nHolders);
     end
-
-    weight_tables = sparse(mat_idx(1,1:n_val-1),mat_idx(2,1:n_val-1), mat_val(1:n_val-1),nHolders,nHolders); 
-    bst_progress('stop');
+    sensitivity_mat = sparse(mat_sensitivity_idx(1,1:n_sensitivity_val-1),mat_sensitivity_idx(2,1:n_sensitivity_val-1), mat_sensitivity_val(1:n_sensitivity_val-1),nHolders,nHolders); 
+    if flag_coverage
+        coverage_mat = sparse(mat_coverage_idx(1,1:n_coverage_val-1), mat_coverage_idx(2,1:n_coverage_val-1), mat_coverage_val(1:n_coverage_val-1), nHolders, nHolders);
+    end
+    bst_progress('stop');  
 end
-
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, options)
     
+    %======================================================================
+    % 1) Compute OM by maximizing sensitivity only
+    %======================================================================
+    
     %Define the cplex problem
-    [prob, options] = define_prob_simple(head_vertices_coords, options);
+    [prob, options] = define_prob(head_vertices_coords, options);
    
     cplex=Cplex(prob);
     cplex.Model.sense = 'maximize';
@@ -339,6 +364,37 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
 
     %Calculation of montage_pairs matrix and montage_weight vector
     [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options);
+
+    %======================================================================
+    % 2) Compute OM by maximizing sensitivity and coverage
+    %======================================================================
+    %Reutiliser montage weight
+    %Define the cplex problem
+    [prob, options] = define_prob(head_vertices_coords, options);
+
+    cplex=Cplex(prob);
+    cplex.Model.sense = 'maximize';
+    
+    %Faire varier le temps pour verifier
+    cplex.Param.timelimit.Cur=300;
+
+    % Delete clone[number].log files created by Cplex
+    cplex.Param.output.clonelog.Cur = 0;
+
+    %Progress bar
+    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
+    
+    results = cplex.solve;
+    if ~isfield(results, 'x')
+        bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
+        return;
+    end
+
+    bst_progress('stop');
+
+    %Calculation of montage_pairs matrix and montage_weight vector
+    [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options);
+
 end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
@@ -387,7 +443,8 @@ function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_sc
 
 end
 
-function [prob, options] = define_prob_simple(head_vertices_coords, options)
+% A MODIFIER
+function [prob, options] = define_prob(head_vertices_coords, options)
 % @========================================================================
 % define_prob_simple Initializes the problem
 % Added in options by function : holder_distances, nH, thresh_sep_optode_optode 
@@ -462,10 +519,10 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     Aeq = [Aeq_1 ; Aeq_2];
     E   = [E_1 ; E_2];
     
-    Aineq   = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4,; Aineq_5];
+    Aineq   = [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4 ; Aineq_5];
     I       = [I_1 ; I_2 ; I_3 ; I_4 ; I_5];
     
-    f       = [zeros(1, 2*nH) ones(1, nH)]';
+    f       = [zeros(1, nH) , zeros(1, nH) ones(1, nH)]';
     lb      = []; 
     ub      = []; 
     ctype   = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
@@ -487,6 +544,10 @@ function [prob, options] = define_prob_simple(head_vertices_coords, options)
     
 end
 
+%==========================================================================
+% FUNCTIONS USED TO DEFINE THE OPTIMISATION PROBLEM
+%==========================================================================
+
 function [A, E] = add_constraint_nSrc(nVar, nH, nS)
 % @========================================================================
 % add_constraint_nSrc Adds the constraint for the total number of sources.
@@ -498,10 +559,6 @@ function [A, E] = add_constraint_nSrc(nVar, nH, nS)
 
     E = nS;
 end
-
-%==========================================================================
-% FUNCTIONS USED BY "compute_optimal_montage" FUNCTION
-%==========================================================================
 
 function [A, E] = add_constraint_nDet(nVar, nH, nD)
 % @========================================================================
@@ -533,6 +590,21 @@ end
 function [A, I] = detect_activ_constr(nH, nVar, weight_table)
 % @========================================================================
 % detect_activ_constr Generates inequality constraints for detector activation.
+%   See equation 13 : wq_V-Sum(Vpq*xp) <= 0
+% ========================================================================@
+
+    A=zeros(nH, nVar);
+    for iH = 1:nH
+        A(iH, 2*nH+iH) = 1;
+        A(iH, 1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
+    end
+    I = zeros(nH, 1);
+end
+
+function [A, I] = detect_activ_constr_cov(nH, nVar, weight_table)
+% @========================================================================
+% detect_activ_constr Generates inequality constraints for detector
+% activation for the coverage constrained version
 %   See equation 13 : wq_V-Sum(Vpq*xp) <= 0
 % ========================================================================@
 
@@ -604,83 +676,6 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
     end
 end
 
-function cplex = init_solution(cplex, weight_table, nH, nS, nD)
-%@=========================================================================
-% INITIAL SOLUTION FUNCTIONS (cplex)
-%=========================================================================@
-    
-    xp_0 = zeros(nH, 1);
-    yq_0 = zeros(nH, 1);
-    [~,idx] = sort(weight_table(:), 'descend');
-    % Seems to only needed if holder list is not the same size as weight_table
-    
-    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
-    
-    src_weight_table = weight_table(src_pos_idx,:);
-    [~, idx] = sort(src_weight_table(:), 'descend');
-    
-    [~, det_pos_idx] = ind2sub(size(src_weight_table), idx(1:nD));
-    
-    xp_0(src_pos_idx) = 1;
-    yq_0(det_pos_idx) = 1;
-    
-    wq_V_O = zeros(nH, 1);
-    for ii = 1:numel(yq_0)
-        if yq_0(ii) == 1
-            wq_V_O(ii) = sum(weight_table(src_pos_idx, ii));
-        end
-    end
-    
-    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
-    fprintf('incumbent=%g\n', incumbent_x0)
-    x0 = [xp_0 ; yq_0 ; wq_V_O];
-
-    cplex.MipStart(1).name='optim';
-    cplex.MipStart(1).effortlevel=1;
-    cplex.MipStart(1).x=x0;
-    cplex.MipStart(1).xindices=int32((1:numel(x0))');
-end
-
-function [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options)
-% @========================================================================
-% montage_pairs_and_weight Calculation of montage pairs matrix and montage
-% weight vector
-% ========================================================================@
-    
-    x=results.x;
-    x=round(x);
-    isources = find(x(1:options.nH)==1);
-    idetectors = find(x(options.nH+1:2*options.nH)==1);
-    
-    ipair = 1;
-    
-    % Memory management
-    max_pairs = length(isources) * length(idetectors) -1;
-    montage_pairs = zeros(max_pairs, 2);
-    montage_weight = zeros(max_pairs, 1);
-    
-    for isrc = 1:length(isources)
-        for idet = 1:length(idetectors)
-            if options.holder_distances(isources(isrc), idetectors(idet)) > options.thresh_sep_optode_optode(1) && ...
-                    options.holder_distances(isources(isrc), idetectors(idet)) < options.thresh_sep_optode_optode(2) && ...
-                    full(options.weight_tables(isources(isrc), idetectors(idet)))
-                
-                if ipair <= max_pairs
-                    montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                    montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
-                    ipair = ipair + 1;
-                else
-                    warning('Memory management error : The variables are not correctly sized. ');   
-                end
-            end
-        end
-    end
-    
-    % Make sure the matrix is the right size
-    montage_pairs = montage_pairs(1:ipair-1, :);
-    montage_weight = montage_weight(1:ipair-1, :);
-end
-
 %==========================================================================
 % DEBUG FUNCTIONS
 %==========================================================================
@@ -712,7 +707,6 @@ function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
         ylim([0.5 size(mat2show, 1)+0.5])
     end
 end
-
 
 function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_weight, head_vertices_coords, wavelengths)
 
