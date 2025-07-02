@@ -52,7 +52,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         OPTIONS.CortexFile = file_fullpath(sSubject.Surface(sSubject.iCortex).FileName);
     end
     
-    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions());
+    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions(), 0);
 
     if isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
         OPTIONS = struct_copy_fields(OPTIONS,  sProcess.options.fluencesCond.Value, 1);

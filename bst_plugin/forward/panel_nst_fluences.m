@@ -60,7 +60,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
         end
     end
    
-    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions());
+    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions(), 0);
     if isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
         OPTIONS = struct_copy_fields(OPTIONS,  sProcess.options.fluencesCond.Value, 1);
     end
@@ -401,7 +401,7 @@ function [software, info] = loadSoftware()
     isClLoaded      = isClInstalled && PlugDescCl.isLoaded;
 
     % Load the plugin
-    if ~isCudaLoaded || ~isClLoaded
+    if ~isCudaLoaded && ~isClLoaded
         if isCudaInstalled && isClInstalled
             res = java_dialog('question', 'Select the toolbox you want to use to compute fluences', 'Compute Fluence', [], {'mcxlab-cuda', 'mcxlab-cl', 'Cancel'}, 'mcxlab-cuda');
             switch res
