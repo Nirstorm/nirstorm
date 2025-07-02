@@ -1,5 +1,5 @@
 function varargout = panel_nst_OM(varargin)
-% panel_nst_fluences Edit ROI for fluences computation. 
+% panel_nst_OM Panel for the optimal montage
 % USAGE:  bstPanel = panel_nst_OM('CreatePanel', OPTIONS)           : Call from the interactive interface
 %         bstPanel = panel_nst_OM('CreatePanel', sProcess, sFiles)  : Call from the process editor
 %                s = panel_nst_OM('GetPanelContents')

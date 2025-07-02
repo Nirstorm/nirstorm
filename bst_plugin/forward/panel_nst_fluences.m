@@ -22,7 +22,7 @@ function varargout = panel_nst_fluences(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2020
+% Authors: Francois Tadel, 2020, Edouard Delaire, 2025
 
 eval(macro_method);
 end
@@ -37,10 +37,10 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     import org.brainstorm.list.*;
 
     ctrl = struct();
-    % GUI CALL:  panel_femcond('CreatePanel', OPTIONS)
+    % GUI CALL:  panel_nst_fluences('CreatePanel', OPTIONS)
     if (nargin == 1)
         OPTIONS = sProcess;
-    % PROCESS CALL:  panel_femcond('CreatePanel', sProcess, sFiles)
+    % PROCESS CALL:  panel_nst_fluences('CreatePanel', sProcess, sFiles)
     else
         if isempty(sFiles.ChannelFile)
             sSubject = bst_get('Subject', sProcess.options.subjectname.Value);
@@ -51,45 +51,59 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             end    
             OPTIONS.HeadFile = file_fullpath(sSubject.Surface(sSubject.iScalp).FileName);
             OPTIONS.CortexFile = file_fullpath(sSubject.Surface(sSubject.iCortex).FileName);
-            OPTIONS.Wavelengths = {'685'};
         else
             OPTIONS.fromMontage = 1;
             OPTIONS.ChannelFile = sFiles.ChannelFile;
             OPTIONS.SubjectName = sFiles.SubjectName;
             ChanneMat = in_bst_channel(sFiles.ChannelFile);
-            OPTIONS.Wavelengths = strsplit(num2str(ChanneMat.Nirs.Wavelengths));
+            OPTIONS.wavelengths = ChanneMat.Nirs.Wavelengths;
         end
     end
-    
-    have_fluence_region = 0;
-    have_fluence_exclude = 0;
+   
+    OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions());
+    if isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
+        OPTIONS = struct_copy_fields(OPTIONS,  sProcess.options.fluencesCond.Value, 1);
+    end
+
+    have_fluence_region     = 0;
+    have_fluence_exclude    = 0;
+
     if OPTIONS.fromMontage 
         ctrl.ChannelFile = sFiles.ChannelFile;
         ctrl.SubjectName = OPTIONS.SubjectName;
-        
     else
         % Load head atlases
-        AtlasHead = load(OPTIONS.HeadFile,  'Atlas', 'iAtlas');
-        ctrl.HeadAtlasName = {AtlasHead.Atlas.Name};
-        % Load cortex atlases
-        AtlasCortex = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
-        ctrl.CortexAtlasName = {AtlasCortex.Atlas.Name};
-        
-        % ;)
+        AtlasHead           = load(OPTIONS.HeadFile,  'Atlas', 'iAtlas');
+        ctrl.HeadAtlasName  = {AtlasHead.Atlas.Name};
+
+        if strcmp(OPTIONS.surface, 'head') && ~isempty(OPTIONS.Atlas)
+            AtlasHead.iAtlas = find(strcmp({AtlasHead.Atlas.Name}, OPTIONS.Atlas));
+            AtlasHead.iScout = find(strcmp({AtlasHead.Atlas(AtlasHead.iAtlas).Scouts.Label}, OPTIONS.ROI));
+        else
+            AtlasHead.iScout = 1;
+        end
+
+        % Detect if FluenceRegion and FluenceExclude are present
         have_fluence_region     = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceRegion'));
         have_fluence_exclude    = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceExclude'));
 
+        % Load cortex atlases
+        AtlasCortex             = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
+        ctrl.CortexAtlasName    = {AtlasCortex.Atlas.Name};
+
+        if strcmp(OPTIONS.surface, 'cortex') && ~isempty(OPTIONS.Atlas)
+            AtlasCortex.iAtlas = find(strcmp({AtlasCortex.Atlas.Name}, OPTIONS.Atlas));
+            AtlasCortex.iScout = find(strcmp({AtlasCortex.Atlas(AtlasCortex.iAtlas).Scouts.Label}, OPTIONS.ROI));
+        else
+            AtlasCortex.iScout = 1;
+        end
+
     end    
-    
-    if  ~exist('mcxlab', 'file') &&  ~exist('mcxlabcl', 'file')
-        bst_error('Please load MXClab (Cuda or OpenCl)'); 
+
+    [ctrl.software, info] = loadSoftware();
+    if isempty(ctrl.software)
+       bst_error('Please load MXClab (Cuda or OpenCl)'); 
        return;
-    elseif exist('mcxlab', 'file')
-        ctrl.software = 'mcxlab-cuda';
-        info=mcxlab('gpuinfo');
-    else
-        ctrl.software = 'mcxlab-cl';
-        info=mcxlabcl('gpuinfo');
     end
     
     % ==== FRAME STRUCTURE ====
@@ -147,7 +161,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     % Extent label
     jExtentTitle = gui_component('label', jPanelScouts, 'br', 'Extent of scalp projection:', [], [], [], []);
-    jExtent = gui_component('text', jPanelScouts, 'hfill', '4', [], [], [], []);
+    jExtent = gui_component('text', jPanelScouts, 'hfill', num2str(OPTIONS.Extent), [], [], [], []);
     jExtentUnit = gui_component('label', jPanelScouts, 'hfill', ' cm', [], [], [], []);
     
     if have_fluence_region && have_fluence_exclude
@@ -183,7 +197,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelForward = gui_river([2,2], [3,5,3,5], 'Forward Model');
     
     gui_component('label', jPanelForward, 'br', 'Wavelengths (nm) [coma-separated list]', [], [], [], []);
-    jWavelengths = gui_component('text', jPanelForward, 'hfill',  strjoin(OPTIONS.Wavelengths, ' ,'), [], [], [], []);
+    jWavelengths = gui_component('text', jPanelForward, 'hfill', strjoin(string(OPTIONS.wavelengths),' ,'), [], [], [], []);
     ctrl.jWavelengths = jWavelengths;
     if   OPTIONS.fromMontage
         jWavelengths.setEnabled(0);
@@ -197,12 +211,17 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
     jCheckGPU = javaArray('javax.swing.JCheckBox', length(info));
     for i_gpu = 1: length(info)
-        jCheckGPU(i_gpu) = gui_component('checkbox', jPanelSimulaion, 'hfill',  info(i_gpu).name, [], [], [], []);  
+        jCheckGPU(i_gpu) = gui_component('checkbox', jPanelSimulaion, 'hfill',  info(i_gpu).name, [], [], [], []); 
+
+        if i_gpu <= length(OPTIONS.mxclab_gpu)
+            jCheckGPU(i_gpu).setSelected(OPTIONS.mxclab_gpu(i_gpu)); 
+        end
+
     end
     ctrl.jCheckGPU = jCheckGPU;
     
     gui_component('label', jPanelSimulaion, 'br', 'Number of photons:', [], [], [], []);
-    jNphoton = gui_component('text', jPanelSimulaion, 'hfill', '10', [], [], [], []);    
+    jNphoton = gui_component('text', jPanelSimulaion, 'hfill', num2str(OPTIONS.mcxlab_nphoton), [], [], [], []);    
     gui_component('label', jPanelSimulaion, 'hfill', ' millions', [], [], [], []);
     ctrl.jNphoton = jNphoton;
 
@@ -212,10 +231,12 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
     
     gui_component('label', jPanelOutput, 'br', 'Output folder:', [], [], [], []);
-    jOutputFolder = gui_component('text', jPanelOutput, 'hfill', '', [], [], [], []);
+    jOutputFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
     jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwirte existing fluences', [], [], [], []);
+    jOverwrite.setSelected(OPTIONS.mcxlab_overwrite_fluences);
+
     gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
     ctrl.jOverwrite=jOverwrite;
     
@@ -242,8 +263,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     % Create the BstPanel object that is returned by the function
     bstPanelNew = BstPanel(panelName, jPanelMain, ctrl); 
     
-    
     % Redraw panel
+    %UpdateScoutList(AtlasCortex.Atlas, AtlasCortex.iAtlas);
+    %UpdateScoutList(AtlasHead.Atlas, AtlasHead.iAtlas);
     UpdatePanel();
     
 %% =================================================================================
@@ -270,13 +292,13 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             jExtentTitle.setVisible(1);
             jExtentUnit.setVisible(1);
             jExtent.setVisible(1);
-            UpdateScoutList(AtlasCortex.Atlas, AtlasCortex.iAtlas);
+            UpdateScoutList(AtlasCortex.Atlas, AtlasCortex.iAtlas, AtlasCortex.iScout);
         elseif jRadioLayerHead.isSelected() 
             jExtentTitle.setVisible(0);
             jExtentUnit.setVisible(0);
             jExtent.setVisible(0);
             jPanelScouts.setVisible(1);
-            UpdateScoutList(AtlasHead.Atlas, AtlasHead.iAtlas);
+            UpdateScoutList(AtlasHead.Atlas, AtlasHead.iAtlas, AtlasHead.iScout);
         elseif jRadioLayerMontage.isSelected()
             jExtentTitle.setVisible(0);
             jExtentUnit.setVisible(0);
@@ -286,7 +308,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     end
 
     %% ===== UPDATE SCOUT LIST =====
-    function UpdateScoutList(Atlas, iAtlas)
+    function UpdateScoutList(Atlas, iAtlas, iScout)
         import org.brainstorm.list.*;
 
                 
@@ -323,6 +345,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
 
         % Set current atlas
         AtlasSelection_Callback(AtlasList, jCombo, jList, []);
+
+        if ~isempty(iScout)
+            jList.setSelectedIndex(iScout - 1);
+        end
+               
         % Set callbacks
         java_setcb(jCombo, 'ItemStateChangedCallback', @(h,ev)AtlasSelection_Callback(AtlasList, jCombo, jList, ev));
     end
@@ -332,6 +359,79 @@ end
 %% =================================================================================
 %  === EXTERNAL CALLBACKS  =========================================================
 %  =================================================================================
+
+
+function options = getDefaultOptions()
+
+    options.surface = 'cortex';
+    options.Atlas   = [];
+    options.ROI     = [];
+
+    options.Extent  = 4;
+    
+    options.software    = 'mcxlab-cuda';
+    options.wavelengths = 685;
+    options.mxclab_gpu = [1];
+
+
+     options.mcxlab_nphoton   =  10;
+     options.outputdir        = '';
+     options.mcxlab_overwrite_fluences = 0;
+     
+     options.mcxlab_flag_autoOP = 1; 
+end
+
+function [software, info] = loadSoftware()
+    
+    software        = '';
+    info            = struct();
+
+    PlugDescCuda    = bst_plugin('GetInstalled', 'mcxlab-cuda');
+    PlugDescCl      = bst_plugin('GetInstalled', 'mcxlab-cl');
+
+    isCudaInstalled = ~isempty(PlugDescCuda);
+    isClInstalled   = ~isempty(PlugDescCl);
+
+    if ~isCudaInstalled && ~isClInstalled
+        % If neither plugin are installed, we return
+        return;
+    end
+
+    isCudaLoaded    = isCudaInstalled && PlugDescCuda.isLoaded;
+    isClLoaded      = isClInstalled && PlugDescCl.isLoaded;
+
+    % Load the plugin
+    if ~isCudaLoaded || ~isClLoaded
+        if isCudaInstalled && isClInstalled
+            res = java_dialog('question', 'Select the toolbox you want to use to compute fluences', 'Compute Fluence', [], {'mcxlab-cuda', 'mcxlab-cl', 'Cancel'}, 'mcxlab-cuda');
+            switch res
+                case 'mcxlab-cuda'
+                    isCudaLoaded = bst_plugin('Load',   'mcxlab-cuda');
+                case 'mcxlab-cl'
+                    isClLoaded = bst_plugin('Load',   'mcxlab-cl');
+                otherwise
+                    return
+            end
+        elseif isCudaInstalled
+            isCudaLoaded = bst_plugin('Load',   'mcxlab-cuda');
+        elseif isClInstalled
+            isClLoaded = bst_plugin('Load',   'mcxlab-cl');
+        end
+    end
+
+    % Return the information
+    if isCudaLoaded
+        software = 'mcxlab-cuda';
+        info=mcxlab('gpuinfo');
+    elseif isClLoaded
+        software = 'mcxlab-cl';
+        info=mcxlabcl('gpuinfo');
+    else
+        % Error: no toolbox loaded
+    end
+
+end
+
 %% ===== GET PANEL CONTENTS =====
 function s = GetPanelContents() %#ok<DEFNU>
     % Get panel controls handles
@@ -370,6 +470,8 @@ function s = GetPanelContents() %#ok<DEFNU>
        bst_error('Please select at least one GPU'); 
        return;
     end  
+    s.mxclab_gpu = GPU;
+
     if length(find(GPU)) > 1
         s.mcxlab_gpuid = char(strjoin(string(GPU),''));  %If multipe GPU,gpuid is a vector containing 1 for the active GPU 
     else
