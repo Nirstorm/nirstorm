@@ -71,17 +71,17 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end        
     
-    cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    try
-        cplx = Cplex();
-        if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
-            bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-            return
-        end
-    catch
-        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-        return
-    end
+    % cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+    % try
+    %     cplx = Cplex();
+    %     if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
+    %         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    %         return
+    %     end
+    % catch
+    %     bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    %     return
+    % end
     
     options     = sProcess.options.fluencesCond.Value;
     if ~isfield(options, 'condition_name') || isempty(options.condition_name)
@@ -303,18 +303,16 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet) < options.sep_optode_max
                 if ref(isrc,idet) ~=0 
                     fluenceDet = fluences(:,idet);
-                    sensitivity = fluenceSrc' * fluenceDet; 
+                    sensitivity = (fluenceSrc .* fluenceDet) /  ref(isrc,idet); 
                     
-                    mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sensitivity / ref(isrc,idet);
+                    mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity) ;
                     n_sensitivity_val = n_sensitivity_val + 1;
-                    
-                    if flag_coverage
-                        % A REVOIR
-                        ????
-                        
-                        mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage_volume / ref(isrc,idet);
-                        n_coverage_val = n_coverage_val + 1;
-                    end
+
+
+                    threshold = pi; % todo
+                    binary_sensitivity = sensitivity > threshold;
+                    mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage_volume / ref(isrc,idet);
+                    n_coverage_val = n_coverage_val + 1;
                 end
             end    
         end
