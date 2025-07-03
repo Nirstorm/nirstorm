@@ -71,17 +71,17 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end        
     
-    % cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    % try
-    %     cplx = Cplex();
-    %     if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
-    %         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    %         return
-    %     end
-    % catch
-    %     bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    %     return
-    % end
+    cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+    try
+        cplx = Cplex();
+        if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
+            bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+            return
+        end
+    catch
+        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+        return
+    end
     
     options     = sProcess.options.fluencesCond.Value;
     if ~isfield(options, 'condition_name') || isempty(options.condition_name)
