@@ -128,7 +128,6 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    % A MODIFIER
     [options.sensitivity_mat, options.coverage_mat] = get_weight_tables(sSubject, options, ROI_cortex, ROI_head);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
@@ -136,7 +135,7 @@ function OutputFile = Run(sProcess, sInput)
     end
     
     % Experimental : Denoise the weight table. (be carefull)
-    % options.weight_tables = denoise_weight_table(weight_table, threshold);
+    % options.weight_tables = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
     [montage_pairs, montage_weight] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
@@ -258,8 +257,7 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
 end
 
 function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
-    %(isfield(options, 'cW') && options.cW > 0); A rajouter une fois
-    %l'option ajoutee
+    %(isfield(options, 'cW') && options.cW > 0); A rajouter une fois l'option ajoutee
     flag_coverage = 1;
 
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
@@ -270,7 +268,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     mat_sensitivity_val = zeros(1,nHolders);
     n_sensitivity_val   = 1;
     
-    coverage_mat = []; % Reste vide si non calculée
+    coverage_mat = [];
     if flag_coverage
         mat_coverage_idx = zeros(2, nHolders);
         mat_coverage_val = zeros(1, nHolders);
@@ -298,13 +296,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     bst_progress('inc', 1);
 
     %threshold for coverage
-    if flag_coverage
-        p_thresh = 1; % Definit comme valant 1%
-        numerator = log((100 + p_thresh) / 100);
-        denomimator = (act_vol / V_hat) * delta_mu_a;
-        threshold = numerator / denomimator;
-    end
-    
+    threshold = compute_threshold(flag_coverage);
     
     bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
     for isrc=1:nHolders
@@ -320,11 +312,13 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
 
                     if flag_coverage
                         N_tot = length(sensitivity);
-                        binary_sensitivity = sensitivity > threshold;
-                        coverage = binary_sensitivity / N_tot;
-
-                        mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
-                        n_coverage_val = n_coverage_val + 1;
+                        if N_tot>0
+                            sum_binary_sensitivity = sum(sensitivity > threshold);
+                            coverage = sum_binary_sensitivity / N_tot;
+    
+                            mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
+                            n_coverage_val = n_coverage_val + 1;
+                        end
                     end
                 end
             end    
@@ -336,6 +330,25 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
         coverage_mat = sparse(mat_coverage_idx(1,1:n_coverage_val-1), mat_coverage_idx(2,1:n_coverage_val-1), mat_coverage_val(1:n_coverage_val-1), nHolders, nHolders);
     end
     bst_progress('stop');  
+end
+
+function threshold = compute_threshold(flag_coverage)
+% @========================================================================
+% compute_threshold computes the threshold to determine the coverage
+% matrix 
+% Formula used : threshold = log((100 + p_thresh) / 100) / ((act_vol / V_hat) * delta_mu_a)
+% ========================================================================@
+
+    if flag_coverage
+        p_thresh = 1;
+        act_vol = 1000; %A definir comme un parametre donne par l'utilisateur
+        V_hat = 1; % changer par une fonction permettant de le calculer
+        delta_mu_a = 0.1;
+        
+        numerator = log((100 + p_thresh) / 100);
+        denomimator = (act_vol / V_hat) * delta_mu_a;
+        threshold = numerator / denomimator;
+    end
 end
 
 function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_coords, options)
@@ -378,7 +391,7 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
-    %Reutiliser montage weight
+    %Reutiliser montage_weight/montage_pairs
     %Define the cplex problem
 
     %VERIFIER COMMEMT EST DEFINI LAMBDA
