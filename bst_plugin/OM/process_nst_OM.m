@@ -310,8 +310,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
                     
                     if flag_coverage
                         % A REVOIR
-                        coverage = fluenceSrc .* fluenceDet; 
-                        coverage_volume = sum(sqrt(max(coverage, 0)));
+                        ????
                         
                         mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage_volume / ref(isrc,idet);
                         n_coverage_val = n_coverage_val + 1;
@@ -335,7 +334,7 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     %======================================================================
     
     %Define the cplex problem
-    [prob, options] = define_prob(head_vertices_coords, options);
+    [prob, options] = define_prob(options.sensitivity_mat,head_vertices_coords, options);
    
     cplex=Cplex(prob);
     cplex.Model.sense = 'maximize';
@@ -370,7 +369,10 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     %======================================================================
     %Reutiliser montage weight
     %Define the cplex problem
-    [prob, options] = define_prob(head_vertices_coords, options);
+
+    %VERIFIER COMMEMT EST DEFINI LAMBDA
+    wt = options.sensitivity_mat + options.lambda * options.coverage_mat;
+    [prob, options] = define_prob(wt,head_vertices_coords, options);
 
     cplex=Cplex(prob);
     cplex.Model.sense = 'maximize';
@@ -444,7 +446,7 @@ function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_sc
 end
 
 % A MODIFIER
-function [prob, options] = define_prob(head_vertices_coords, options)
+function [prob, options] = define_prob(weight_table, head_vertices_coords, options)
 % @========================================================================
 % define_prob_simple Initializes the problem
 % Added in options by function : holder_distances, nH, thresh_sep_optode_optode 
@@ -453,7 +455,6 @@ function [prob, options] = define_prob(head_vertices_coords, options)
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
 
     nHolders = size(head_vertices_coords, 1);
-    weight_table = options.weight_tables;
     
     nS = options.nb_sources; % number of sources
     nD = options.nb_detectors; % number of detectors
