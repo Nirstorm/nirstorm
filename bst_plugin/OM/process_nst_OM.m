@@ -258,7 +258,8 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
 end
 
 function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
-    %Rajouter un if avec "si le cW > 0 alors flag vaut 1
+    %(isfield(options, 'cW') && options.cW > 0); A rajouter une fois
+    %l'option ajoutee
     flag_coverage = 1;
 
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
@@ -269,6 +270,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     mat_sensitivity_val = zeros(1,nHolders);
     n_sensitivity_val   = 1;
     
+    coverage_mat = []; % Reste vide si non calculée
     if flag_coverage
         mat_coverage_idx = zeros(2, nHolders);
         mat_coverage_val = zeros(1, nHolders);
@@ -287,13 +289,21 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     ref = zeros(nHolders,nHolders);
     for isrc=1:nHolders
         for idet=1:nHolders
-            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet)< options.sep_optode_max                   
+            if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet) < options.sep_optode_max                   
                 ref(isrc,idet) = full(reference{isrc}{iwl}(idet));  
             end
         end    
     end
     
     bst_progress('inc', 1);
+
+    %threshold for coverage
+    if flag_coverage
+        p_thresh = 1; % Definit comme valant 1%
+        numerator = log((100 + p_thresh) / 100);
+        denomimator = (act_vol / V_hat) * delta_mu_a;
+        threshold = numerator / denomimator;
+    end
     
     
     bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
@@ -308,11 +318,14 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity) ;
                     n_sensitivity_val = n_sensitivity_val + 1;
 
+                    if flag_coverage
+                        N_tot = length(sensitivity);
+                        binary_sensitivity = sensitivity > threshold;
+                        coverage = binary_sensitivity / N_tot;
 
-                    threshold = pi; % todo
-                    binary_sensitivity = sensitivity > threshold;
-                    mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage_volume / ref(isrc,idet);
-                    n_coverage_val = n_coverage_val + 1;
+                        mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
+                        n_coverage_val = n_coverage_val + 1;
+                    end
                 end
             end    
         end
