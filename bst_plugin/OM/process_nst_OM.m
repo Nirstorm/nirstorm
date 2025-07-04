@@ -334,8 +334,7 @@ end
 
 function threshold = compute_threshold(flag_coverage)
 % @========================================================================
-% compute_threshold computes the threshold to determine the coverage
-% matrix 
+% compute_threshold computes the threshold to determine the coverage matrix 
 % Formula used : threshold = log((100 + p_thresh) / 100) / ((act_vol / V_hat) * delta_mu_a)
 % ========================================================================@
 
@@ -391,7 +390,7 @@ function [montage_pairs,montage_weight] = compute_optimal_montage(head_vertices_
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
-    %Reutiliser montage_weight/montage_pairs
+    %Reutiliser montage_weight/montage_pairs pour Smax
     %Define the cplex problem
 
     %VERIFIER COMMEMT EST DEFINI LAMBDA
@@ -626,21 +625,6 @@ function [A, I] = detect_activ_constr(nH, nVar, weight_table)
     I = zeros(nH, 1);
 end
 
-function [A, I] = detect_activ_constr_cov(nH, nVar, weight_table)
-% @========================================================================
-% detect_activ_constr Generates inequality constraints for detector
-% activation for the coverage constrained version
-%   See equation 13 : wq_V-Sum(Vpq*xp) <= 0
-% ========================================================================@
-
-    A=zeros(nH, nVar);
-    for iH = 1:nH
-        A(iH, 2*nH+iH) = 1;
-        A(iH, 1:nH) = -weight_table(:, iH); %Note: this takes into account weight assymetry
-    end
-    I = zeros(nH, 1);
-end
-
 function [A, I] = opt_opt_min_sep_constr(flag_sep_optode_optode, holder_distances, nH, thresh_sep_optode_optode, nS, nD, nVar)
 % @========================================================================
 % opt_opt_min_sep_constr Optode/Optode minimal separation constraints
@@ -699,6 +683,83 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
         A = [];
         I = [];
     end
+end
+
+function cplex = init_solution(cplex, weight_table, nH, nS, nD)
+%@=========================================================================
+% INITIAL SOLUTION FUNCTIONS (cplex)
+%=========================================================================@
+    
+    xp_0 = zeros(nH, 1);
+    yq_0 = zeros(nH, 1);
+    [~,idx] = sort(weight_table(:), 'descend');
+    % Seems to only needed if holder list is not the same size as weight_table
+    
+    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
+    
+    src_weight_table = weight_table(src_pos_idx,:);
+    [~, idx] = sort(src_weight_table(:), 'descend');
+    
+    [~, det_pos_idx] = ind2sub(size(src_weight_table), idx(1:nD));
+    
+    xp_0(src_pos_idx) = 1;
+    yq_0(det_pos_idx) = 1;
+    
+    wq_V_O = zeros(nH, 1);
+    for ii = 1:numel(yq_0)
+        if yq_0(ii) == 1
+            wq_V_O(ii) = sum(weight_table(src_pos_idx, ii));
+        end
+    end
+    
+    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
+    fprintf('incumbent=%g\n', incumbent_x0)
+    x0 = [xp_0 ; yq_0 ; wq_V_O];
+
+    cplex.MipStart(1).name='optim';
+    cplex.MipStart(1).effortlevel=1;
+    cplex.MipStart(1).x=x0;
+    cplex.MipStart(1).xindices=int32((1:numel(x0))');
+end
+
+function [montage_pairs, montage_weight] = montage_pairs_and_weight(results,options)
+% @========================================================================
+% montage_pairs_and_weight Calculation of montage pairs matrix and montage
+% weight vector
+% ========================================================================@
+    
+    x=results.x;
+    x=round(x);
+    isources = find(x(1:options.nH)==1);
+    idetectors = find(x(options.nH+1:2*options.nH)==1);
+    
+    ipair = 1;
+    
+    % Memory management
+    max_pairs = length(isources) * length(idetectors) -1;
+    montage_pairs = zeros(max_pairs, 2);
+    montage_weight = zeros(max_pairs, 1);
+    
+    for isrc = 1:length(isources)
+        for idet = 1:length(idetectors)
+            if options.holder_distances(isources(isrc), idetectors(idet)) > options.thresh_sep_optode_optode(1) && ...
+                    options.holder_distances(isources(isrc), idetectors(idet)) < options.thresh_sep_optode_optode(2) && ...
+                    full(options.weight_tables(isources(isrc), idetectors(idet)))
+                
+                if ipair <= max_pairs
+                    montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
+                    montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
+                    ipair = ipair + 1;
+                else
+                    warning('Memory management error : The variables are not correctly sized. ');   
+                end
+            end
+        end
+    end
+    
+    % Make sure the matrix is the right size
+    montage_pairs = montage_pairs(1:ipair-1, :);
+    montage_weight = montage_weight(1:ipair-1, :);
 end
 
 %==========================================================================
