@@ -138,11 +138,13 @@ function OutputFile = Run(sProcess, sInput)
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
-    montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, montage_pairs, montage_sensitivity, montage_coverage = compute_optimal_montage(ROI_head.head_vertices_coords,options);
+    [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
     
     % Convert Montage to Brainstorm structure
     %A MODIFIER
+    disp("Only sensitivity : ")
     ChannelMatSimple                = create_channelMat_from_montage(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, ROI_head.head_vertices_coords, options.wavelengths);
+    
     ChannelMat                      = create_channelMat_from_montage(montage_pairs, montage_sensitivity, montage_coverage, ROI_head.head_vertices_coords, options.wavelengths);
     
     
@@ -815,7 +817,8 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sens
             ' >>> Distance: ', num2str(round(nst_pdist(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', ...
             'Sensitivity: ', num2str(round(montage_sensitivity(ipair,:),3)), '    ' ...
             'Coverage : ', num2str(round(montage_coverage(ipair,:),3))]);
-
+           
+        %TEST
         formatSpec = 'Channel S%dD%d >>> Distance: %4.1fmm    Sensitivity: %6.3f    Coverage: %.3f';
 
         % 2. Calculer les valeurs
@@ -825,7 +828,7 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sens
         
         % 3. Créer et afficher la chaîne formatée
         fprintf(formatSpec, idx_src, idx_det, distance_mm, sensitivity, coverage);
-
+        %%%
         
         for iwl=1:length(wavelengths)
             
