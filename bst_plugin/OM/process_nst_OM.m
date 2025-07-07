@@ -655,7 +655,7 @@ function [montage_pairs, montage_weight] = montage_pairs_and_weight(results,opti
     ipair = 1;
     
     % Memory management
-    max_pairs = length(isources) * length(idetectors) -1;
+    max_pairs = length(isources) * length(idetectors);
     montage_pairs = zeros(max_pairs, 2);
     montage_weight = zeros(max_pairs, 1);
     
@@ -665,13 +665,10 @@ function [montage_pairs, montage_weight] = montage_pairs_and_weight(results,opti
                     options.holder_distances(isources(isrc), idetectors(idet)) < options.thresh_sep_optode_optode(2) && ...
                     full(options.weight_tables(isources(isrc), idetectors(idet)))
                 
-                if ipair <= max_pairs
-                    montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                    montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
-                    ipair = ipair + 1;
-                else
-                    warning('Memory management error : The variables are not correctly sized. ');   
-                end
+                montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
+                montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
+                
+                ipair = ipair + 1;
             end
         end
     end
