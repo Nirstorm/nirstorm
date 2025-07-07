@@ -138,7 +138,7 @@ function OutputFile = Run(sProcess, sInput)
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
-    [montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
+    montage_pairs = compute_optimal_montage(ROI_head.head_vertices_coords,options);
     
     % Convert Montage to Brainstorm structure
     ChannelMat = create_channelMat_from_montage(montage_pairs, ROI_head.head_vertices_coords, options.wavelengths);
@@ -325,7 +325,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     bst_progress('stop');  
 end
 
-function [montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(head_vertices_coords, options)
+function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
     
     %======================================================================
     % 1) Compute OM by maximizing sensitivity only
@@ -385,7 +385,7 @@ function [montage_pairs, montage_sensitivity, montage_coverage] = compute_optima
     disp("Only sensitivity :")
     display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
     
-    disp("/nSensitivity and Coverage :")
+    fprintf("\nSensitivity and Coverage :\n")
     display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
     disp("--------------------------");
 end
@@ -766,8 +766,12 @@ function display_channel_info(montage_pairs, montage_sensitivity, montage_covera
         sensitivity = montage_sensitivity(ipair, :);
         coverage = montage_coverage(ipair, :);
         
-        fprintf('Canal S%dD%d >>> Distance: %4.1fmm    Sensibilité: %6.3f    Couverture: %.3f\n', idx_src, idx_det, distance_mm, sensitivity, coverage);
+        fprintf('Canal S%dD%d >>> Distance: %4.1fmm    Sensibilité: %6.3f    Couverture: %.2f%%\n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
     end
+    fprintf("TOTAL      >>> ")
+    %Pour dist : mean/range
+    %Pour sensitivity : sum
+    %Tout traduire en anglais !!
 end
 
 %==========================================================================
