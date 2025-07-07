@@ -138,15 +138,10 @@ function OutputFile = Run(sProcess, sInput)
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
-    [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
+    [montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(ROI_head.head_vertices_coords,options);
     
     % Convert Montage to Brainstorm structure
-    %A MODIFIER
-    sprintf("Only sensitivity : \n")
-    ChannelMatSimple                = create_channelMat_from_montage(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, ROI_head.head_vertices_coords, options.wavelengths);
-    
-    sprintf("Sensitivity and Coverage : \n")
-    ChannelMat                      = create_channelMat_from_montage(montage_pairs, montage_sensitivity, montage_coverage, ROI_head.head_vertices_coords, options.wavelengths);
+    ChannelMat = create_channelMat_from_montage(montage_pairs, ROI_head.head_vertices_coords, options.wavelengths);
     
     
     sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
@@ -330,22 +325,15 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     bst_progress('stop');  
 end
 
-function [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(head_vertices_coords, options)
+function [montage_pairs, montage_sensitivity, montage_coverage] = compute_optimal_montage(head_vertices_coords, options)
     
     %======================================================================
     % 1) Compute OM by maximizing sensitivity only
     %======================================================================
     
     % Define the cplex problem
-    [prob, options] = define_prob(options.sensitivity_mat, head_vertices_coords, options);
-   
-    cplex=Cplex(prob);
-    cplex.Model.sense = 'maximize';
-    cplex.Param.timelimit.Cur=300;
-
-    % Delete clone[number].log files created by Cplex
-    cplex.Param.output.clonelog.Cur = 0;
-
+    [cplex, options] = define_prob(options.sensitivity_mat, head_vertices_coords, options);
+    
     % Progress bar
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
     
@@ -375,16 +363,8 @@ function [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_sim
     lambda1 = 1/sum(montage_sensitivity_simple);
     lambda2 = 2; % options.lambda 
     wt = lambda1 * options.sensitivity_mat  + lambda2 * options.coverage_mat;
-    [prob, options] = define_prob(wt, head_vertices_coords, options);
-
-    cplex=Cplex(prob);
-    cplex.Model.sense = 'maximize';
     
-    % Faire varier le temps pour verifier
-    cplex.Param.timelimit.Cur=300;
-
-    % Delete clone[number].log files created by Cplex
-    cplex.Param.output.clonelog.Cur = 0;
+    [cplex, options] = define_prob(wt, head_vertices_coords, options);
 
     % Progress bar
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
@@ -399,7 +379,15 @@ function [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_sim
 
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
     [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_and_weight(results, options);
-
+    
+    %Display
+    disp("------ Channel info ------")
+    disp("Only sensitivity :")
+    display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
+    
+    disp("/nSensitivity and Coverage :")
+    display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
+    disp("--------------------------");
 end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
@@ -448,7 +436,7 @@ function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_sc
 
 end
 
-function [prob, options] = define_prob(weight_table, head_vertices_coords, options)
+function [cplex, options] = define_prob(weight_table, head_vertices_coords, options)
 % @========================================================================
 % define_prob_simple Initializes the problem
 % Added in options by function : holder_distances, nH, thresh_sep_optode_optode 
@@ -518,7 +506,6 @@ function [prob, options] = define_prob(weight_table, head_vertices_coords, optio
     % display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5);
     %......................................................................
     
-    
     Aeq = [Aeq_1 ; Aeq_2];
     E   = [E_1 ; E_2];
     
@@ -540,7 +527,13 @@ function [prob, options] = define_prob(weight_table, head_vertices_coords, optio
     prob.x0         = [];
     prob.options    = [];
 
-    
+    cplex=Cplex(prob);
+    cplex.Model.sense = 'maximize';
+    cplex.Param.timelimit.Cur=300;
+
+    % Delete clone[number].log files created by Cplex
+    cplex.Param.output.clonelog.Cur = 0;
+
     options.holder_distances = holder_distances;
     options.thresh_sep_optode_optode = thresh_sep_optode_optode; 
     options.nH = nH;
@@ -728,18 +721,53 @@ function [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_
                 
                 ipair = ipair + 1;
 
-                montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                montage_sensitivity(ipair,:) = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
-                montage_coverage(ipair,:) = full(options.coverage_mat(isources(isrc), idetectors(idet)));
+                montage_pairs(ipair,:)          = [isources(isrc) idetectors(idet)];
+                montage_sensitivity(ipair,:)    = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
+                montage_coverage(ipair,:)       = full(options.coverage_mat(isources(isrc), idetectors(idet)));
             end
         end
     end
     
     % Make sure the matrix is the right size
-    montage_pairs   = montage_pairs(1:ipair, :);
-    montage_sensitivity = montage_sensitivity(1:ipair-1, :);
-    montage_coverage = montage_coverage(1:ipair-1, :);
+    montage_pairs       = montage_pairs(1:ipair, :);
+    montage_sensitivity = montage_sensitivity(1:ipair, :);
+    montage_coverage    = montage_coverage(1:ipair, :);
 
+end
+
+function display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
+
+    src_indexes = zeros(max(montage_pairs(:, 1)), 1);
+    det_indexes = zeros(max(montage_pairs(:, 2)), 1);
+    det_next_idx = 1;
+    src_next_idx = 1;
+
+    for ipair = 1:size(montage_pairs, 1)
+        ihead_vertex_src = montage_pairs(ipair, 1);
+        ihead_vertex_det = montage_pairs(ipair, 2);
+        
+        if src_indexes(ihead_vertex_src) == 0
+            idx_src = src_next_idx;
+            src_indexes(ihead_vertex_src) = src_next_idx;
+            src_next_idx = src_next_idx + 1;
+        else
+            idx_src = src_indexes(ihead_vertex_src);
+        end
+        
+        if det_indexes(ihead_vertex_det) == 0
+            idx_det = det_next_idx;
+            det_indexes(ihead_vertex_det) = det_next_idx;
+            det_next_idx = det_next_idx + 1;
+        else
+            idx_det = det_indexes(ihead_vertex_det);
+        end
+        
+        distance_mm = nst_pdist(head_vertices_coords(ihead_vertex_src, :), head_vertices_coords(ihead_vertex_det, :)) * 1000;
+        sensitivity = montage_sensitivity(ipair, :);
+        coverage = montage_coverage(ipair, :);
+        
+        fprintf('Canal S%dD%d >>> Distance: %4.1fmm    Sensibilité: %6.3f    Couverture: %.3f\n', idx_src, idx_det, distance_mm, sensitivity, coverage);
+    end
 end
 
 %==========================================================================
@@ -774,7 +802,7 @@ function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
     end
 end
 
-function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords, wavelengths)
+function ChannelMat = create_channelMat_from_montage(montage_pairs, head_vertices_coords, wavelengths)
 
     % montage_pairs contains head vertex indexes -> remap to 1-based consecutive indexes
     src_indexes = zeros(max(montage_pairs(:, 1)), 1);
@@ -810,19 +838,7 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sens
         else
             idx_det = det_indexes(ihead_vertex_det);
         end
-        
-        %TEST
-        formatSpec = 'Channel S%dD%d >>> Distance: %4.1fmm    Sensitivity: %6.3f    Coverage: %.3f';
 
-        % 2. Calculer les valeurs
-        distance_mm = nst_pdist(head_vertices_coords(ihead_vertex_src, :), head_vertices_coords(ihead_vertex_det, :)) * 1000;
-        sensitivity = montage_sensitivity(ipair, :);
-        coverage = montage_coverage(ipair, :);
-        
-        % 3. Créer et afficher la chaîne formatée
-        fprintf(formatSpec, idx_src, idx_det, distance_mm, sensitivity, coverage);
-        %%%
-        
         for iwl=1:length(wavelengths)
             
             ChannelMat.Channel(iChan).Name      = sprintf('S%dD%dWL%d', idx_src, idx_det, ChannelMat.Nirs.Wavelengths(iwl));
@@ -837,7 +853,6 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sens
             iChan = iChan + 1;
         end
     end
-
 end
 
 function weight_table = denoise_weight_table(weight_table, threshold)
