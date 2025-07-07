@@ -142,9 +142,10 @@ function OutputFile = Run(sProcess, sInput)
     
     % Convert Montage to Brainstorm structure
     %A MODIFIER
-    disp("Only sensitivity : ")
+    sprintf("Only sensitivity : \n")
     ChannelMatSimple                = create_channelMat_from_montage(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, ROI_head.head_vertices_coords, options.wavelengths);
     
+    sprintf("Sensitivity and Coverage : \n")
     ChannelMat                      = create_channelMat_from_montage(montage_pairs, montage_sensitivity, montage_coverage, ROI_head.head_vertices_coords, options.wavelengths);
     
     
@@ -711,7 +712,6 @@ function [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_
     isources = find(x(1:options.nH)==1);
     idetectors = find(x(options.nH+1:2*options.nH)==1);
     
-    
     % Memory management
     max_pairs = length(isources) * length(idetectors);
     montage_pairs = zeros(max_pairs, 2);
@@ -729,15 +729,16 @@ function [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_
                 ipair = ipair + 1;
 
                 montage_pairs(ipair,:) = [isources(isrc) idetectors(idet)];
-                montage_weight(ipair,:) = full(options.weight_tables(isources(isrc), idetectors(idet)));
-                
+                montage_sensitivity(ipair,:) = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
+                montage_coverage(ipair,:) = full(options.coverage_mat(isources(isrc), idetectors(idet)));
             end
         end
     end
     
     % Make sure the matrix is the right size
     montage_pairs   = montage_pairs(1:ipair, :);
-    montage_weight  = montage_weight(1:ipair, :);
+    montage_sensitivity = montage_sensitivity(1:ipair-1, :);
+    montage_coverage = montage_coverage(1:ipair-1, :);
 
 end
 
@@ -810,11 +811,6 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, montage_sens
             idx_det = det_indexes(ihead_vertex_det);
         end
         
-        disp(['Channel S', num2str(idx_src), 'D' num2str(idx_det) ...
-            ' >>> Distance: ', num2str(round(nst_pdist(head_vertices_coords(ihead_vertex_src, :),head_vertices_coords(ihead_vertex_det, :)).*1000,1)), 'mm    ', ...
-            'Sensitivity: ', num2str(round(montage_sensitivity(ipair,:),3)), '    ' ...
-            'Coverage : ', num2str(round(montage_coverage(ipair,:),3))]);
-           
         %TEST
         formatSpec = 'Channel S%dD%d >>> Distance: %4.1fmm    Sensitivity: %6.3f    Coverage: %.3f';
 
