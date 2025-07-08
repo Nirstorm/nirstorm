@@ -128,7 +128,7 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    [options.sensitivity_mat, options.coverage_mat] = get_weight_tables(sSubject, options, ROI_cortex, ROI_head);
+    [options.sensitivity_mat, options.coverage_mat] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
@@ -173,7 +173,7 @@ function OutputFile = Run(sProcess, sInput)
     
 end
 
-function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, ROI_cortex, ROI_head)
+function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
 
     sensitivity_mat = [];
     coverage_mat    = [];
@@ -186,8 +186,8 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
                     'segmentation_label', options.segmentation_label);
     end
         
-    voronoi_bst = in_mri_bst(voronoi_fn);
-    voronoi     = voronoi_bst.Cube;
+    sVoronoi = in_mri_bst(voronoi_fn);
+    voronoi     = sVoronoi.Cube;
         
     % Load segmentation
     segmentation_name = 'segmentation_5tissues';
@@ -211,7 +211,7 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
         return;
     end
 
-    weight_cache = struct();
+    weight_cache = struct('name', {}, 'sensitivity_mat', {},'coverage_mat', {}, 'options', {});
     
     if exist(fullfile(options.outputdir , 'weight_tables.mat'), 'file')
         tmp = load (fullfile(options.outputdir, 'weight_tables.mat'));
@@ -220,17 +220,27 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
             weight_cache = tmp.weight_cache;
         end
         
-        if options.exist_weight && isfield(weight_cache,  matlab.lang.makeValidName(ROI_cortex.Label))
-            tmp = weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label));    
-            if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max   
-                sensitivity_mat = tmp.sensitivity_mat;
-                coverage_mat = tmp.coverage_mat;
+        if options.exist_weight && isfield(weight_cache, 'sensitivity_mat') && any(strcmp( {weight_cache.name}, ROI_cortex.Label))
+            
+            tmp = weight_cache(strcmp( {weight_cache.name}, ROI_cortex.Label));
 
-            end    
+            if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max
+                    
+                    sensitivity_mat = tmp.sensitivity_mat;
+                    coverage_mat = tmp.coverage_mat;
+            end
+            
+        elseif options.exist_weight && ~isfield(tmp, 'sensitivity_mat')
+            file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1,1);
+
+            %TODO : Warning + delete file file_delete a voir fctn de
+            %brainstorm
+            %Format updated and recomputed Changer dans le warning
+            bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.")
         end    
     end
     
-    if isempty(sensitivity_mat)
+    if isempty(sensitivity_mat) || isempty(coverage_mat)
         
         % Compute weight table
         [fluence_volumes, reference] = process_nst_import_head_model('request_fluences', ...
@@ -247,8 +257,13 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, options, 
         if ~isempty(options.outputdir)
             options_out = options;
             options_out.head_vertex_ids = ROI_head.head_vertex_ids;
-            tmp = struct('sensitivity_mat', sensitivity_mat,'coverage_mat', coverage_mat,'options',options_out);
-            weight_cache.(matlab.lang.makeValidName(ROI_cortex.Label)) = tmp;
+            tmp = struct('name', ROI_cortex.Label, 'sensitivity_mat', sensitivity_mat, 'coverage_mat', coverage_mat, 'options', options_out);
+            
+            if isempty(weight_cache)
+                weight_cache = tmp;
+            else
+                weight_cache(end+1) = tmp;
+            end
             save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
         end
         
@@ -293,9 +308,20 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     %threshold for coverage
     p_thresh = 1;
     act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
-    V_hat = 1; % changer par une fonction permettant de le calculer
     delta_mu_a = 0.1;
-    threshold = process_nst_extract_sensitivity_from_head_model('compute_threshold', p_thresh, act_vol, V_hat, delta_mu_a);
+
+    sSubject    = bst_get('Subject', options.SubjectName);
+    voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+
+    if ~exist(voronoi_fn, 'file')
+        error('Could not find the required Voronoi file.');
+    end
+    sVoronoi = in_mri_bst(voronoi_fn);
+
+    median_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);
+    
+    %TODO
+    threshold = process_nst_extract_sensitivity_from_head_model('compute_threshold', p_thresh, act_vol, median_volume, delta_mu_a);
     
     bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
     for isrc=1:nHolders
@@ -319,8 +345,8 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
         bst_progress('inc', nHolders);
     end
 
-    sensitivity_mat     = sparse(mat_sensitivity_idx(1,1:n_sensitivity_val-1),mat_sensitivity_idx(2,1:n_sensitivity_val-1), mat_sensitivity_val(1:n_sensitivity_val-1),nHolders, nHolders); 
-    coverage_mat        = sparse(mat_coverage_idx(1,1:n_coverage_val-1), mat_coverage_idx(2,1:n_coverage_val-1), mat_coverage_val(1:n_coverage_val-1), nHolders, nHolders);
+    sensitivity_mat = sparse(mat_sensitivity_idx(1,1:n_sensitivity_val-1),mat_sensitivity_idx(2,1:n_sensitivity_val-1), mat_sensitivity_val(1:n_sensitivity_val-1),nHolders, nHolders); 
+    coverage_mat    = sparse(mat_coverage_idx(1,1:n_coverage_val-1),      mat_coverage_idx(2,1:n_coverage_val-1),       mat_coverage_val(1:n_coverage_val-1), nHolders, nHolders);
     
     bst_progress('stop');  
 end
