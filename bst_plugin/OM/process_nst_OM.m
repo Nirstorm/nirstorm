@@ -232,10 +232,6 @@ function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, sProcess,
             
         elseif options.exist_weight && ~isfield(tmp, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1,1);
-
-            %TODO : Warning + delete file file_delete a voir fctn de
-            %brainstorm
-            %Format updated and recomputed Changer dans le warning
             bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.")
         end    
     end
@@ -320,7 +316,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
 
     median_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);
     
-    %TODO
+    %TODO : tune parameters
     threshold = process_nst_extract_sensitivity_from_head_model('compute_threshold', p_thresh, act_vol, median_volume, delta_mu_a);
     
     bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
@@ -381,13 +377,33 @@ function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
     [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple] = montage_pairs_and_weight(results,options);
 
+   
+    %     if isfield(options, 'lambda')
+    %         lambda2 = options.lambda;
+    %     else
+    %         lambda2 = 0;
+    %     end
+
+
+    lambda2 = 2; % options.lambda 
+    if lambda2 == 0
+        montage_pairs = montage_pairs_simple;
+
+        fprintf("\n------ Channels info ------\n")
+        disp("Only sensitivity :")
+        display_channel_info(montage_pairs, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
+        disp("---------------------------");
+        
+        return;
+    end
+
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
-    % Define the cplex problem
+     % Define the cplex problem
 
     lambda1 = 1/sum(montage_sensitivity_simple);
-    lambda2 = 2; % options.lambda 
+    
     wt = lambda1 * options.sensitivity_mat  + lambda2 * options.coverage_mat;
     
     [cplex, options] = define_prob(wt, head_vertices_coords, options);
@@ -407,13 +423,14 @@ function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
     [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_and_weight(results, options);
     
     %Display
-    disp("------ Channel info ------")
+    fprintf("\n------ Channels info ------\n")
     disp("Only sensitivity :")
     display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
     
     fprintf("\nSensitivity and Coverage :\n")
     display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
-    disp("--------------------------");
+    disp("---------------------------");
+
 end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
@@ -767,6 +784,7 @@ function display_channel_info(montage_pairs, montage_sensitivity, montage_covera
     det_indexes = zeros(max(montage_pairs(:, 2)), 1);
     det_next_idx = 1;
     src_next_idx = 1;
+    tab_dist_mm = zeros(size(montage_pairs, 1), 1);
 
     for ipair = 1:size(montage_pairs, 1)
         ihead_vertex_src = montage_pairs(ipair, 1);
@@ -789,15 +807,18 @@ function display_channel_info(montage_pairs, montage_sensitivity, montage_covera
         end
         
         distance_mm = nst_pdist(head_vertices_coords(ihead_vertex_src, :), head_vertices_coords(ihead_vertex_det, :)) * 1000;
+        tab_dist_mm(ipair) = distance_mm;
         sensitivity = montage_sensitivity(ipair, :);
         coverage = montage_coverage(ipair, :);
-        
-        fprintf('Canal S%dD%d >>> Distance: %4.1fmm    Sensibilité: %6.3f    Couverture: %.2f%%\n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
+
+        fprintf('Channel S%dD%d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
     end
-    fprintf("TOTAL      >>> ")
-    %Pour dist : mean/range
-    %Pour sensitivity : sum
-    %Tout traduire en anglais !!
+    
+    mean_distance = mean(tab_dist_mm);
+    distance_range = [min(tab_dist_mm), max(tab_dist_mm)];
+    total_sensitivity = sum(montage_sensitivity);
+    
+    fprintf('TOTAL      >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total Sensitivity: %.3f \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity);
 end
 
 %==========================================================================
