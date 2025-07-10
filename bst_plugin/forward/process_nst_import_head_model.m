@@ -19,11 +19,12 @@ function varargout = process_nst_import_head_model( varargin )
 % =============================================================================@
 %
 % Authors: Thomas Vincent, ZhengChen Cai (2017-2018)
+%          Edouard Delaire (2025)
 
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Compute head model from fluence';
     sProcess.FileTag     = '';
@@ -73,81 +74,81 @@ end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
 
-OutputFiles = {sInputs.FileName};
-
-
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    bst_error('Head model importation works only for dOD data (eg do not use MBLL prior to this process)');
-    return;
-end
-
-
-%% Retrieve list of vertex indexes corresponding to current montage
-% Load channel file
-
-% Load subject
-[sSubject, iSubject] = bst_get('Subject', sInputs.SubjectName);
-
-% Load MRI, Head and Cortex. 
-if isempty(sSubject.iAnatomy)
-    bst_error(['No anatomical data found for ' sInputs.SubjectName]);
-end
-
-voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    OutputFiles = {sInput.FileName};
     
-if ~exist(voronoi_fn, 'file')
-    sProcess.options.do_grey_mask.Value   = 1; 
-    process_nst_compute_voronoi('Run', sProcess, sInputs);
-end
+    
+    ChannelMat = in_bst_channel(sInput.ChannelFile);
+    if ~isfield(ChannelMat.Nirs, 'Wavelengths')
+        bst_error('Head model importation works only for dOD data (eg do not use MBLL prior to this process)');
+        return;
+    end
 
 
-OPTIONS = struct();
+    %% Retrieve list of vertex indexes corresponding to current montage
+    % Load channel file
+    
+    % Load subject
+    [sSubject, iSubject] = bst_get('Subject', sInput.SubjectName);
+    
+    % Load MRI, Head and Cortex. 
+    if isempty(sSubject.iAnatomy)
+        bst_error(['No anatomical data found for ' sInput.SubjectName]);
+    end
+    
+    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+        
+    if ~exist(voronoi_fn, 'file')
+        sProcess.options.do_grey_mask.Value   = 1; 
+        process_nst_compute_voronoi('Run', sProcess, sInput);
+    end
 
-% Subject Informations 
-OPTIONS.SubjectName     = sInputs.SubjectName;
-OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
-OPTIONS.VoronoiFile     = voronoi_fn;
-OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
-OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
-OPTIONS.ChannelFile     = sInputs(1).ChannelFile;
 
-% Use defined options : 
-OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
-OPTIONS.smoothing_method    = sProcess.options.method.Value;
-OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
+    OPTIONS = struct();
+    
+    % Subject Informations 
+    OPTIONS.SubjectName     = sInput.SubjectName;
+    OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
+    OPTIONS.VoronoiFile     = voronoi_fn;
+    OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
+    OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
+    OPTIONS.ChannelFile     = sInput(1).ChannelFile;
 
-% Compute Head model
-HeadModelMat = Compute(OPTIONS);
+    % Use defined options : 
+    OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
+    OPTIONS.smoothing_method    = sProcess.options.method.Value;
+    OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
+    
+    % Compute Head model
+    HeadModelMat = Compute(OPTIONS);
 
 
-% Save Head Model
-sStudy = bst_get('Study', sInputs.iStudy);
-
-HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudy.FileName)), 'headmodel_nirs_mcx_fluence.mat');
-HeadModelFile = file_unique(HeadModelFile);
-bst_save(HeadModelFile, HeadModelMat, 'v7');
-
-% Update Study structure
-newHeadModel = db_template('HeadModel');
-newHeadModel.FileName = file_short(HeadModelFile);
-newHeadModel.Comment = 'NIRS head model from fluence';
-newHeadModel.HeadModelType  = 'surface';    
-
-iHeadModel = length(sStudy.HeadModel) + 1;
-if ~isempty(sStudy.HeadModel)
-    sStudy.HeadModel(end+1) = newHeadModel(1);
-else
-    sStudy.HeadModel = newHeadModel;
-end
-sStudy.iHeadModel = iHeadModel;
-
-% Update DataBase
-bst_set('Study', sInputs.iStudy, sStudy);
-panel_protocols('UpdateNode', 'Study', sInputs.iStudy);
-db_save();
+    % Save Head Model
+    sStudy = bst_get('Study', sInput.iStudy);
+    
+    HeadModelFile = bst_fullfile(bst_fileparts(file_fullpath(sStudy.FileName)), 'headmodel_nirs_mcx_fluence.mat');
+    HeadModelFile = file_unique(HeadModelFile);
+    bst_save(HeadModelFile, HeadModelMat, 'v7');
+    
+    % Update Study structure
+    newHeadModel = db_template('HeadModel');
+    newHeadModel.FileName = file_short(HeadModelFile);
+    newHeadModel.Comment = 'NIRS head model from fluence';
+    newHeadModel.HeadModelType  = 'surface';    
+    
+    iHeadModel = length(sStudy.HeadModel) + 1;
+    if ~isempty(sStudy.HeadModel)
+        sStudy.HeadModel(end+1) = newHeadModel(1);
+    else
+        sStudy.HeadModel = newHeadModel;
+    end
+    sStudy.iHeadModel = iHeadModel;
+    
+    % Update DataBase
+    bst_set('Study', sInput.iStudy, sStudy);
+    panel_protocols('UpdateNode', 'Study', sInput.iStudy);
+    db_save();
 
 end
 
@@ -371,9 +372,9 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
         data_source = [data_source '/'];
     end
     
-    can_be_downloaded = true(1,length(missing_fluences));
 
    % Check files existance on the server
+    can_be_downloaded = true(1,length(missing_fluences));
 
     for iFluence = 1:length(missing_fluences)
         url = [data_source nst_protect_fn_str(anat_name) '/' missing_fluences{iFluence}];
@@ -388,7 +389,6 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
     
         if status == 404
             can_be_downloaded(iFluence) = false;
-            return;
         end
 
         query_duration = toc(tstart);
@@ -442,6 +442,9 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
     bst_progress('stop');
 end
 
+function fluence_fn = get_fluence_fn(vertex_id, wl)
+    fluence_fn = sprintf('fluence_%dnm_v%06d.mat', wl, vertex_id);
+end
 
 function fluence_fns = list_fluences(data_source, head_vertices, wavelengths)
 % Return the list of fluences files for the list of head vertices and
@@ -500,10 +503,6 @@ function [fluences, reference] = load_fluences(fluence_fns, cube_size)
 
 
     bst_progress('start', 'Load fluences', sprintf('Loading %d fluences...',  nFluencess), 1, nFluencess);
-
-
-    
-
     for ivertex=1:nVertex
         for iwl=1:nWavelength
 
@@ -517,7 +516,6 @@ function [fluences, reference] = load_fluences(fluence_fns, cube_size)
             bst_progress('inc',1);
         end
     end
-
     bst_progress('stop');
 end
 
@@ -570,22 +568,6 @@ function [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, 
 
 end
 
-function fluence_fn = get_fluence_fn(vertex_id, wl)
-   fluence_fn = sprintf('fluence_%dnm_v%06d.mat', wl, vertex_id);
-end
-
-
-function closest_wavelengths = get_template_closest_wl(wavelengths)
-
-    template_wls = [685];
-    closest_wavelengths = template_wls(arrayfun(@(wl) iclosest(template_wls, wl), wavelengths));
-
-end
-
-function ic = iclosest(catalog, value)
-    [v,ic] = min(abs(catalog-value));
-end
-
 function str_size = format_file_size(size)
     if size < 1e3
         str_size = sprintf('%do', size);
@@ -611,11 +593,11 @@ function [sensitivity_surf, warmInfo] = smooth_sensitivity_map(surface, sensitiv
         FWHM = smoothing_fwhm / 1000;
         
         if  strcmp(method, 'surfstat_before_2023')
-            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
+            [sensitivity_surf, ~, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
         elseif strcmp(method, 'geodesic_dist')
-            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth('compute',  surface, sensitivity_surf, FWHM, 'geodesic_dist');
+            [sensitivity_surf, ~, warmInfo] = process_ssmooth('compute',  surface, sensitivity_surf, FWHM, 'geodesic_dist');
         else
-            [sensitivity_surf, msgInfo, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
+            [sensitivity_surf, ~, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
         end
 
     end
