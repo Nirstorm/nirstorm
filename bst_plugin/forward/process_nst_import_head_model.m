@@ -189,55 +189,25 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
     
     %% Load fluence data from local .brainstorm folder (download if not available)
-    use_closest_wl = 0;
-    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences_old([src_hvidx ; det_hvidx], sMri.Comment, ...
-                                                                             ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
-                                                                             use_closest_wl);
-
-    
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
-
-    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences( OPTIONS.FluenceFolder  , ...
+    [all_fluences, all_reference_voxels_index] = request_fluences( OPTIONS.FluenceFolder  , ...
                                                                               [src_hvidx ; det_hvidx] , ...
                                                                               ChannelMat.Nirs.Wavelengths, ...
-                                                                              nan, nan, ...
+                                                                              size(sMri.Cube), nan, ...
                                                                               local_cache_dir);
 
-
-    (data_source, head_vertices, wavelengths, cube_size, voi_mask, local_cache_dir)
-
-    if isempty(all_fluences_flat_sparse)
+    if isempty(all_fluences)
         return;
     end
-    
-    
-    mri_zeros       = zeros(size(sMri.Cube));
-    src_fluences    = cell(1, nb_sources);
-    det_fluences    = cell(1, nb_dets);
 
-    bst_progress('start', 'Export fluences','Unpacking volumic fluences...', 1, (nb_sources+nb_dets)*nb_wavelengths);
-    for iwl = 1:nb_wavelengths
-        src_iv = 1;
-        det_iv = 1;
-        for ivertex=1:length([src_hvidx ; det_hvidx])
-            if ivertex <= nb_sources
-                src_fluences{src_iv}{iwl} = mri_zeros;
-                src_fluences{src_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
-                src_iv = src_iv + 1;
-            else
-                det_fluences{det_iv}{iwl} = mri_zeros;
-                det_fluences{det_iv}{iwl}(:) = all_fluences_flat_sparse{ivertex}{iwl};
-                det_iv = det_iv + 1;
-            end
-            bst_progress('inc',1);
-        end
-    end
-    
+    % Unpack the fluences, and separate sources and detectors.
+    src_fluences    = all_fluences(1:nb_sources);
+    det_fluences    = all_fluences((nb_sources+1):(nb_sources+nb_dets));
     det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
-    
+
+
     % Compute sensitivity matrix (volume) and interpolate on cortical surface
     % using Voronoi partitionning
-    
     bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
     
     nb_nodes            = size(sCortex.Vertices, 1);
@@ -285,15 +255,12 @@ function [HeadModelMat, err] = Compute(OPTIONS)
                                   det_fluences{idet}{iwl}./normalization_factor ;
             end
 
-            % modified by zhengchen to normalize the sensitivity
-            %sensitivity_vol = sensitivity_vol./max(sensitivity_vol(:)); 
-            
             sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
             sens_tmp(end)=[]; % trash last column
     
-    
             sensitivity_surf(:,ipair,iwl) = sens_tmp;
         end
+        
         bst_progress('inc',1);
     end
     
@@ -417,7 +384,7 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     reference   = {};
 
     if ~isempty(strfind(data_source, 'http'))
-
+        
         download_fluences(data_source, head_vertices, wavelengths, local_cache_dir);
 
         fluence_folder = local_cache_dir;
@@ -446,7 +413,7 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
 
     % Load Fluences
     if any(isnan(voi_mask))
-        [fluences, reference] = load_fluences(fluence_fns);
+        [fluences, reference] = load_fluences(fluence_fns, cube_size);
     else
         [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, voi_mask);
     end
@@ -499,28 +466,35 @@ function list_missing_fluences(missing_fluences)
     end
 end
 
-function [fluences, reference] = load_fluences(fluence_fns)
+function [fluences, reference] = load_fluences(fluence_fns, cube_size)
 
     flat_fluence_fns = [fluence_fns{:}]';
 
     nFluencess = length(flat_fluence_fns);
     nVertex    = length(fluence_fns);
+    nWavelength = nFluencess / nVertex; 
 
-    fluences    = cell(nVertex, 1);
+    assert(nWavelength == round(nWavelength))
+
+
+    fluences    = repmat( {repmat({zeros(cube_size)}, 1, nWavelength)} ,  nVertex, 1);
     reference   = cell(nVertex, 1);
 
 
     bst_progress('start', 'Load fluences', sprintf('Loading %d fluences...',  nFluencess), 1, nFluencess);
 
+
+    
+
     for ivertex=1:nVertex
-        for iwl=1:length(wavelengths)
+        for iwl=1:nWavelength
 
             fluence = load(fluence_fns{ivertex}{iwl});
             reference_voxel_index = fluence.reference_voxel_index;
             fluence = fluence.fluence_flat_sparse_vol;
 
 
-            fluences{ivertex}{iwl}  = fluence;
+            fluences{ivertex}{iwl}(:)  = fluence;
             reference{ivertex}{iwl} = reference_voxel_index;
             bst_progress('inc',1);
         end
@@ -530,7 +504,7 @@ function [fluences, reference] = load_fluences(fluence_fns)
 end
 
 
-function load_fluence_with_massk(fluence_fns, cube_size, mask)
+function [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, mask)
 
     flat_fluence_fns = [fluence_fns{:}]';
 
