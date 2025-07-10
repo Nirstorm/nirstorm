@@ -193,9 +193,19 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences_old([src_hvidx ; det_hvidx], sMri.Comment, ...
                                                                              ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
                                                                              use_closest_wl);
-    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
-                                                                             ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
-                                                                             use_closest_wl);
+
+    
+    local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
+
+    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences( OPTIONS.FluenceFolder  , ...
+                                                                              [src_hvidx ; det_hvidx] , ...
+                                                                              ChannelMat.Nirs.Wavelengths, ...
+                                                                              nan, nan, ...
+                                                                              local_cache_dir);
+
+
+    (data_source, head_vertices, wavelengths, cube_size, voi_mask, local_cache_dir)
+
     if isempty(all_fluences_flat_sparse)
         return;
     end
@@ -389,37 +399,30 @@ function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_
 end
 
 
-function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir, use_closest_wl, sInput)
-    if nargin < 5
-        sparse_threshold = nan;
-    end
-     
-    if nargin < 6
-        voi_mask = nan;
-    end
+function [fluences, reference] = request_fluences(data_source, head_vertices, wavelengths, cube_size, voi_mask, local_cache_dir)
     
-    if nargin < 7
+    if nargin < 4
         cube_size = [];
     end
-    
-    if nargin < 8 || isempty(local_cache_dir)
-        local_cache_dir = bst_fullfile(nst_get_local_user_dir(), 'fluence', nst_protect_fn_str(anat_name));
+
+    if nargin < 5
+        voi_mask = nan;
     end
-    
-    if nargin < 9 
-       use_closest_wl = 0; 
-    end
-    
-    if nargin < 10
-        sInput = [];
-    end
+
+    if nargin < 6
+        local_cache_dir = '';
+    end    
 
     fluences    = {};
     reference   = {};
 
     if ~isempty(strfind(data_source, 'http'))
+
+        download_fluences(data_source, head_vertices, wavelengths, local_cache_dir);
+
         fluence_folder = local_cache_dir;
     else
+
         fluence_folder = data_source;
     end
 
@@ -442,12 +445,16 @@ function [fluences, reference] = request_fluences(head_vertices, anat_name, wave
     end
 
     % Load Fluences
-    if any(isnan(mask))
+    if any(isnan(voi_mask))
         [fluences, reference] = load_fluences(fluence_fns);
     else
-        [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, mask);
+        [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, voi_mask);
     end
 
+end
+
+function download_fluences(data_source, head_vertices, wavelengths, local_cache_dir)
+    error('Todo');
 end
 
 
