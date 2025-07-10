@@ -175,17 +175,12 @@ function [HeadModelMat, err] = Compute(OPTIONS)
 
     % Load montage informations
     montage_info    = nst_montage_info_from_bst_channels(sChannelsNIRS);
-    pair_names      = montage_info.pair_names;
     src_locs        = montage_info.src_pos;
     src_ids         = montage_info.src_ids;
     det_locs        = montage_info.det_pos;
     det_ids         = montage_info.det_ids;
-    pair_sd_idx     = montage_info.pair_sd_indexes;
-    
-    nb_wavelengths = length(ChannelMat.Nirs.Wavelengths);
-    nb_sources     = size(src_locs, 1);
-    nb_dets        = size(det_locs, 1);
-    nb_pairs       = length(pair_names);
+    nb_sources      = size(src_locs, 1);
+    nb_dets         = size(det_locs, 1);
     
     
     % Find closest head vertices (for which we have fluence data)    
@@ -248,7 +243,7 @@ function [HeadModelMat, err] = Compute(OPTIONS)
         sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
         sens_tmp(end)=[]; % trash last column
     
-        sensitivity_surf(:, iChannel) = sens_tmp;
+        sensitivity_surf(:, iNIRS(iChannel)) = sens_tmp;
     end
         
     [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
@@ -265,9 +260,6 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     
     
     %% Outputs
-    % Save the new head model
-    
-    % Create structure
     HeadModelMat                = db_template('headmodelmat');
     HeadModelMat.NIRSMethod     = 'MCXlab';
     HeadModelMat.Gain           = sensitivity_surf;
@@ -311,15 +303,16 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     reference   = {};
 
     if ~isempty(strfind(data_source, 'http'))
-        
-        download_fluences(data_source, head_vertices, wavelengths, local_cache_dir);
+
+        if ~exist(local_cache_dir, 'dir')
+            mkdir(local_cache_dir);
+        end
 
         fluence_folder = local_cache_dir;
     else
 
         fluence_folder = data_source;
     end
-
 
     % List fluences Files
     assert(isfolder(fluence_folder));
@@ -330,6 +323,15 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     flat_fluence_fns = [fluence_fns{:}]';
     missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
     
+    % Download missing fluences 
+    if ~isempty(strfind(data_source, 'http'))
+
+        download_fluences(data_source, local_cache_dir,  missing_fluences);
+        missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
+
+    end
+
+    % If missing fluences, list them, and return.
     if ~isempty(missing_fluences)
 
         list_missing_fluences(flat_fluence_fns)
@@ -342,13 +344,102 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     if any(isnan(voi_mask))
         [fluences, reference] = load_fluences(fluence_fns, cube_size);
     else
-        [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, voi_mask);
+        [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, voi_mask);
     end
 
 end
 
-function download_fluences(data_source, head_vertices, wavelengths, local_cache_dir)
-    error('Todo');
+function download_fluences(data_source, local_cache_dir,  missing_fluences)
+
+   % Checking if URL repository can be found
+    jurl    = java.net.URL(data_source);
+    conn    = openConnection(jurl);
+    status  = getResponseCode(conn);
+
+    if status == 404
+        default = [nst_get_repository_url(), '/fluence/'];
+        msg = sprintf('Fluence repository not found at %s.\n Switching to default: %s', data_source, default);
+        bst_report('Warning', 'process_nst_import_head_model', sInput, msg);
+    end
+    
+    % if ~fluence_is_available(anat_name)
+    %     bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
+    %     return;
+    % end
+
+    if ~strcmp(data_source(end), '/')
+        data_source = [data_source '/'];
+    end
+    
+    can_be_downloaded = true(1,length(missing_fluences));
+
+   % Check files existance on the server
+
+    for iFluence = 1:length(missing_fluences)
+        url = [data_source nst_protect_fn_str(anat_name) '/' missing_fluences{iFluence}];
+
+        tstart = tic();
+
+
+        jurl    = java.net.URL(url);
+        conn    = openConnection(jurl);
+        status  = getResponseCode(conn);
+
+    
+        if status == 404
+            can_be_downloaded(iFluence) = false;
+            return;
+        end
+
+        query_duration = toc(tstart);
+
+        if query_duration > 0.15
+            fprintf('Quit checking fluence file existence (too much time: %1.2f s / file).\n', query_duration);
+            break;
+        end
+    end
+    
+    if any(~can_be_downloaded)
+        disp('Some fluences are missing on the server : ')
+        list_missing_fluences(missing_fluences(~can_be_downloaded))
+    end
+
+    missing_fluences = missing_fluences(can_be_downloaded);
+    if isempty(missing_fluences)
+        return;
+    end
+
+    default_fluence_file_size = 1000000; %bytes
+    total_download_size = sum(can_be_downloaded) * default_fluence_file_size;
+
+    % Ask user confirmation
+    if ~java_dialog('confirm', ['Warning: ' format_file_size(total_download_size) ...
+                                ' of fluence data will be downloaded to ' local_cache_dir '.' 10 10 ...
+                                'Confirm download?' 10 10], 'Download warning')
+        return;
+    end
+
+    % Process downloads
+    msg = sprintf('Downloading %d fluence files (%s)...', ...
+                  length(missing_fluences), ...
+                  format_file_size(total_download_size));
+
+
+    bst_progress('start', 'Downloading fluences', msg, 1, length(missing_fluences));
+    for idownload=1:length(missing_fluences)
+
+        url = [data_source nst_protect_fn_str(anat_name) '/' missing_fluences{iFluence}];
+        fluence_fn = fullfile(local_cache_dir, missing_fluences{iFluence});
+
+        download_msg = ['Download fluence '  missing_fluences{idownload}];
+        if ~nst_download(url{idownload}, fluence_fn, download_msg)
+            return;
+        end
+
+        bst_progress('inc',1);
+    end
+
+    bst_progress('stop');
 end
 
 
@@ -431,7 +522,7 @@ function [fluences, reference] = load_fluences(fluence_fns, cube_size)
 end
 
 
-function [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, mask)
+function [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, mask)
 
     flat_fluence_fns = [fluence_fns{:}]';
 
@@ -476,239 +567,6 @@ function [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size,
     end
     
     bst_progress('stop');
-
-end
-
-
-function [fluences, reference] = request_fluences_old(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir, use_closest_wl, sInput)
-
-if nargin < 5
-    sparse_threshold = nan;
-end
- 
-if nargin < 6
-    voi_mask = nan;
-end
-
-if nargin < 7
-    cube_size = [];
-end
-
-if nargin < 8 || isempty(local_cache_dir)
-    local_cache_dir = bst_fullfile(nst_get_local_user_dir(), ...
-                                   'fluence', nst_protect_fn_str(anat_name));
-end
-%TODO: assert local cache directory exists
-
-if nargin < 9 
-   use_closest_wl = 0; 
-end
-
-if nargin < 10
-    sInput = [];
-end
-
-fluence_fns = {};
-fluences    = {};
-reference   = {};
-if ~isempty(strfind(data_source, 'http'))
-    
-    % Checking if URL repository can be found
-    jurl = java.net.URL(data_source);
-    conn = openConnection(jurl);
-    status = getResponseCode(conn);
-    if status == 404
-        default = [nst_get_repository_url(), '/fluence/'];
-        msg = sprintf('Fluence repository not found at %s.\n Switching to default: %s', data_source, default);
-        bst_report('Warning', 'process_nst_import_head_model', sInput, msg);
-    end
-    
-    if ~fluence_is_available(anat_name)
-        bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
-        return;
-    end
-    if ~strcmp(data_source(end), '/')
-        data_source = [data_source '/'];
-    end
-    if ~exist(local_cache_dir, 'dir')
-        mkdir(local_cache_dir);
-    end
-    
-    if use_closest_wl
-        wavelengths_for_dl = get_template_closest_wl(wavelengths);
-        diff = (wavelengths_for_dl ~= wavelengths);
-        if any(diff)
-            ndiffs = sum(diff);
-            diff_idx = find(diff);
-            repl = '';
-            for ii=1:ndiffs
-                iwl = diff_idx(ii);
-                repl = [repl sprintf('  - %dnm -> %dnm\n', wavelengths(iwl), wavelengths_for_dl(iwl))];
-            end
-            msg = sprintf('Some wavelengths do not have precomputed fluence data.\nReplacing them with the closest available:\n%s', repl);
-            bst_report('Warning', 'process_nst_import_head_model', sInput, msg);
-        end
-    else
-        wavelengths_for_dl = wavelengths;
-    end
-    
-    to_download_urls = {};
-    to_download_spec = {};
-    dest_fns = {};
-    default_fluence_file_size = 1000000; %bytes
-    idownload = 1;
-    total_download_size = 0;
-    nb_files_to_check = length(head_vertices)*length(wavelengths);
-    bst_progress('start', 'Retrieving server info', sprintf('Checking required downloads from server (%d files)...', nb_files_to_check), 1, nb_files_to_check);
-    check_url_existence = 1;
-    for ivertex=1:length(head_vertices)
-        vertex_id = head_vertices(ivertex);
-        for iwl=1:length(wavelengths)
-            wl = wavelengths(iwl);
-            fluence_bfn =  get_fluence_fn(vertex_id, wavelengths_for_dl(iwl));
-            fluence_fn = fullfile(local_cache_dir, fluence_bfn);
-            fluence_fns{ivertex}{iwl} = fluence_fn;
-            
-            if ~file_exist(fluence_fn)
-                url = [data_source nst_protect_fn_str(anat_name) '/' fluence_bfn];
-                to_download_urls{idownload} = url;
-                if check_url_existence
-                    tstart = tic();
-                    jurl = java.net.URL(url);
-                    conn = openConnection(jurl);
-                    status = getResponseCode(conn);
-                    if status == 404
-                        bst_error(['Fluence file not available at ' url]);
-                        return;
-                    end
-                    query_duration = toc(tstart);
-                    if query_duration > 0.15
-                        fprintf('Quit checking fluence file existence (too much time: %1.2f s / file).\n', query_duration);
-                        check_url_existence = 0;
-                    end
-                end
-                to_download_spec{idownload} = [vertex_id, wl];
-                dest_fns{idownload} = fluence_fn;
-                idownload = idownload + 1;
-                
-                download_size = default_fluence_file_size;
-                total_download_size = total_download_size + download_size;
-            end
-            bst_progress('inc',1);
-        end
-    end
-    bst_progress('stop');
-    if total_download_size > 0
-        % Ask user confirmation
-        if ~java_dialog('confirm', ['Warning: ' format_file_size(total_download_size) ...
-                ' of fluence data will be downloaded to ' local_cache_dir '.' 10 10 ...
-                'Confirm download?' 10 10], 'Download warning')
-            return;
-        end
-        % Process downloads
-        msg = sprintf('Downloading %d fluence files (%s)...', ...
-                      length(to_download_urls), ...
-                      format_file_size(total_download_size));
-        bst_progress('start', 'Downloading fluences', msg, 1, length(to_download_urls));
-        for idownload=1:length(to_download_urls)
-            vertex_id = to_download_spec{idownload}(1);
-            wl = to_download_spec{idownload}(2);
-            download_msg = ['Download fluence for v' num2str(vertex_id) ...
-                            ', ' num2str(wl) 'nm'];
-            if ~nst_download(to_download_urls{idownload}, dest_fns{idownload}, download_msg)
-                return;
-            end
-            bst_progress('inc',1);
-        end
-        bst_progress('stop');
-    end
-else
-    misssing_fluences = {}; 
-    scout_missing = db_template('Scout'); 
-    scout_missing.Label='Missing';
-    
-    for ivertex=1:length(head_vertices)
-        vertex_id = head_vertices(ivertex);
-        for iwl=1:length(wavelengths)
-            wl = wavelengths(iwl);
-            fluence_bfn =  get_fluence_fn(vertex_id, wl);
-            fluence_fn = fullfile(data_source, fluence_bfn);
-            
-            if ~exist(fluence_fn, 'file')
-                misssing_fluences{end+1}= [vertex_id wl];
-                scout_missing.Vertices(end+1)= vertex_id;
-            end
-            fluence_fns{ivertex}{iwl} = fluence_fn;
-        end
-    end
-    
-    if ~isempty(misssing_fluences)
-        scout_missing.Seed = scout_missing.Vertices(1);
-        for k = 1:length(misssing_fluences)
-            
-            tmp = misssing_fluences{k};
-            vertex_id = tmp(1); 
-            wl = tmp(2);
-            fluence_bfn =  get_fluence_fn(vertex_id, wl);
-            fluence_fn = fullfile(data_source, fluence_bfn);
-            disp(['Fluence file not found for v' num2str(vertex_id) ...
-                           ', ' num2str(wl) 'nm (' fluence_fn ')']);
-                
-        end 
-        bst_error('Missing fluences, see comand windows');
-        return;
-    end           
-end
-
-fluences = cell(length(head_vertices), 1);
-if any(isnan(voi_mask))
-    bst_progress('start', 'Get fluences', sprintf('Load volumic fluences (%d files)...', ...
-                 length(head_vertices)*length(wavelengths)), 1, length(head_vertices)*length(wavelengths));
-    reference_voxels_index = cell(length(head_vertices), 1);
-    for ivertex=1:length(head_vertices)
-        for iwl=1:length(wavelengths)
-            fluence = load(fluence_fns{ivertex}{iwl});
-            reference_voxel_index = fluence.reference_voxel_index;
-            fluence = fluence.fluence_flat_sparse_vol;
-            %         if ~issparse(fluence) && ~isnan(sparse_threshold)
-            %             fluence(fluence < sparse_threshold) = 0;
-            %             %fluence = sparse(fluence(:));
-            %         end
-            fluences{ivertex}{iwl} = fluence;
-            reference_voxels_index{ivertex}{iwl} = reference_voxel_index;
-            bst_progress('inc',1);
-        end
-    end
-    reference = reference_voxels_index;
-    bst_progress('stop');
-else
-    bst_progress('start', 'Get fluences', 'Load fluences head mask...',...
-                 1, length(head_vertices));
-    ref_voxel_indexes = zeros(size(head_vertices));
-    for ivertex=1:length(head_vertices)
-        data = load(fluence_fns{ivertex}{1}, 'reference_voxel_index');
-        reference_voxel_index = data.reference_voxel_index;
-        ref_voxel_indexes(ivertex) = sub2ind(cube_size, reference_voxel_index(1), ...
-                                             reference_voxel_index(2), ...
-                                             reference_voxel_index(3));
-        bst_progress('inc',1);
-    end
-    bst_progress('stop');
-    bst_progress('start', 'Get fluences', ...
-                 sprintf('Load & mask volumic fluences (%d files)...', length(head_vertices)*length(wavelengths)), ...
-                 1, length(head_vertices)*length(wavelengths));
-    ref_fluences = cell(length(head_vertices), 1);
-    for ivertex=1:length(head_vertices)
-        for iwl=1:length(wavelengths)
-            data = load(fluence_fns{ivertex}{iwl}, 'fluence_flat_sparse_vol');
-            fluences{ivertex}{iwl} = data.fluence_flat_sparse_vol(voi_mask);
-            ref_fluences{ivertex}{iwl} = data.fluence_flat_sparse_vol(ref_voxel_indexes);
-            bst_progress('inc',1);
-        end
-    end
-    bst_progress('stop');
-    reference = ref_fluences;
-end
 
 end
 
