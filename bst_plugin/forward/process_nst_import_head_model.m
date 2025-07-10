@@ -162,16 +162,19 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     sHead   = in_tess_bst(OPTIONS.HeadFile);
     sCortex = in_tess_bst(OPTIONS.CortexFile);
 
-    ChannelMat = in_bst_channel(OPTIONS.ChannelFile);
-    sChannels       = ChannelMat.Channel;
+    ChannelMat  = in_bst_channel(OPTIONS.ChannelFile);
+    sChannels   = ChannelMat.Channel;
     
+    iNIRS         = channel_find(sChannels, 'NIRS');
+    sChannelsNIRS = sChannels(iNIRS);
+
     % Get Voronoi
     voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
-    voronoi = voronoi_bst.Cube;
+    voronoi     = voronoi_bst.Cube;
     voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
 
     % Load montage informations
-    montage_info    = nst_montage_info_from_bst_channels(sChannels);
+    montage_info    = nst_montage_info_from_bst_channels(sChannelsNIRS);
     pair_names      = montage_info.pair_names;
     src_locs        = montage_info.src_pos;
     src_ids         = montage_info.src_ids;
@@ -205,105 +208,60 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     det_fluences    = all_fluences((nb_sources+1):(nb_sources+nb_dets));
     det_reference_voxels_index = all_reference_voxels_index((nb_sources+1):(nb_sources+nb_dets));
 
+    separations = process_nst_separations('Compute', sChannelsNIRS);
 
     % Compute sensitivity matrix (volume) and interpolate on cortical surface
     % using Voronoi partitionning
-    bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, nb_pairs);
-    
-    nb_nodes            = size(sCortex.Vertices, 1);
-    sensitivity_surf    = zeros(nb_nodes, nb_pairs, nb_wavelengths);
-    
-    if length(src_ids) == 1
-        pair_ids  = [ src_ids(pair_sd_idx(:, 1))]; 
-    else 
-        pair_ids  = [ src_ids(pair_sd_idx(:, 1))]'; 
-    end    
-    if length(det_ids) == 1
-        pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))];
-    else 
-        pair_ids  = [pair_ids, det_ids(pair_sd_idx(:, 2))'];
-    end    
-    separations_by_pairs = process_nst_separations('Compute', ChannelMat.Channel, pair_ids);
-    
-    
-    for ipair  = 1:nb_pairs
+    bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, length(sChannelsNIRS));
+    nb_nodes             = size(sCortex.Vertices, 1);
+    sensitivity_surf = zeros(nb_nodes, length(sChannels));
 
-        isrc = pair_sd_idx(ipair, 1);
-        idet = pair_sd_idx(ipair, 2);
-        separation = separations_by_pairs(ipair);
+    for iChannel = 1:length(sChannelsNIRS)
 
-        for iwl=1:nb_wavelengths
-    
-            ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                                  det_reference_voxels_index{idet}{iwl}(2),...
-                                                  det_reference_voxels_index{idet}{iwl}(3));
-    
-            
-            separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-            if ref_fluence == 0 && separation > separation_threshold
-                sensitivity_vol = mri_zeros;
-            else 
-                if ref_fluence==0
-                    normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
-                    msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                                   src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
-                    bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
-                else
-                    normalization_factor = ref_fluence;
-                end
-                sensitivity_vol = src_fluences{isrc}{iwl} .* ...
-                                  det_fluences{idet}{iwl}./normalization_factor ;
+        [source_id, det_id, measure_id] = nst_unformat_channel(sChannelsNIRS(iChannel).Name);
+        
+        isrc    = find( src_ids ==  source_id);
+        idet    = find( det_ids ==  det_id);
+        iwl     = find(ChannelMat.Nirs.Wavelengths == measure_id);
+
+        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
+                                              det_reference_voxels_index{idet}{iwl}(2),...
+                                              det_reference_voxels_index{idet}{iwl}(3));
+
+        separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
+        if ref_fluence == 0 && separations(iChannel) > separation_threshold
+            sensitivity_vol = mri_zeros;
+        else 
+            if ref_fluence==0
+                normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
+                msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
+                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
+                bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
+            else
+                normalization_factor = ref_fluence;
             end
-
-            sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
-            sens_tmp(end)=[]; % trash last column
     
-            sensitivity_surf(:,ipair,iwl) = sens_tmp;
+            sensitivity_vol = src_fluences{isrc}{iwl} .* ...
+                              det_fluences{idet}{iwl} ./ normalization_factor ;
         end
         
-        bst_progress('inc',1);
-    end
+        sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
+        sens_tmp(end)=[]; % trash last column
     
+        sensitivity_surf(:, iChannel) = sens_tmp;
+    end
+        
     [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
     if ~isempty(warmInfo)
         bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
     end
     
-    sensitivity_surf = permute(sensitivity_surf,[2,3,1]);
+    % sensitivity_surf is now nChannel x nNodes
+    sensitivity_surf = sensitivity_surf';
     
-    % we finally format as brainstorm format 
-    sensitivity_surf_bst = zeros(length(sChannels), nb_nodes*3);
-    
-    for iWavelenth = 1:nb_wavelengths
-    
-        gain_in         = sensitivity_surf;
-        gain_pair_names = pair_names;
-    
-        % hash gain pair names
-        gpair_idx = containers.Map();
-        for gpic=1:length(gain_pair_names)
-            gpair_idx(gain_pair_names{gpic}) = gpic;
-        end
-    
-        selected_chans = channel_find(sChannels, sprintf('WL%d',ChannelMat.Nirs.Wavelengths(iWavelenth)));
-    
-        gains = zeros(length(selected_chans), size(gain_in, 3));
-        for ic=1:length(selected_chans)
-            ichan = selected_chans(ic);
-            chan_name = sChannels(ichan).Name;
-            pair_name = chan_name(1:strfind(chan_name, 'WL')-1);
-            if ~isempty(pair_name) && gpair_idx.isKey(pair_name)
-                gains(ic, :) = squeeze(gain_in(gpair_idx(pair_name), iwl, :));
-            end
-        end
-    
-        sensitivity_surf_bst(selected_chans, 1:3:end) = gains;
-        sensitivity_surf_bst(selected_chans, 2:3:end) = gains;
-        sensitivity_surf_bst(selected_chans, 3:3:end) = gains;
-    
-    end
-    
-    bst_progress('stop');
+    % we finally format as brainstorm format: 
+    % We use repmat, to repeat the sensitivity over the 3 orientations
+    sensitivity_surf = repmat(sensitivity_surf, 1, 3);
     
     
     %% Outputs
@@ -312,7 +270,7 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     % Create structure
     HeadModelMat                = db_template('headmodelmat');
     HeadModelMat.NIRSMethod     = 'MCXlab';
-    HeadModelMat.Gain           = sensitivity_surf_bst;
+    HeadModelMat.Gain           = sensitivity_surf;
     HeadModelMat.HeadModelType  = 'surface';
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
     HeadModelMat.GridOrient     = sCortex.VertNormals;
@@ -325,36 +283,6 @@ function [HeadModelMat, err] = Compute(OPTIONS)
 
 end
 
-function sensitivity = get_sensitivity_from_chans(head_model, pair_names)
-
-    head_model_pair_ids = containers.Map();
-    for ipair=1:length(head_model.pair_names)
-        head_model_pair_ids(head_model.pair_names{ipair}) = ipair;
-    end
-
-    pairs_not_found = {};
-    for ipair=1:length(pair_names)
-        pair_name = pair_names{ipair};
-        if ~head_model_pair_ids.isKey(pair_name)
-            pairs_not_found{end+1} = pair_name;
-        end
-    end
-    if ~isempty(pairs_not_found)
-        throw(MException('NIRSTORM:HeadmodelMismatch', ....
-              ['Sensitivity not found for pairs: ', ...
-               strjoin(pairs_not_found, ', ')]));
-    end
-
-    head_model_size = size(head_model.Gain);
-    sensitivity = zeros(length(pair_names), head_model_size(2), head_model_size(3));
-    for ipair=1:length(pair_names)
-        ipair_head_model = head_model_pair_ids(pair_names{ipair});
-        sensitivity(ipair, :, :) = head_model.Gain(ipair_head_model, :, :);
-    end
-
-end
-
-
 function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
 
     head_vertices_mri = cs_convert(sMri, 'scs', 'mri', sHead.Vertices) * 1000;
@@ -364,7 +292,6 @@ function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_
     det_head_vertex_ids = nst_knnsearch(head_vertices_mri, det_locs_mri);
 
 end
-
 
 function [fluences, reference] = request_fluences(data_source, head_vertices, wavelengths, cube_size, voi_mask, local_cache_dir)
     
