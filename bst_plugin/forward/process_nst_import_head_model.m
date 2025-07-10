@@ -190,6 +190,9 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     
     %% Load fluence data from local .brainstorm folder (download if not available)
     use_closest_wl = 0;
+    [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences_old([src_hvidx ; det_hvidx], sMri.Comment, ...
+                                                                             ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
+                                                                             use_closest_wl);
     [all_fluences_flat_sparse, all_reference_voxels_index] = request_fluences([src_hvidx ; det_hvidx], sMri.Comment, ...
                                                                              ChannelMat.Nirs.Wavelengths, OPTIONS.FluenceFolder, nan, nan, [], '',...
                                                                              use_closest_wl);
@@ -385,7 +388,191 @@ function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_
 
 end
 
+
 function [fluences, reference] = request_fluences(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir, use_closest_wl, sInput)
+    if nargin < 5
+        sparse_threshold = nan;
+    end
+     
+    if nargin < 6
+        voi_mask = nan;
+    end
+    
+    if nargin < 7
+        cube_size = [];
+    end
+    
+    if nargin < 8 || isempty(local_cache_dir)
+        local_cache_dir = bst_fullfile(nst_get_local_user_dir(), 'fluence', nst_protect_fn_str(anat_name));
+    end
+    
+    if nargin < 9 
+       use_closest_wl = 0; 
+    end
+    
+    if nargin < 10
+        sInput = [];
+    end
+
+    fluences    = {};
+    reference   = {};
+
+    if ~isempty(strfind(data_source, 'http'))
+        fluence_folder = local_cache_dir;
+    else
+        fluence_folder = data_source;
+    end
+
+
+    % List fluences Files
+    assert(isfolder(fluence_folder));
+    fluence_fns = list_fluences(fluence_folder, head_vertices, wavelengths);
+    
+
+    % Check for missing fluences
+    flat_fluence_fns = [fluence_fns{:}]';
+    missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
+    
+    if ~isempty(missing_fluences)
+
+        list_missing_fluences(flat_fluence_fns)
+
+        bst_error('Missing fluences, see comand windows');
+        return;
+    end
+
+    % Load Fluences
+    if any(isnan(mask))
+        [fluences, reference] = load_fluences(fluence_fns);
+    else
+        [fluences, reference] = load_fluence_with_massk(fluence_fns, cube_size, mask);
+    end
+
+end
+
+
+function fluence_fns = list_fluences(data_source, head_vertices, wavelengths)
+% Return the list of fluences files for the list of head vertices and
+% wavelentgh. 
+
+
+    fluence_fns = cell(1, length(head_vertices));
+
+    for ivertex=1:length(head_vertices)
+        vertex_id = head_vertices(ivertex);
+
+        for iwl=1:length(wavelengths)
+
+            fluence_bfn =  get_fluence_fn(vertex_id, wavelengths(iwl));
+            fluence_fn  = fullfile(data_source, fluence_bfn);
+            
+            fluence_fns{ivertex}{iwl} = fluence_fn;
+        end
+    end
+end
+
+function list_missing_fluences(missing_fluences)
+
+    tokens = cellfun( @(x) regexp(x, 'fluence_(\d+)nm_v(\d+)\.mat', 'tokens'), missing_fluences);
+    
+    % Flatten each inner token (each is a 1x1 cell containing a 1x2 cell)
+    misssing_wavelength = cellfun(@(x) x{1}, tokens, 'UniformOutput', false);
+    misssing_vertex = cellfun(@(x) x{2}, tokens, 'UniformOutput', false);
+
+    [counts, list_missing_wavelength] = groupcounts(misssing_wavelength);
+
+    for iWavelength = 1:length(list_missing_wavelength)
+        fprintf('%d fluences missing for wavelength %s : \n',counts(iWavelength), list_missing_wavelength{iWavelength});
+        idx_fluences = find(cellfun(@(x) strcmp(x,  list_missing_wavelength{iWavelength}), misssing_wavelength));
+
+        for k = 1:length(idx_fluences)
+            fprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)});
+        end
+        fprintf('\n');
+    end
+end
+
+function [fluences, reference] = load_fluences(fluence_fns)
+
+    flat_fluence_fns = [fluence_fns{:}]';
+
+    nFluencess = length(flat_fluence_fns);
+    nVertex    = length(fluence_fns);
+
+    fluences    = cell(nVertex, 1);
+    reference   = cell(nVertex, 1);
+
+
+    bst_progress('start', 'Load fluences', sprintf('Loading %d fluences...',  nFluencess), 1, nFluencess);
+
+    for ivertex=1:nVertex
+        for iwl=1:length(wavelengths)
+
+            fluence = load(fluence_fns{ivertex}{iwl});
+            reference_voxel_index = fluence.reference_voxel_index;
+            fluence = fluence.fluence_flat_sparse_vol;
+
+
+            fluences{ivertex}{iwl}  = fluence;
+            reference{ivertex}{iwl} = reference_voxel_index;
+            bst_progress('inc',1);
+        end
+    end
+
+    bst_progress('stop');
+end
+
+
+function load_fluence_with_massk(fluence_fns, cube_size, mask)
+
+    flat_fluence_fns = [fluence_fns{:}]';
+
+    nFluences = length(flat_fluence_fns);
+    nVertex    = length(fluence_fns);
+
+    fluences    = cell(nVertex, 1);
+    reference   = cell(nVertex, 1);
+
+    bst_progress('start', 'Get fluences', 'Load fluences head mask...', 1, nVertex);
+
+    ref_voxel_indexes = zeros(1, nVertex);
+
+    for ivertex=1:nVertex
+
+        data = load(fluence_fns{ivertex}{1}, 'reference_voxel_index');
+
+        reference_voxel_index      = data.reference_voxel_index;
+
+        ref_voxel_indexes(ivertex) = sub2ind(   cube_size, ...
+                                                reference_voxel_index(1), ...
+                                                reference_voxel_index(2), ...
+                                                reference_voxel_index(3));
+        bst_progress('inc',1);
+    end
+    bst_progress('stop');
+
+
+
+    bst_progress('start', 'Get fluences', sprintf('Load & mask volumic fluences (%d files)...', nFluences), 1, nFluences);
+    
+    for ivertex=1:length(head_vertices)
+        for iwl=1:length(wavelengths)
+
+            data = load(fluence_fns{ivertex}{iwl}, 'fluence_flat_sparse_vol');
+
+            fluences{ivertex}{iwl}  = data.fluence_flat_sparse_vol(mask);
+            reference{ivertex}{iwl} = data.fluence_flat_sparse_vol(ref_voxel_indexes);
+            
+            bst_progress('inc',1);
+        end
+    end
+    
+    bst_progress('stop');
+
+end
+
+
+function [fluences, reference] = request_fluences_old(head_vertices, anat_name, wavelengths, data_source, sparse_threshold, voi_mask, cube_size, local_cache_dir, use_closest_wl, sInput)
 
 if nargin < 5
     sparse_threshold = nan;
@@ -414,8 +601,8 @@ if nargin < 10
 end
 
 fluence_fns = {};
-fluences = {};
-reference = {};
+fluences    = {};
+reference   = {};
 if ~isempty(strfind(data_source, 'http'))
     
     % Checking if URL repository can be found
