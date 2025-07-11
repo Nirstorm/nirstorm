@@ -102,6 +102,10 @@ end
 nirs_head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 nirs_head_model.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 
+if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
+    nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
+end
+
 %% Load data & baseline
 % Load recordings
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
@@ -153,6 +157,11 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
+    if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
+        nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
+    end
+
+
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
     nb_nodes        = size(cortex.Vertices, 1);

@@ -10,9 +10,8 @@ function gains = nst_headmodel_get_gains(head_model, unused_iWL, sChannel, selec
         
         gains     = nst_headmodel_get_gains_old(head_model, iWL, sChannel, selected_channels);
     else
-        % New format. Gain is nChannel  x nDipole (nDipole = nVertex x 3)
-        gains = head_model.Gain(selected_channels, 1:3:end); 
-
+        
+        gains = head_model.Gain(selected_channels,  :); 
     end
 
 end

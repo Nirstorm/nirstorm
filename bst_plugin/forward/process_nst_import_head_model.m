@@ -117,7 +117,7 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
     
     % Compute Head model
-    HeadModelMat = Compute(OPTIONS);
+    HeadModelMat = Compute(sInput, OPTIONS);
 
 
     % Save Head Model
@@ -148,7 +148,7 @@ function OutputFiles = Run(sProcess, sInput)
 
 end
 
-function [HeadModelMat, err] = Compute(OPTIONS)
+function [HeadModelMat, err] = Compute(sInput, OPTIONS)
     
     HeadModelMat = [];
     err = '';
@@ -226,9 +226,9 @@ function [HeadModelMat, err] = Compute(OPTIONS)
         else 
             if ref_fluence==0
                 normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
-                msg = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100);
-                bst_report('Warning', 'process_nst_import_head_model', sInputs, msg);
+
+                bst_report('Warning', 'process_nst_import_head_model', sInput, sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
+                                                                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100));
             else
                 normalization_factor = ref_fluence;
             end
@@ -245,7 +245,7 @@ function [HeadModelMat, err] = Compute(OPTIONS)
         
     [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
     if ~isempty(warmInfo)
-        bst_report('Warning', 'process_nst_import_head_model', sInputs, warmInfo);
+        bst_report('Warning', 'process_nst_import_head_model', sInput, warmInfo);
     end
     
     % sensitivity_surf is now nChannel x nNodes
@@ -600,13 +600,12 @@ function [sensitivity_surf, warmInfo] = smooth_sensitivity_map(surface, sensitiv
 end
 
 function A = normal_to_xyz(sensitivity_surf, VertNormals)
-% Extract component (x, y, or z)
+% Expend the sensitivity map to x,y,z coordinates 
+% from the normal magnitude
 
     A  = zeros( size(sensitivity_surf, 1), 3 * size(sensitivity_surf, 2) );
-    
     for k = 1:3
-        scaled = sensitivity_surf .* VertNormals(:, k)';            % nSensor x nVertex
-        A(:, k:3:end) = scaled;              % Fill the corresponding columns
+        A(:, k:3:end) = sensitivity_surf .* VertNormals(:, k)';
     end
 
 end

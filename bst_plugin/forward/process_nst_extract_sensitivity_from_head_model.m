@@ -108,6 +108,10 @@ bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
 ChannelFlag = bst_chan_data.ChannelFlag;
 
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
+if isfield(head_model, 'NIRSMethod') && ~isempty(head_model.NIRSMethod)
+    head_model.Gain = bst_gain_orient(head_model.Gain, head_model.GridOrient);
+end
+
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 sCortex    = in_tess_bst(head_model.SurfaceFile);
 
