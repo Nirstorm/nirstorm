@@ -68,13 +68,13 @@ function sProcess = GetDescription()
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput) 
 
     OutputFiles = {sInput.FileName};
     
@@ -85,20 +85,16 @@ function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
         return;
     end
 
-
-    %% Retrieve list of vertex indexes corresponding to current montage
-    % Load channel file
-    
     % Load subject
-    [sSubject, iSubject] = bst_get('Subject', sInput.SubjectName);
+    sSubject = bst_get('Subject', sInput.SubjectName);
     
     % Load MRI, Head and Cortex. 
     if isempty(sSubject.iAnatomy)
         bst_error(['No anatomical data found for ' sInput.SubjectName]);
     end
     
+    % Load Voronoi function
     voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-        
     if ~exist(voronoi_fn, 'file')
         sProcess.options.do_grey_mask.Value   = 1; 
         process_nst_compute_voronoi('Run', sProcess, sInput);
@@ -226,7 +222,7 @@ function [HeadModelMat, err] = Compute(OPTIONS)
 
         separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
         if ref_fluence == 0 && separations(iChannel) > separation_threshold
-            sensitivity_vol = mri_zeros;
+            sensitivity_vol = nan(size(sMri.Cube));
         else 
             if ref_fluence==0
                 normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
@@ -254,10 +250,9 @@ function [HeadModelMat, err] = Compute(OPTIONS)
     
     % sensitivity_surf is now nChannel x nNodes
     sensitivity_surf = sensitivity_surf';
-    
-    % we finally format as brainstorm format: 
-    % We use repmat, to repeat the sensitivity over the 3 orientations
-    sensitivity_surf = repmat(sensitivity_surf, 1, 3);
+
+    % We convert to 3 orientation for saving in brainstorm database  
+    sensitivity_surf = normal_to_xyz(sensitivity_surf, sCortex.VertNormals);
     
     
     %% Outputs
@@ -303,7 +298,7 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     fluences    = {};
     reference   = {};
 
-    if ~isempty(strfind(data_source, 'http'))
+    if contains(data_source, 'http')
 
         if ~exist(local_cache_dir, 'dir')
             mkdir(local_cache_dir);
@@ -325,7 +320,7 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
     missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
     
     % Download missing fluences 
-    if ~isempty(strfind(data_source, 'http'))
+    if ~isempty(missing_fluences) && contains(data_source, 'http')
 
         download_fluences(data_source, local_cache_dir,  missing_fluences);
         missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
@@ -600,6 +595,18 @@ function [sensitivity_surf, warmInfo] = smooth_sensitivity_map(surface, sensitiv
             [sensitivity_surf, ~, warmInfo] = process_ssmooth_surfstat('compute',  surface,  sensitivity_surf, FWHM, 'before_2023');
         end
 
+    end
+
+end
+
+function A = normal_to_xyz(sensitivity_surf, VertNormals)
+% Extract component (x, y, or z)
+
+    A  = zeros( size(sensitivity_surf, 1), 3 * size(sensitivity_surf, 2) );
+    
+    for k = 1:3
+        scaled = sensitivity_surf .* VertNormals(:, k)';            % nSensor x nVertex
+        A(:, k:3:end) = scaled;              % Fill the corresponding columns
     end
 
 end
