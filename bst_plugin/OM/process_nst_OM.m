@@ -138,39 +138,39 @@ function OutputFile = Run(sProcess, sInput)
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
-    montage_pairs = compute_optimal_montage(ROI_head.head_vertices_coords,options);
+    [ChannelMats, montageSufix] = compute_optimal_montage(ROI_head.head_vertices_coords, options);
     
-    % Convert Montage to Brainstorm structure
-    ChannelMat = create_channelMat_from_montage(montage_pairs, ROI_head.head_vertices_coords, options.wavelengths);
-    
-    
-    sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
-    options.condition_name    = file_unique(options.condition_name, {sSubjStudies.Name}, 1);
-    
-    iStudy = db_add_condition(sSubject.Name, options.condition_name);
-    sStudy = bst_get('Study', iStudy);
-    
-    % Save channel definition
-    [~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-    db_set_channel(iChannelStudy, ChannelMat, 1, 0);
+    for iChannel = 1 :length(ChannelMats)
+        ChannelMat = ChannelMats(iChannel);
         
-    % Save time-series data
-    sDataOut              = db_template('data');
-    sDataOut.F            = process_nst_separations('Compute',ChannelMat.Channel) * 100;
-    sDataOut.Comment      = 'Separations';
-    sDataOut.ChannelFlag  = ones(length(ChannelMat.Channel),1);
-    sDataOut.Time         = (1);
-    sDataOut.DataType     = 'recordings';
-    sDataOut.nAvg         = 1;
-    sDataOut.DisplayUnits = 'cm';
-    
-    % Generate a new file name in the same folder
-    OutputFile{1} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
-    bst_save(OutputFile{1} , sDataOut, 'v7');
-    
-    % Register in database
-    db_add_data(iStudy, OutputFile{1} , sDataOut);
-    
+        sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
+        condition_name    = file_unique([options.condition_name, '_', montageSufix{iChannel}], {sSubjStudies.Name}, 1);
+        
+        iStudy = db_add_condition(sSubject.Name, condition_name);
+        sStudy = bst_get('Study', iStudy);
+        
+        % Save channel definition
+        [~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+        db_set_channel(iChannelStudy, ChannelMat, 1, 0);
+            
+        % Save time-series data
+        sDataOut              = db_template('data');
+        sDataOut.F            = process_nst_separations('Compute',ChannelMat.Channel) * 100;
+        sDataOut.Comment      = 'Separations';
+        sDataOut.ChannelFlag  = ones(length(ChannelMat.Channel),1);
+        sDataOut.Time         = (1);
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = 'cm';
+        
+        % Generate a new file name in the same folder
+        OutputFile{iChannel} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
+        bst_save(OutputFile{iChannel} , sDataOut, 'v7');
+        
+        % Register in database
+        db_add_data(iStudy, OutputFile{iChannel} , sDataOut);
+    end
+
 end
 
 function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
@@ -347,7 +347,7 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     bst_progress('stop');  
 end
 
-function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
+function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coords, options)
     
     %======================================================================
     % 1) Compute OM by maximizing sensitivity only
@@ -378,15 +378,14 @@ function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
     [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple] = montage_pairs_and_weight(results,options);
 
    
-    %     if isfield(options, 'lambda')
-    %         lambda2 = options.lambda;
-    %     else
-    %         lambda2 = 0;
-    %     end
+    % lambda2 = options.lambda;
 
+    % Convert Montage to Brainstorm structure
+    ChannelMat = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
+    montageSufix{1} = 'simple';
 
-    lambda2 = 2; % options.lambda 
-    if lambda2 == 0
+    lambda2 = (0:10); % options.lambda 
+    if isempty(lambda2)
         montage_pairs = montage_pairs_simple;
 
         fprintf("\n------ Channels info ------\n")
@@ -400,36 +399,42 @@ function montage_pairs = compute_optimal_montage(head_vertices_coords, options)
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
-     % Define the cplex problem
-
-    lambda1 = 1/sum(montage_sensitivity_simple);
+    % Define the cplex problem
+    for iLambda = 1:length(lambda2)
+        lambda1 = 1/sum(montage_sensitivity_simple);
+        
+        wt = lambda1 * options.sensitivity_mat  + lambda2(iLambda) * options.coverage_mat;
+        
+        [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
-    wt = lambda1 * options.sensitivity_mat  + lambda2 * options.coverage_mat;
+        % Progress bar
+        bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
+        
+        results = cplex.solve();
+        if ~isfield(results, 'x')
+            bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
+            return;
+        end
     
-    [cplex, options] = define_prob(wt, head_vertices_coords, options);
-
-    % Progress bar
-    bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
+        bst_progress('stop');
+                                                        
+        % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
+        [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_and_weight(results, options);
+        
+        %Display
+        fprintf("\n------ Channels info ------\n")
+        disp("Only sensitivity :")
+        display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
+        
+        fprintf("\nSensitivity and Coverage :\n")
+        display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
     
-    results = cplex.solve();
-    if ~isfield(results, 'x')
-        bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
-        return;
+        disp("---------------------------");
+    
+        % Convert Montage to Brainstorm structure
+        ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
+        montageSufix{iLambda+1} = sprintf('complex - lambda %d', lambda2(iLambda));
     end
-
-    bst_progress('stop');
-
-    % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
-    [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_and_weight(results, options);
-    
-    %Display
-    fprintf("\n------ Channels info ------\n")
-    disp("Only sensitivity :")
-    display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
-    
-    fprintf("\nSensitivity and Coverage :\n")
-    display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
-    disp("---------------------------");
 
 end
 

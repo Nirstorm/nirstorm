@@ -232,7 +232,7 @@ act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
 sVoronoi = in_mri_bst(voronoi_fn);
 
 median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
-delta_mu_a = 0.001;
+delta_mu_a = 0.1;
 threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
 
 coverage = sensitivity_surf > threshold ;
