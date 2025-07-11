@@ -104,12 +104,12 @@ if isempty(sStudy.iHeadModel)
     return;
 end
 
-bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
-ChannelFlag = bst_chan_data.ChannelFlag;
+bst_chan_data   = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+ChannelFlag     = bst_chan_data.ChannelFlag;
 
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-cortex = in_tess_bst(head_model.SurfaceFile);
+sCortex = in_tess_bst(head_model.SurfaceFile);
 
 
 
@@ -123,6 +123,14 @@ if ndims(head_model.Gain) ~= 3
    bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
    return;
 end
+
+sSubject    = bst_get('Subject', sInputs.SubjectName);
+voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    
+if ~exist(voronoi_fn, 'file')
+    error('Could not find the required Voronoi file.');
+end
+
  
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
@@ -187,6 +195,7 @@ if contains(sProcess.options.method.Value,'db')
         sensitivity_surf(mask == 1 ) = 0;
     end
 else
+    for iwl=1:nb_Wavelengths
         mask = zeros(size(sensitivity_surf_sum));
         mask(:,iwl) = sensitivity_surf_sum(:,iwl) < 10^(threshold_value)*max(sensitivity_surf_sum(:,iwl));
         sensitivity_surf_sum(mask == 1) = 0;
@@ -194,10 +203,12 @@ else
         mask = zeros(size(sensitivity_surf));
         mask(:,iwl,:) = sensitivity_surf(:,iwl,:) <  10^(threshold_value)*max(sensitivity_surf(:,iwl,:),[],'all');
         sensitivity_surf(mask == 1 ) = 0;
+    end
 end   
 
 %% Save sensitivity 
 for iwl=1:size(sensitivity_surf, 2)
+
 
     [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
                                          head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
@@ -207,10 +218,43 @@ for iwl=1:size(sensitivity_surf, 2)
     OutputFiles{end+1} = ResultFile;
 
 
-        [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
-            head_model, ['Sensitivities - WL' num2str(iwl)], ...
-            sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
-        OutputFiles{end+1} = ResultFile;
+    [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
+        head_model, ['Sensitivities - WL' num2str(iwl)], ...
+        sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
+    OutputFiles{end+1} = ResultFile;
+end
+%% Estimate Coverage
+
+%threshold for coverage
+p_thresh = 1;
+act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
+        
+sVoronoi = in_mri_bst(voronoi_fn);
+
+median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+delta_mu_a = 0.1;
+threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+
+coverage = sensitivity_surf > threshold ;
+
+for iwl=1:size(sensitivity_surf, 2)
+
+    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sum(coverage(:, iwl,:), 3)), [1,2]), [0 1], ...
+                                         head_model, ['Summed Coverage - WL' num2str(iwl)], ...
+                                         sInputs.iStudy, sStudy,  ...
+                                         'sensitivity imported from MCXlab');
+        
+    OutputFiles{end+1} = ResultFile;
+
+    [sStudy, ResultFile] = add_surf_data( ...
+                                         squeeze(coverage(:,iwl,:)), ...
+                                         time, ...
+                                        head_model, ...
+                                        ['Coverage - WL' num2str(iwl)], ...
+                                        sInputs.iStudy, ...
+                                        sStudy, ...
+                                        'sensitivity imported from MCXlab');
+    OutputFiles{end+1} = ResultFile;
 end
 
 
@@ -262,23 +306,23 @@ end
 
 %% define the reconstruction FOV
 thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
-[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag);
+[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, ChannelFlag);
 
-if any(strcmp({cortex.Atlas.Name},'NIRS-FOV'))
-    iAtlas = find(strcmp({cortex.Atlas.Name},'NIRS-FOV'));
+if any(strcmp({sCortex.Atlas.Name},'NIRS-FOV'))
+    iAtlas = find(strcmp({sCortex.Atlas.Name},'NIRS-FOV'));
 else
-    cortex.Atlas(end+1).Name = 'NIRS-FOV';
-    iAtlas = length( cortex.Atlas);
+    sCortex.Atlas(end+1).Name = 'NIRS-FOV';
+    iAtlas = length( sCortex.Atlas);
 end
 
 
-cortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
-cortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
-cortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
-cortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
-cortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',cortex.Atlas(iAtlas).Scouts(end), length(cortex.Atlas(iAtlas).Scouts));
+sCortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
+sCortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
+sCortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
+sCortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
+sCortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sCortex.Atlas(iAtlas).Scouts(end), length(sCortex.Atlas(iAtlas).Scouts));
 
-bst_save(file_fullpath(head_model.SurfaceFile), cortex)
+bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
 
 % [sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
 %                                  head_model, 'Distance to cortex', ...
@@ -288,6 +332,16 @@ bst_save(file_fullpath(head_model.SurfaceFile), cortex)
 
 end
 
+function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
+% @========================================================================
+% compute_threshold computes the threshold to determine the coverage matrix 
+% Formula used : threshold = log((100 + p_thresh) / 100) / ((act_vol / V_hat) * delta_mu_a)
+% ========================================================================@
+        
+        numerator = log10((100 + p_thresh) / 100);
+        denomimator = (act_vol / V_hat) * delta_mu_a;
+        threshold = numerator / denomimator;
+end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               iStudy, sStudy, history_comment)
