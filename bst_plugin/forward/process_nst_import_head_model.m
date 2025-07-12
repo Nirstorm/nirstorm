@@ -183,13 +183,18 @@ function [HeadModelMat, err] = Compute(sInput, OPTIONS)
     % Find closest head vertices (for which we have fluence data)    
     [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
     
-    %% Load fluence data from local .brainstorm folder (download if not available)
+    % Load fluence data from local .brainstorm folder (download if not available)
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
-    [all_fluences, all_reference_voxels_index] = request_fluences( OPTIONS.FluenceFolder  , ...
-                                                                              [src_hvidx ; det_hvidx] , ...
-                                                                              ChannelMat.Nirs.Wavelengths, ...
-                                                                              size(sMri.Cube), nan, ...
-                                                                              local_cache_dir);
+
+    % Request Fluences files 
+    fluence_fns = request_fluences(     OPTIONS.FluenceFolder  , ...
+                                        [src_hvidx ; det_hvidx] , ...
+                                        ChannelMat.Nirs.Wavelengths, ...
+                                        local_cache_dir);
+
+
+    % Load Fluences
+    [all_fluences, all_reference_voxels_index] = load_fluences(fluence_fns, size(sMri.Cube));
 
     if isempty(all_fluences)
         return;
@@ -281,22 +286,11 @@ function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_
 
 end
 
-function [fluences, reference] = request_fluences(data_source, head_vertices, wavelengths, cube_size, voi_mask, local_cache_dir)
+function [fluence_fns] = request_fluences(data_source, head_vertices, wavelengths, local_cache_dir)
     
     if nargin < 4
-        cube_size = [];
-    end
-
-    if nargin < 5
-        voi_mask = nan;
-    end
-
-    if nargin < 6
         local_cache_dir = '';
     end    
-
-    fluences    = {};
-    reference   = {};
 
     if contains(data_source, 'http')
 
@@ -334,13 +328,6 @@ function [fluences, reference] = request_fluences(data_source, head_vertices, wa
 
         bst_error('Missing fluences, see comand windows');
         return;
-    end
-
-    % Load Fluences
-    if any(isnan(voi_mask))
-        [fluences, reference] = load_fluences(fluence_fns, cube_size);
-    else
-        [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, voi_mask);
     end
 
 end
