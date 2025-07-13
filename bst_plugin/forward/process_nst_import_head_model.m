@@ -87,19 +87,18 @@ function OutputFiles = Run(sProcess, sInput)
 
     % Load subject
     sSubject = bst_get('Subject', sInput.SubjectName);
-    
-    % Load MRI, Head and Cortex. 
-    if isempty(sSubject.iAnatomy)
-        bst_error(['No anatomical data found for ' sInput.SubjectName]);
-    end
-    
-    % Load Voronoi function
     voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    if ~exist(voronoi_fn, 'file')
-        sProcess.options.do_grey_mask.Value   = 1; 
-        process_nst_compute_voronoi('Run', sProcess, sInput);
+
+    %  Check that all the information are present
+    if isempty(sSubject.iAnatomy) ||  isempty(sSubject.iCortex) || isempty(sSubject.iScalp) || ~exist(voronoi_fn,"file")
+        bst_error(sprintf('Anatomical data for subject %s are incomplete ', sInput.SubjectName));
     end
 
+    % Load cortical surface.
+    sCortex  = in_tess_bst(sSubject.Surface(sSubject.iCortex ).FileName);
+
+    % Load channels
+    ChannelMat  = in_bst_channel(sInput.ChannelFile);
 
     OPTIONS = struct();
     
@@ -109,7 +108,7 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS.VoronoiFile         = voronoi_fn;
     OPTIONS.HeadFile            = sSubject.Surface(sSubject.iScalp  ).FileName;
     OPTIONS.CortexFile          = sSubject.Surface(sSubject.iCortex ).FileName;
-    OPTIONS.ChannelFile         = sInput(1).ChannelFile;
+    OPTIONS.Channel         = ChannelMat.Channel;
 
     % Use defined options : 
     OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
@@ -117,7 +116,7 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
     
     % Compute Head model
-    [HeadModelMat, error_message, warning_message]  = Compute(OPTIONS);
+    [Gain, error_message, warning_message]  = Compute(OPTIONS);
 
     if  ~isempty(error_message)
         bst_report('Error',   sProcess, sInput, error_message);
@@ -128,6 +127,22 @@ function OutputFiles = Run(sProcess, sInput)
         end
     end
     
+
+    % Outputs
+    HeadModelMat                = db_template('headmodelmat');
+    HeadModelMat.NIRSMethod     = 'MCXlab';
+    HeadModelMat.Gain           = Gain;
+    HeadModelMat.HeadModelType  = 'surface';
+    HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
+    HeadModelMat.GridOrient     = sCortex.VertNormals;
+    HeadModelMat.Comment        = 'NIRS head model';
+    HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
+                                         'smoothing_method', OPTIONS.smoothing_method, ...
+                                         'smoothing_fwhm',   OPTIONS.smoothing_fwhm);
+    
+    HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
+
+
     % Save Head Model
     sStudy = bst_get('Study', sInput.iStudy);
     
@@ -156,7 +171,7 @@ function OutputFiles = Run(sProcess, sInput)
 
 end
 
-function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
+function [Gain, error_message, warning_message] = Compute(OPTIONS)
 % Compute the nirs head model.
 %
 % Input: 
@@ -167,7 +182,7 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
 %  |--  OPTIONS.VoronoiFile         : path to voronoi volume to surface interpolator
 %  |--  OPTIONS.HeadFile            : path to scalp surface
 %  |--  OPTIONS.CortexFile          : path to cortex surface
-%  |--  OPTIONS.ChannelFile         : path to chanel file
+%  |--  OPTIONS.Channel             : full brainstorm channel structure
 %
 %  |--  OPTIONS.FluenceFolder       ; path to the fluence folder. Can be a server
 %  |--  OPTIONS.smoothing_method    : method used to smooth the fluence {'surfstat_before_2023' or  'geodesic_dist' (recomended) }
@@ -179,7 +194,6 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
 % -- warning_message: Description of the warning
 
 
-    HeadModelMat    = [];
     error_message   = '';
     warning_message = {};
 
@@ -189,11 +203,14 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
     sHead   = in_tess_bst(OPTIONS.HeadFile);
     sCortex = in_tess_bst(OPTIONS.CortexFile);
 
-    ChannelMat  = in_bst_channel(OPTIONS.ChannelFile);
-    sChannels   = ChannelMat.Channel;
+    sChannels   = OPTIONS.Channel;
     
     iNIRS         = channel_find(sChannels, 'NIRS');
     sChannelsNIRS = sChannels(iNIRS);
+
+    % find used wavelentgh 
+    wavelengths = unique({sChannelsNIRS.Group});
+    wavelengths = cellfun( @(x) str2double(x(3:end)), wavelengths) ;
 
     % Get Voronoi
     voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
@@ -219,7 +236,7 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
     % Request Fluences files 
     [fluence_fns, missing_fluences] = request_fluences(     OPTIONS.FluenceFolder  , ...
                                         [src_hvidx ; det_hvidx] , ...
-                                        ChannelMat.Nirs.Wavelengths, ...
+                                        wavelengths, ...
                                         local_cache_dir);
 
     % If missing fluences, list them, and return.
@@ -255,7 +272,7 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
         
         isrc    = find( src_ids ==  source_id);
         idet    = find( det_ids ==  det_id);
-        iwl     = find(ChannelMat.Nirs.Wavelengths == measure_id);
+        iwl     = find( wavelengths == measure_id);
 
         ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
                                               det_reference_voxels_index{idet}{iwl}(2),...
@@ -285,6 +302,8 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
         sens_tmp(end)=[]; % trash last column
     
         sensitivity_surf(:, iNIRS(iChannel)) = sens_tmp;
+        
+        bst_progress('inc',1);
     end
         
     [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
@@ -296,23 +315,8 @@ function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
     sensitivity_surf = sensitivity_surf';
 
     % We convert to 3 orientation for saving in brainstorm database  
-    sensitivity_surf = normal_to_xyz(sensitivity_surf, sCortex.VertNormals);
-    
-    
-    %% Outputs
-    HeadModelMat                = db_template('headmodelmat');
-    HeadModelMat.NIRSMethod     = 'MCXlab';
-    HeadModelMat.Gain           = sensitivity_surf;
-    HeadModelMat.HeadModelType  = 'surface';
-    HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
-    HeadModelMat.GridOrient     = sCortex.VertNormals;
-    HeadModelMat.Comment        = 'NIRS head model';
-    HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
-                                         'smoothing_method', OPTIONS.smoothing_method, ...
-                                         'smoothing_fwhm',   OPTIONS.smoothing_fwhm);
-    
-    HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
-
+    Gain = normal_to_xyz(sensitivity_surf, sCortex.VertNormals);
+  
 end
 
 function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
