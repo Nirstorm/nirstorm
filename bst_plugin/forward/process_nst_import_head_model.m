@@ -104,12 +104,12 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS = struct();
     
     % Subject Informations 
-    OPTIONS.SubjectName     = sInput.SubjectName;
-    OPTIONS.MriFile         = sSubject.Anatomy(sSubject.iAnatomy).FileName;
-    OPTIONS.VoronoiFile     = voronoi_fn;
-    OPTIONS.HeadFile        = sSubject.Surface(sSubject.iScalp  ).FileName;
-    OPTIONS.CortexFile      = sSubject.Surface(sSubject.iCortex ).FileName;
-    OPTIONS.ChannelFile     = sInput(1).ChannelFile;
+    OPTIONS.SubjectName         = sInput.SubjectName;
+    OPTIONS.MriFile             = sSubject.Anatomy(sSubject.iAnatomy).FileName;
+    OPTIONS.VoronoiFile         = voronoi_fn;
+    OPTIONS.HeadFile            = sSubject.Surface(sSubject.iScalp  ).FileName;
+    OPTIONS.CortexFile          = sSubject.Surface(sSubject.iCortex ).FileName;
+    OPTIONS.ChannelFile         = sInput(1).ChannelFile;
 
     % Use defined options : 
     OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
@@ -117,9 +117,17 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS.smoothing_fwhm      = sProcess.options.smoothing_fwhm.Value{1};
     
     % Compute Head model
-    HeadModelMat = Compute(sInput, OPTIONS);
+    [HeadModelMat, error_message, warning_message]  = Compute(OPTIONS);
 
-
+    if  ~isempty(error_message)
+        bst_report('Error',   sProcess, sInput, error_message);
+    end
+    if  ~isempty(warning_message)
+        for iMessage = 1:length(warning_message)
+            bst_report('Warning',   sProcess, sInput, warning_message{iMessage});
+        end
+    end
+    
     % Save Head Model
     sStudy = bst_get('Study', sInput.iStudy);
     
@@ -148,10 +156,32 @@ function OutputFiles = Run(sProcess, sInput)
 
 end
 
-function [HeadModelMat, err] = Compute(sInput, OPTIONS)
-    
-    HeadModelMat = [];
-    err = '';
+function [HeadModelMat, error_message, warning_message] = Compute(OPTIONS)
+% Compute the nirs head model.
+%
+% Input: 
+%
+%  OPTIONS: Struct with the following fields
+%  |--  OPTIONS.SubjectName         : Subject name
+%  |--  OPTIONS.MriFile             : path to MRI
+%  |--  OPTIONS.VoronoiFile         : path to voronoi volume to surface interpolator
+%  |--  OPTIONS.HeadFile            : path to scalp surface
+%  |--  OPTIONS.CortexFile          : path to cortex surface
+%  |--  OPTIONS.ChannelFile         : path to chanel file
+%
+%  |--  OPTIONS.FluenceFolder       ; path to the fluence folder. Can be a server
+%  |--  OPTIONS.smoothing_method    : method used to smooth the fluence {'surfstat_before_2023' or  'geodesic_dist' (recomended) }
+%  |--  OPTIONS.smoothing_fwhm      : parameter of the smoothing kernel
+%
+% Output: 
+% -- HeadModelMat: Brainstorm structure for the head model
+% -- error_message: Description of the error
+% -- warning_message: Description of the warning
+
+
+    HeadModelMat    = [];
+    error_message   = '';
+    warning_message = {};
 
     % Retrieve optode coordinates
     % Load channel file
@@ -187,16 +217,22 @@ function [HeadModelMat, err] = Compute(sInput, OPTIONS)
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
 
     % Request Fluences files 
-    fluence_fns = request_fluences(     OPTIONS.FluenceFolder  , ...
+    [fluence_fns, missing_fluences] = request_fluences(     OPTIONS.FluenceFolder  , ...
                                         [src_hvidx ; det_hvidx] , ...
                                         ChannelMat.Nirs.Wavelengths, ...
                                         local_cache_dir);
 
+    % If missing fluences, list them, and return.
+    if ~isempty(missing_fluences)
+        error_message = list_missing_fluences(flat_fluence_fns);
+        return;
+    end
 
     % Load Fluences
     [all_fluences, all_reference_voxels_index] = load_fluences(fluence_fns, size(sMri.Cube));
 
     if isempty(all_fluences)
+        error_message = ' Some fluence could not be loaded';
         return;
     end
 
@@ -228,12 +264,15 @@ function [HeadModelMat, err] = Compute(sInput, OPTIONS)
         separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
         if ref_fluence == 0 && separations(iChannel) > separation_threshold
             sensitivity_vol = nan(size(sMri.Cube));
+            warning_message{end+1} = sprintf('Fluence for channel cannot be computed S%02dD%02d (wavelength=%dnm, separation=%1.2fcm).\n', ...
+                                                               source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
+            
         else 
             if ref_fluence==0
                 normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
 
-                bst_report('Warning', 'process_nst_import_head_model', sInput, sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                                                                               src_ids(isrc), det_ids(idet), ChannelMat.Nirs.Wavelengths(iwl), separation*100));
+                warning_message{end+1} = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
+                                                                                source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
             else
                 normalization_factor = ref_fluence;
             end
@@ -250,7 +289,7 @@ function [HeadModelMat, err] = Compute(sInput, OPTIONS)
         
     [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
     if ~isempty(warmInfo)
-        bst_report('Warning', 'process_nst_import_head_model', sInput, warmInfo);
+        warning_message{end+1} =  warmInfo;
     end
     
     % sensitivity_surf is now nChannel x nNodes
@@ -286,7 +325,7 @@ function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_
 
 end
 
-function [fluence_fns] = request_fluences(data_source, head_vertices, wavelengths, local_cache_dir)
+function [fluence_fns, missing_fluences] = request_fluences(data_source, head_vertices, wavelengths, local_cache_dir)
     
     if nargin < 4
         local_cache_dir = '';
@@ -319,15 +358,6 @@ function [fluence_fns] = request_fluences(data_source, head_vertices, wavelength
         download_fluences(data_source, local_cache_dir,  missing_fluences);
         missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
 
-    end
-
-    % If missing fluences, list them, and return.
-    if ~isempty(missing_fluences)
-
-        list_missing_fluences(flat_fluence_fns)
-
-        bst_error('Missing fluences, see comand windows');
-        return;
     end
 
 end
@@ -448,8 +478,10 @@ function fluence_fns = list_fluences(data_source, head_vertices, wavelengths)
     end
 end
 
-function list_missing_fluences(missing_fluences)
-
+function warning_msg = list_missing_fluences(missing_fluences)
+    
+    warning_msg = ''; 
+    
     tokens = cellfun( @(x) regexp(x, 'fluence_(\d+)nm_v(\d+)\.mat', 'tokens'), missing_fluences);
     
     % Flatten each inner token (each is a 1x1 cell containing a 1x2 cell)
@@ -459,14 +491,18 @@ function list_missing_fluences(missing_fluences)
     [counts, list_missing_wavelength] = groupcounts(misssing_wavelength);
 
     for iWavelength = 1:length(list_missing_wavelength)
-        fprintf('%d fluences missing for wavelength %s : \n',counts(iWavelength), list_missing_wavelength{iWavelength});
+
+        warning_msg = [ warning_msg, ...
+                        sprintf('%d fluences missing for wavelength %s : \n',counts(iWavelength), list_missing_wavelength{iWavelength})];
         idx_fluences = find(cellfun(@(x) strcmp(x,  list_missing_wavelength{iWavelength}), misssing_wavelength));
 
         for k = 1:length(idx_fluences)
-            fprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)});
+            warning_msg = [ warning_msg, ...
+                            fprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)})];
         end
-        fprintf('\n');
+        warning_msg  = [warning_msg, '\n'];
     end
+
 end
 
 function [fluences, reference] = load_fluences(fluence_fns, cube_size)
