@@ -588,6 +588,55 @@ function [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, 
 
 end
 
+
+function headmodel = convert_head_model( sChannel, headmodel, apply_orientation)   
+% Convert the head model from old nirstorm structure to the brainstorm
+% structure 
+
+    if nargin < 3
+        apply_orientation = 1;
+    end
+
+    gain = zeros(length(sChannel.Channel), size(headmodel.Gain, 3));
+
+    iNIRS = good_channel(sChannel.Channel, [], 'NIRS');
+    sChannelNirs = sChannel.Channel(iNIRS);
+
+    for iChannel = 1:length(iNIRS)
+        [source_id, det_id, measure_id] = nst_unformat_channel(sChannelNirs(iChannel).Name);
+        
+
+        iPair =  find(strcmp(headmodel.pair_names, sprintf('S%dD%d',source_id, det_id )));
+        iWl   =  find(sChannel.Nirs.Wavelengths == measure_id );
+
+        gain(iNIRS(iChannel), : ) = headmodel.Gain(iPair, iWl, :);
+    end
+
+    if apply_orientation
+        
+        % COnvert the nornmal vector to x,y,z 
+        sCortex = in_tess_bst(headmodel.SurfaceFile);
+
+        gain = normal_to_xyz(gain, sCortex.VertNormals);
+        headmodel.GridOrient =  sCortex.VertNormals;
+
+    else
+        % Ensute to empty the Grid Orient so the orientation can't be
+        % applied accidentally later. 
+
+        headmodel.GridOrient = [];
+    end
+    
+    % Update and complete the head model
+    headmodel.Gain = gain;
+    headmodel = rmfield(headmodel, 'pair_names');
+    headmodel.NIRSMethod     = 'MCXlab';
+    headmodel                = bst_history('add', headmodel, 'compute', 'Convert head model structure');
+
+end
+
+
+
 function str_size = format_file_size(size)
     if size < 1e3
         str_size = sprintf('%do', size);

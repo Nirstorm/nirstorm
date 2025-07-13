@@ -171,7 +171,11 @@ end
 function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
-    if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
+    if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
+        nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model);
+    end
+
+    if isfield(nirs_head_model, 'GridOrient') && ~isempty(nirs_head_model.GridOrient)
         nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
     end
 
@@ -187,8 +191,6 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
     HM.SurfaceFile          = nirs_head_model.SurfaceFile;
     HM.vertex_connectivity  = sCortex.VertConn(valid_nodes, valid_nodes);
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = sCortex.Vertices(valid_nodes, :); 
-
-
 
     sResults = repmat(db_template('resultsmat'), 1, nb_wavelengths);
     isReconstructed = true(1, nb_wavelengths); 
@@ -210,8 +212,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         OPTIONS.Channel     = ChannelMat.Channel(selected_chans);
         OPTIONS.Data        = sDataIn.F(selected_chans,:);
 
-        gain    = nst_headmodel_get_gains(nirs_head_model, iwl, ChannelMat.Channel, find(selected_chans));
-        HM.Gain = gain(:,valid_nodes);
+        HM.Gain = nirs_head_model.Gain(selected_chans, valid_nodes); 
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
 
         % MNE results
