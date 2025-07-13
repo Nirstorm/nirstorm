@@ -98,13 +98,8 @@ if isempty(sStudy.iHeadModel)
     bst_error('No head model found. Consider running "NIRS -> Compute head model"');
     return;
 end
+HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 
-nirs_head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-nirs_head_model.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-
-if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
-    nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
-end
 
 %% Load data & baseline
 % Load recordings
@@ -121,7 +116,7 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
-OPTIONS         = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
+OPTIONS         = getOptions(sProcess, HeadModelFile, sInputs(1).FileName);
 pipeline        = OPTIONS.MEMpaneloptions.mandatory.pipeline;
 
 if  strcmp(pipeline,'rMEM')
@@ -141,8 +136,7 @@ for iMap = 1:length(sResults)
 
     ResultsMat = sResults(iMap);
     ResultsMat.DataFile   = sInputs.FileName;
-    ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
-    ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
+    
     bst_save(ResultFile, ResultsMat, 'v6');
     db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
@@ -157,10 +151,13 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
-    if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
-        nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
+    if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
+        nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model);
     end
 
+    if isfield(nirs_head_model, 'GridOrient') && ~isempty(nirs_head_model.GridOrient)
+        nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
+    end
 
     cortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
@@ -191,10 +188,9 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         OPTIONS.DataTime        = round(sDataIn.Time,6);
         OPTIONS.Data            = sDataIn.F(selected_chans,:);
     
-        gain = nst_headmodel_get_gains(nirs_head_model,iwl, ChannelMat.Channel, find(selected_chans));
         
         % Remove 0 from the gain matrix
-        HM.Gain = gain(:,valid_nodes);
+        HM.Gain = nirs_head_model.Gain(selected_chans, valid_nodes); 
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
         
         %% launch MEM (cMEM only in current version)
@@ -217,6 +213,10 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         result.Function = result.Options.FunctionName;
         result.Comment =  [sOptions(iwl).Comment ' | ' swl 'nm'];
         result.History  = OPTIONS.History;
+        result.HeadModelFile = OPTIONS.HeadModelFile;
+        result.HeadModelType = nirs_head_model.HeadModelType;
+        result.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
+
         result = bst_history('add', result, 'compute', sOptions(iwl).Comment );
         result.DisplayUnits   =  'OD';
         
@@ -239,7 +239,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
     sResults = nst_misc_FOV_to_cortex(sResults, nb_nodes, valid_nodes, isSaveFactor);
 end
 
-function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
+function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
 
     MethodOptions.MEMpaneloptions =   sProcess.options.mem.Value.MEMpaneloptions;
     MethodOptions.SourceOrient{1} = 'fixed';
@@ -257,7 +257,7 @@ function OPTIONS = getOptions(sProcess,HeadModel, DataFile)
     OPTIONS.FunctionName    = 'mem';
     OPTIONS.DataFile        = DataFile;
     OPTIONS.ResultFile      = [];
-    OPTIONS.HeadModelFile   =  HeadModel.FileName;
+    OPTIONS.HeadModelFile   =  HeadModelFileName;
     
     sDataIn = in_bst_data(DataFile, 'History');
     OPTIONS.History       = sDataIn.History;
