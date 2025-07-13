@@ -118,7 +118,7 @@ if ~strcmp(head_model.HeadModelType, 'surface')
 end
 
 if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
-    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model);
+    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
 end
 
 if isfield(head_model, 'GridOrient') && ~isempty(head_model.GridOrient)

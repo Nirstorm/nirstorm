@@ -172,7 +172,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
-        nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model);
+        nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model, 0);
     end
 
     if isfield(nirs_head_model, 'GridOrient') && ~isempty(nirs_head_model.GridOrient)
