@@ -105,24 +105,29 @@ if isempty(sStudy.iHeadModel)
 end
 
 bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
-ChannelFlag = bst_chan_data.ChannelFlag;
+
+ChannelFlag     = bst_chan_data.ChannelFlag;
+ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
+
+
 
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-if isfield(head_model, 'NIRSMethod') && ~isempty(head_model.NIRSMethod)
-    head_model.Gain = bst_gain_orient(head_model.Gain, head_model.GridOrient);
-end
-
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-sCortex    = in_tess_bst(head_model.SurfaceFile);
-
-
-
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
 end
 
- 
+if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
+    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model);
+end
+
+if isfield(head_model, 'GridOrient') && ~isempty(head_model.GridOrient)
+    head_model.Gain = bst_gain_orient(head_model.Gain, head_model.GridOrient);
+end
+
+
+sCortex    = in_tess_bst(head_model.SurfaceFile);
+
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
 src_coords = montage_info.src_pos;
@@ -147,14 +152,14 @@ for iwl = 1:nb_Wavelengths
     selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
     idx_chan       = find(selected_chans);
         
-    sensitivity         = nst_headmodel_get_gains(head_model, iwl, ChannelMat.Channel, idx_chan);
+    sensitivity         = head_model.Gain(idx_chan, :);
 
 
     for iChan = 1:length(idx_chan)
         chan = ChannelMat.Channel(idx_chan(iChan));
         [src_id, det_id] = nst_unformat_channel(chan.Name );
 
-        sensitivity_surf(:,iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
+        sensitivity_surf(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
         isUsedTime(det_id + src_id*100)              = 1;
     end
 
