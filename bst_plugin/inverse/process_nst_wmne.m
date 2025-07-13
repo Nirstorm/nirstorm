@@ -18,7 +18,7 @@ function varargout = process_nst_wmne( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire (2022-2024)
+% Authors: Edouard Delaire (2022-2025)
 % Thomas Vincent, ZhengChen Cai (2015-2016)
 %
 eval(macro_method);
@@ -81,24 +81,18 @@ end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
 OutputFiles = {};
 
 sStudy = bst_get('Study', sInputs.iStudy);
-%% Load head model
+
+% Load head model
 if isempty(sStudy.iHeadModel)
     bst_error('No head model found. Consider running "NIRS -> Compute head model"');
     return;
 end
-
-nirs_head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
-    nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
-end
-
-
-nirs_head_model.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 
 %% Load recordings 
 
@@ -110,17 +104,16 @@ end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    bst_error(['dMNE source reconstruction works only for dOD data ' ... 
+    bst_error(['MNE source reconstruction works only for dOD data ' ... 
                ' (eg do not use MBLL prior to this process)']);
     return;
 end
 
 
-
 %% Run dMNE
 bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
 
-OPTIONS  = getOptions(sProcess,nirs_head_model, sInputs(1).FileName);
+OPTIONS  = getOptions(sProcess, HeadModelFile, sInputs(1).FileName);
 sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 
 
@@ -130,11 +123,9 @@ for iMap = 1:length(sResults)
 
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
 
-    ResultsMat = sResults(iMap);
-    ResultsMat.DataFile   = sInputs.FileName;
-    ResultsMat.HeadModelFile = OPTIONS.HeadModelFile;
-    ResultsMat.Options       = OPTIONS;
-    ResultsMat.SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
+    ResultsMat          = sResults(iMap);
+    ResultsMat.DataFile = sInputs.FileName;
+    ResultsMat.Options  = OPTIONS;
 
     bst_save(ResultFile, ResultsMat, 'v6');
     db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
@@ -147,18 +138,18 @@ bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
 
 end
 
-function OPTIONS = getOptions(sProcess, HeadModel, DataFile)
+function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
     sDataIn = in_bst_data(DataFile);
 
 
-    OPTIONS.NoiseCov_recompute = sProcess.options.NoiseCov_recompute.Value;
-    OPTIONS.depth_weigth_MNE = sProcess.options.depth_weightingMNE.Value{1};
+    OPTIONS.NoiseCov_recompute  = sProcess.options.NoiseCov_recompute.Value;
+    OPTIONS.depth_weigth_MNE    = sProcess.options.depth_weightingMNE.Value{1};
 
     OPTIONS.Comment       = 'MNE';
     OPTIONS.DataFile      = DataFile;
     OPTIONS.DataTime      = round(sDataIn.Time,6);
     OPTIONS.ResultFile    = [];
-    OPTIONS.HeadModelFile =  file_short(HeadModel.FileName);
+    OPTIONS.HeadModelFile = HeadModelFileName;
     OPTIONS.FunctionName  = 'MNE';
     OPTIONS.History       = sDataIn.History;
 
@@ -177,7 +168,7 @@ function OPTIONS = getOptions(sProcess, HeadModel, DataFile)
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
 end
 
-function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
+function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
     if isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod)
@@ -193,7 +184,7 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
     %% define the reconstruction FOV
     valid_nodes             = nst_headmodel_get_FOV(ChannelMat, sCortex, OPTIONS.thresh_dis2cortex, sDataIn.ChannelFlag);
-    HM.SurfaceFile = nirs_head_model.SurfaceFile;
+    HM.SurfaceFile          = nirs_head_model.SurfaceFile;
     HM.vertex_connectivity  = sCortex.VertConn(valid_nodes, valid_nodes);
     OPTIONS.MEMpaneloptions.optional.cortex_vertices = sCortex.Vertices(valid_nodes, :); 
 
@@ -238,7 +229,9 @@ function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
         sResults(iwl).Function      = 'MNE';
         sResults(iwl).DisplayUnits  = 'OD';
         sResults(iwl).ChannelFlag   = OPTIONS.ChannelFlag;
-        sResults(iwl).HeadModelType = file_short(nirs_head_model.HeadModelType);
+        sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
+        sResults(iwl).HeadModelType = nirs_head_model.HeadModelType;
+        sResults(iwl).SurfaceFile   = file_short(nirs_head_model.SurfaceFile);
         sResults(iwl).History       = OPTIONS.History;
         sResults(iwl) = bst_history('add', sResults(iwl), 'compute', 'Compute minimum norm estimate (MNE)');
 
@@ -269,4 +262,3 @@ function [idX] = be_closest(vecGuess, vecRef)
     end
 
 end
-

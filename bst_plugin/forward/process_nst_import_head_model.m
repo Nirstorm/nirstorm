@@ -103,12 +103,11 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS = struct();
     
     % Subject Informations 
-    OPTIONS.SubjectName         = sInput.SubjectName;
     OPTIONS.MriFile             = sSubject.Anatomy(sSubject.iAnatomy).FileName;
     OPTIONS.VoronoiFile         = voronoi_fn;
     OPTIONS.HeadFile            = sSubject.Surface(sSubject.iScalp  ).FileName;
     OPTIONS.CortexFile          = sSubject.Surface(sSubject.iCortex ).FileName;
-    OPTIONS.Channel         = ChannelMat.Channel;
+    OPTIONS.Channel             = ChannelMat.Channel;
 
     % Use defined options : 
     OPTIONS.FluenceFolder       = sProcess.options.data_source.Value;
@@ -177,7 +176,6 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
 % Input: 
 %
 %  OPTIONS: Struct with the following fields
-%  |--  OPTIONS.SubjectName         : Subject name
 %  |--  OPTIONS.MriFile             : path to MRI
 %  |--  OPTIONS.VoronoiFile         : path to voronoi volume to surface interpolator
 %  |--  OPTIONS.HeadFile            : path to scalp surface
