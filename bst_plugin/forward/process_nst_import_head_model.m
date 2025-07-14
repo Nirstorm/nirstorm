@@ -495,7 +495,7 @@ function warning_msg = list_missing_fluences(missing_fluences)
             warning_msg = [ warning_msg, ...
                             sprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)})];
         end
-        warning_msg  = [warning_msg, '\n'];
+        warning_msg  = [warning_msg, newline];
     end
 
 end
