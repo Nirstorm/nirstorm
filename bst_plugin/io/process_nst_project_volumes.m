@@ -86,9 +86,9 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 OutputFiles = {};
 
 % Load subject
-subjectName = sProcess.options.subjectname.Value;
+subjectName         = sProcess.options.subjectname.Value;
 sInputs.SubjectName = subjectName;
-sSubject    = bst_get('Subject', subjectName);
+sSubject            = bst_get('Subject', subjectName);
 
 iStudy = db_add_condition(subjectName, sProcess.options.out_name.Value);
 sStudy = bst_get('Study', iStudy);
@@ -127,8 +127,32 @@ if ndims(fMRI_map) == 4
         surf_maps(:,iTime) = surf_maps_tmp;
     end
 
-    TR = fMRI_vol.Header.dim.pixdim(4); % to check
+    TR = fMRI_vol.Header.dim.pixdim(5)/1000; % to check
     time = TR*(0:(size(fMRI_map,4)-1));
+
+    sChannels = db_template('channelmat');
+    sChannels.Comment = 'channel';
+    sChannels.Channel = db_template('channeldesc');
+    sChannels.Channel.Name = 'data';
+    sChannels.Channel.Type = 'eeg';
+    
+    db_set_channel(iStudy, sChannels)
+
+
+    sDataOut = db_template('data');
+    sDataOut.F            = zeros(1, length(time));
+    sDataOut.Comment      = 'BOLD data';
+    sDataOut.ChannelFlag  = [1];
+    sDataOut.Time         = time;
+    sDataOut.DataType     = 'recordings';
+    sDataOut.nAvg         = 1;
+    
+    % Generate a new file name in the same folder
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_bold');
+    sDataOut.FileName = file_short(OutputFile);
+    bst_save(OutputFile, sDataOut, 'v7');
+    % Register in database
+    db_add_data(iStudy, OutputFile, sDataOut);
 else
     surf_maps = accumarray(voronoi(voronoi_mask), fMRI_map(voronoi_mask), [nb_nodes+1 1],func); 
     surf_maps(end)=[]; % trash last column
@@ -137,7 +161,7 @@ end
 
 OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
                                            'results_volume_projection');
-[A,volName,ext] = fileparts(sProcess.options.fMRI.Value{1});
+[A, volName, ext] = fileparts(sProcess.options.fMRI.Value{1});
 
 % ===== CREATE FILE STRUCTURE =====
 ResultsMat = db_template('resultsmat');
@@ -147,6 +171,10 @@ ResultsMat.Time          = time;
 ResultsMat.ImageGridAmp  = surf_maps;
 ResultsMat.DisplayUnits  = 'BOLD';
 ResultsMat.SurfaceFile   = SurfaceFile;
+if ndims(fMRI_map) == 4
+    ResultsMat.DataFile = sDataOut.FileName;
+end
+
 % History
 ResultsMat = bst_history('add', ResultsMat, 'compute', sprintf('Projection of %s onto %s (%s)', volName,sCortex.Comment, sProcess.options.method.Value));
 % Save new file structure

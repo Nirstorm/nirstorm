@@ -104,24 +104,19 @@ if isempty(sStudy.iHeadModel)
     return;
 end
 
-bst_chan_data   = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+
 ChannelFlag     = bst_chan_data.ChannelFlag;
+ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
 
-head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-sCortex = in_tess_bst(head_model.SurfaceFile);
-
-
-
+head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
 end
 
-
-if ndims(head_model.Gain) ~= 3
-   bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
-   return;
+if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
+    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
 end
 
 sSubject    = bst_get('Subject', sInputs.SubjectName);
@@ -134,35 +129,38 @@ end
  
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
-src_coords = montage_info.src_pos;
-det_coords = montage_info.det_pos;
 
-nb_sources          = size(src_coords, 1);
-nb_dets             = size(det_coords, 1);
+sCortex    = in_tess_bst(head_model.SurfaceFile);
 
-nb_nodes            = size(head_model.Gain   , 3);
-nb_Wavelengths      = size(head_model.Gain   , 2);
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
-time        = 1:(nb_sources*100 + nb_dets + 1);
+max_sources          = max(montage_info.src_ids);
+max_dets             = max(montage_info.det_ids);
+
+nb_nodes            = size(sCortex.Vertices   , 1);
+nb_Wavelengths      = length(ChannelMat.Nirs.Wavelengths);
+
+time        = 1:(max_sources*100 + max_dets);
 isUsedTime  = zeros(1, length(time));
 
 sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
 sensitivity_surf_sum    = zeros(nb_nodes, nb_Wavelengths);
 
 %% Compute sensitivity
-for iwl=1:nb_Wavelengths
+for iwl = 1:nb_Wavelengths
+
     swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
     selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
     idx_chan       = find(selected_chans);
         
-    sensitivity     = nst_headmodel_get_gains(head_model,iwl, ChannelMat.Channel,idx_chan );
+    sensitivity         = head_model.Gain(idx_chan, :);
 
 
     for iChan = 1:length(idx_chan)
         chan = ChannelMat.Channel(idx_chan(iChan));
         [src_id, det_id] = nst_unformat_channel(chan.Name );
 
-        sensitivity_surf(:,iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
+        sensitivity_surf(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
         isUsedTime(det_id + src_id*100)              = 1;
     end
 
