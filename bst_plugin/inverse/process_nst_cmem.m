@@ -150,27 +150,23 @@ end
 function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
 
 
-    nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
+    nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile, 1);
     if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
         nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model, 0);
     end
 
-    if isfield(nirs_head_model, 'GridOrient') && ~isempty(nirs_head_model.GridOrient)
-        nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
-    end
-
-    cortex = in_tess_bst(nirs_head_model.SurfaceFile);
+    sCortex = in_tess_bst(nirs_head_model.SurfaceFile);
     
-    nb_nodes        = size(cortex.Vertices, 1);
+    nb_nodes        = size(sCortex.Vertices, 1);
     nb_wavelengths  = length(ChannelMat.Nirs.Wavelengths);
     HM.SurfaceFile = nirs_head_model.SurfaceFile;
 
     %% define the reconstruction FOV
     thresh_dis2cortex       = OPTIONS.thresh_dis2cortex;
-    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, sDataIn.ChannelFlag );
+    valid_nodes             = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, sDataIn.ChannelFlag );
 
-    OPTIONS.MEMpaneloptions.optional.cortex_vertices = cortex.Vertices(valid_nodes, :); 
-    HM.vertex_connectivity = cortex.VertConn(valid_nodes, valid_nodes);
+    OPTIONS.MEMpaneloptions.optional.cortex_vertices = sCortex.Vertices(valid_nodes, :); 
+    HM.vertex_connectivity = sCortex.VertConn(valid_nodes, valid_nodes);
 
     isReconstructed = true(1, nb_wavelengths); 
     for iwl=1:nb_wavelengths

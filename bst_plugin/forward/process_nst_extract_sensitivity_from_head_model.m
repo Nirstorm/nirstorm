@@ -109,9 +109,7 @@ bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
 ChannelFlag     = bst_chan_data.ChannelFlag;
 ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
 
-
-
-head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
+head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
@@ -119,10 +117,6 @@ end
 
 if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
     head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
-end
-
-if isfield(head_model, 'GridOrient') && ~isempty(head_model.GridOrient)
-    head_model.Gain = bst_gain_orient(head_model.Gain, head_model.GridOrient);
 end
 
 

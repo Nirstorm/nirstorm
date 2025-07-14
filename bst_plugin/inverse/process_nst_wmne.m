@@ -170,13 +170,9 @@ end
 
 function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
-    nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile);
+    nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile, 1);
     if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
         nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model, 0);
-    end
-
-    if isfield(nirs_head_model, 'GridOrient') && ~isempty(nirs_head_model.GridOrient)
-        nirs_head_model.Gain = bst_gain_orient(nirs_head_model.Gain, nirs_head_model.GridOrient);
     end
 
     sCortex         = in_tess_bst(nirs_head_model.SurfaceFile);
