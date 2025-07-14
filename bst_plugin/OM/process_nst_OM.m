@@ -177,14 +177,13 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
 
     weight_table = [];
 
-    voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    
+
+    sMri        = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+
     if ~exist(voronoi_fn, 'file')
-        voronoi_fn = bst_process('CallProcess', 'process_nst_compute_voronoi', [], [], ...
-                    'subjectname',        sSubject.Name, ...
-                    'segmentation_label', options.segmentation_label);
+        bst_error('ERROR: Missing voronoi volume to surface interpolator.');
     end
-        
         
     voronoi_bst = in_mri_bst(voronoi_fn);
     voronoi     = voronoi_bst.Cube;
@@ -230,18 +229,40 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
     
     if isempty(weight_table)
         
+        % Request fluences fliles
+        local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
+        if contains(options.data_source, 'http')
+            if ~process_nst_import_head_model('fluence_is_available', sMri.Comment)
+                bst_error(['Precomputed fluence data not available for anatomy "' sMri.Comment '"']);
+                return;
+            end
+
+            options.data_source = fullfile(options.data_source, nst_protect_fn_str(sMri.Comment));
+        end
+
+
+        [fluence_fns, missing_fluences] = process_nst_import_head_model('request_fluences', ...
+                                                                        options.data_source, ...
+                                                                        ROI_head.head_vertex_ids, ...
+                                                                        options.wavelengths, ...
+                                                                        local_cache_dir);
+
+        % If missing fluences, list them, and return.
+        if ~isempty(missing_fluences)   
+            bst_error(process_nst_import_head_model('list_missing_fluences', missing_fluences));
+            return;
+        end
+
+        % Load and mask fluences
+        [fluence_volumes, reference] = process_nst_import_head_model('load_fluence_with_mask', ...
+                                                                                            fluence_fns, ...
+                                                                                            options.cubeSize, ...
+                                                                                            vois);
+
         % Compute weight table
-        [fluence_volumes, reference] = process_nst_import_head_model('request_fluences', ...
-            ROI_head.head_vertex_ids, ...
-            sSubject.Anatomy(sSubject.iAnatomy).Comment, ...
-            options.wavelengths, ...
-            options.data_source, ...
-            [], ...
-            vois, ...
-            options.cubeSize);
-        
         weight_table = compute_weights(fluence_volumes, ROI_head.head_vertices_coords, reference, options);
         
+        % Save the weight table in cache
         if ~isempty(options.outputdir)
             options_out = options;
             options_out.head_vertex_ids = ROI_head.head_vertex_ids;

@@ -105,56 +105,52 @@ if isempty(sStudy.iHeadModel)
 end
 
 bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
-ChannelFlag = bst_chan_data.ChannelFlag;
 
-head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-cortex = in_tess_bst(head_model.SurfaceFile);
+ChannelFlag     = bst_chan_data.ChannelFlag;
+ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
 
-
-
+head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
 end
 
-
-if ndims(head_model.Gain) ~= 3
-   bst_error('Bad shape of gain matrix, must be nb_pairs x nb_wavelengths x nb_vertices');
-   return;
+if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
+    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
 end
- 
+
+
+sCortex    = in_tess_bst(head_model.SurfaceFile);
+
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
-src_coords = montage_info.src_pos;
-det_coords = montage_info.det_pos;
+max_sources          = max(montage_info.src_ids);
+max_dets             = max(montage_info.det_ids);
 
-nb_sources          = size(src_coords, 1);
-nb_dets             = size(det_coords, 1);
+nb_nodes            = size(sCortex.Vertices   , 1);
+nb_Wavelengths      = length(ChannelMat.Nirs.Wavelengths);
 
-nb_nodes            = size(head_model.Gain   , 3);
-nb_Wavelengths      = size(head_model.Gain   , 2);
-
-time        = 1:(nb_sources*100 + nb_dets + 1);
+time        = 1:(max_sources*100 + max_dets);
 isUsedTime  = zeros(1, length(time));
 
 sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
 sensitivity_surf_sum    = zeros(nb_nodes, nb_Wavelengths);
 
 %% Compute sensitivity
-for iwl=1:nb_Wavelengths
+for iwl = 1:nb_Wavelengths
+
     swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
     selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
     idx_chan       = find(selected_chans);
         
-    sensitivity     = nst_headmodel_get_gains(head_model,iwl, ChannelMat.Channel,idx_chan );
+    sensitivity         = head_model.Gain(idx_chan, :);
 
 
     for iChan = 1:length(idx_chan)
         chan = ChannelMat.Channel(idx_chan(iChan));
         [src_id, det_id] = nst_unformat_channel(chan.Name );
 
-        sensitivity_surf(:,iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
+        sensitivity_surf(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
         isUsedTime(det_id + src_id*100)              = 1;
     end
 
@@ -207,10 +203,10 @@ for iwl=1:size(sensitivity_surf, 2)
     OutputFiles{end+1} = ResultFile;
 
 
-        [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
-            head_model, ['Sensitivities - WL' num2str(iwl)], ...
-            sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
-        OutputFiles{end+1} = ResultFile;
+    [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
+        head_model, ['Sensitivities - WL' num2str(iwl)], ...
+        sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
+    OutputFiles{end+1} = ResultFile;
 end
 
 
@@ -262,23 +258,23 @@ end
 
 %% define the reconstruction FOV
 thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
-[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, cortex, thresh_dis2cortex, ChannelFlag);
+[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, ChannelFlag);
 
-if any(strcmp({cortex.Atlas.Name},'NIRS-FOV'))
-    iAtlas = find(strcmp({cortex.Atlas.Name},'NIRS-FOV'));
+if any(strcmp({sCortex.Atlas.Name},'NIRS-FOV'))
+    iAtlas = find(strcmp({sCortex.Atlas.Name},'NIRS-FOV'));
 else
-    cortex.Atlas(end+1).Name = 'NIRS-FOV';
-    iAtlas = length( cortex.Atlas);
+    sCortex.Atlas(end+1).Name = 'NIRS-FOV';
+    iAtlas = length( sCortex.Atlas);
 end
 
 
-cortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
-cortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
-cortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
-cortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
-cortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',cortex.Atlas(iAtlas).Scouts(end), length(cortex.Atlas(iAtlas).Scouts));
+sCortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
+sCortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
+sCortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
+sCortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
+sCortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sCortex.Atlas(iAtlas).Scouts(end), length(sCortex.Atlas(iAtlas).Scouts));
 
-bst_save(file_fullpath(head_model.SurfaceFile), cortex)
+bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
 
 % [sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
 %                                  head_model, 'Distance to cortex', ...
