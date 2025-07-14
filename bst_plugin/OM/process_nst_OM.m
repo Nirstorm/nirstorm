@@ -231,6 +231,16 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
         
         % Request fluences fliles
         local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
+        if contains(options.data_source, 'http')
+            if ~process_nst_import_head_model('fluence_is_available', sMri.Comment)
+                bst_error(['Precomputed fluence data not available for anatomy "' sMri.Comment '"']);
+                return;
+            end
+
+            options.data_source = fullfile(options.data_source, nst_protect_fn_str(sMri.Comment));
+        end
+
+
         [fluence_fns, missing_fluences] = process_nst_import_head_model('request_fluences', ...
                                                                         options.data_source, ...
                                                                         ROI_head.head_vertex_ids, ...
@@ -239,8 +249,7 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
 
         % If missing fluences, list them, and return.
         if ~isempty(missing_fluences)   
-            flat_fluence_fns = vertcat(fluence_fns{:});
-            bst_error(process_nst_import_head_model('list_missing_fluences', flat_fluence_fns(:)));
+            bst_error(process_nst_import_head_model('list_missing_fluences', missing_fluences));
             return;
         end
 

@@ -241,8 +241,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
 
     % If missing fluences, list them, and return.
     if ~isempty(missing_fluences)
-        flat_fluence_fns = vertcat(fluence_fns{:});
-        error_message = list_missing_fluences(flat_fluence_fns(:));
+        error_message = list_missing_fluences(missing_fluences);
         return;
     end
 
@@ -355,13 +354,13 @@ function [fluence_fns, missing_fluences] = request_fluences(data_source, head_ve
 
     % Check for missing fluences
     flat_fluence_fns = [fluence_fns{:}]';
-    missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
+    missing_fluences = flat_fluence_fns(cellfun(@(x) exist(x, 'file') ~=2 , flat_fluence_fns));
     
     % Download missing fluences 
     if ~isempty(missing_fluences) && contains(data_source, 'http')
 
         download_fluences(data_source, local_cache_dir,  missing_fluences);
-        missing_fluences = find( cellfun(@(x) exist(x, 'file'), flat_fluence_fns ) ~= 2);
+        missing_fluences = missing_fluences(cellfun(@(x) exist(x, 'file') ~=2 , missing_fluences));
 
     end
 
@@ -380,21 +379,13 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
         bst_report('Warning', 'process_nst_import_head_model', sInput, msg);
     end
     
-    % if ~fluence_is_available(anat_name)
-    %     bst_error(['Precomputed fluence data not available for anatomy "' anat_name '"']);
-    %     return;
-    % end
-
-    if ~strcmp(data_source(end), '/')
-        data_source = [data_source '/'];
-    end
-    
-
-   % Check files existance on the server
+    % Check files existance on the server
     can_be_downloaded = true(1,length(missing_fluences));
 
     for iFluence = 1:length(missing_fluences)
-        url = [data_source nst_protect_fn_str(anat_name) '/' missing_fluences{iFluence}];
+        [~, fluence_name, ext] = fileparts(missing_fluences{iFluence});
+        url = fullfile(data_source, [fluence_name,ext] );
+        url = strrep(url, '\', '/');
 
         tstart = tic();
 
@@ -418,7 +409,7 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
     
     if any(~can_be_downloaded)
         disp('Some fluences are missing on the server : ')
-        list_missing_fluences(missing_fluences(~can_be_downloaded))
+        disp(list_missing_fluences(missing_fluences(~can_be_downloaded)))
     end
 
     missing_fluences = missing_fluences(can_be_downloaded);
@@ -444,12 +435,12 @@ function download_fluences(data_source, local_cache_dir,  missing_fluences)
 
     bst_progress('start', 'Downloading fluences', msg, 1, length(missing_fluences));
     for idownload=1:length(missing_fluences)
+        
+        [~, fluence_name, ext] = fileparts(missing_fluences{idownload});
+        url = fullfile(data_source, [fluence_name,ext] );
+        url = strrep(url, '\', '/');
 
-        url = [data_source nst_protect_fn_str(anat_name) '/' missing_fluences{iFluence}];
-        fluence_fn = fullfile(local_cache_dir, missing_fluences{iFluence});
-
-        download_msg = ['Download fluence '  missing_fluences{idownload}];
-        if ~nst_download(url{idownload}, fluence_fn, download_msg)
+        if ~nst_download(url, missing_fluences{idownload}, ['Downloading fluence '  missing_fluences{idownload}])
             return;
         end
 
@@ -513,9 +504,9 @@ function [fluences, reference] = load_fluences(fluence_fns, cube_size)
 
     flat_fluence_fns = [fluence_fns{:}]';
 
-    nFluencess = length(flat_fluence_fns);
+    nFluences = length(flat_fluence_fns);
     nVertex    = length(fluence_fns);
-    nWavelength = nFluencess / nVertex; 
+    nWavelength = nFluences / nVertex; 
 
     assert(nWavelength == round(nWavelength))
 
@@ -524,7 +515,7 @@ function [fluences, reference] = load_fluences(fluence_fns, cube_size)
     reference   = cell(nVertex, 1);
 
 
-    bst_progress('start', 'Load fluences', sprintf('Loading %d fluences...',  nFluencess), 1, nFluencess);
+    bst_progress('start', 'Load fluences', sprintf('Loading %d fluences...',  nFluences), 1, nFluences);
     for ivertex=1:nVertex
         for iwl=1:nWavelength
 
@@ -548,6 +539,9 @@ function [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, 
 
     nFluences = length(flat_fluence_fns);
     nVertex    = length(fluence_fns);
+    nWavelength = nFluences / nVertex; 
+
+    assert(nWavelength == round(nWavelength))
 
     fluences    = cell(nVertex, 1);
     reference   = cell(nVertex, 1);
@@ -574,8 +568,8 @@ function [fluences, reference] = load_fluence_with_mask(fluence_fns, cube_size, 
 
     bst_progress('start', 'Get fluences', sprintf('Load & mask volumic fluences (%d files)...', nFluences), 1, nFluences);
     
-    for ivertex=1:length(head_vertices)
-        for iwl=1:length(wavelengths)
+    for ivertex=1:nVertex
+        for iwl=1:nWavelength
 
             data = load(fluence_fns{ivertex}{iwl}, 'fluence_flat_sparse_vol');
 
