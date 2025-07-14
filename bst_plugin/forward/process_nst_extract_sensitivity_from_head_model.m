@@ -124,16 +124,13 @@ sCortex    = in_tess_bst(head_model.SurfaceFile);
 
 montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
-src_coords = montage_info.src_pos;
-det_coords = montage_info.det_pos;
-
-nb_sources          = size(src_coords, 1);
-nb_dets             = size(det_coords, 1);
+max_sources          = max(montage_info.src_ids);
+max_dets             = max(montage_info.det_ids);
 
 nb_nodes            = size(sCortex.Vertices   , 1);
 nb_Wavelengths      = length(ChannelMat.Nirs.Wavelengths);
 
-time        = 1:(nb_sources*100 + nb_dets + 1);
+time        = 1:(max_sources*100 + max_dets);
 isUsedTime  = zeros(1, length(time));
 
 sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
