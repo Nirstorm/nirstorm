@@ -238,11 +238,8 @@ function weight_table = load_weight_table(sSubject, options, ROI_cortex, ROI_hea
                                                                         local_cache_dir);
 
         % If missing fluences, list them, and return.
-        if ~isempty(missing_fluences)
-
-            list_missing_fluences(flat_fluence_fns)
-   
-            bst_error('Missing fluences, see comand windows');
+        if ~isempty(missing_fluences)   
+            bst_error(process_nst_import_head_model('list_missing_fluences', flat_fluence_fns));
             return;
         end
 
