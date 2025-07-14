@@ -139,7 +139,7 @@ function OutputFile = Run(sProcess, sInput)
     
     % Compute Optimal Montage
     [ChannelMats, montageSufix] = compute_optimal_montage(ROI_head.head_vertices_coords, options);
-    
+    OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
         
@@ -378,28 +378,35 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
     [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple] = montage_pairs_and_weight(results,options);
 
    
-    % lambda2 = options.lambda;
-
+    % lambda2 : For coverage montages
+    lambda2 = (0:10); % options.lambda 
+    %TODO : attention au moment de mettre option.lambda, gerer pour la
+    %taille de lambda2
     % Convert Montage to Brainstorm structure
-    ChannelMat = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
+    montageSufix    = cell(1, length(lambda2)+1);
+    ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
     montageSufix{1} = 'simple';
 
-    lambda2 = (0:10); % options.lambda 
+    % Premature ending in case coverage constraint is not asked
     if isempty(lambda2)
         montage_pairs = montage_pairs_simple;
 
         fprintf("\n------ Channels info ------\n")
         disp("Only sensitivity :")
-        display_channel_info(montage_pairs, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
+        disp(display_channel_info(montage_pairs, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords))
         disp("---------------------------");
-        
         return;
     end
+
+    % Display
+    display_montages_info = sprintf("\n------ Channels info ------\nOnly sensitivity : \n");
+    display_montages_info = display_montages_info + display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords);
 
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
     % Define the cplex problem
+
     for iLambda = 1:length(lambda2)
         lambda1 = 1/sum(montage_sensitivity_simple);
         
@@ -420,22 +427,16 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
                                                         
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
         [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_and_weight(results, options);
-        
-        %Display
-        fprintf("\n------ Channels info ------\n")
-        disp("Only sensitivity :")
-        display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords)
-        
-        fprintf("\nSensitivity and Coverage :\n")
-        display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
-    
-        disp("---------------------------");
+
+        display_montages_info = display_montages_info + sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda));
+        display_montages_info = display_montages_info + display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords);
     
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
         montageSufix{iLambda+1} = sprintf('complex - lambda %d', lambda2(iLambda));
     end
-
+    display_montages_info = display_montages_info + ("---------------------------");
+    disp(display_montages_info);
 end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
@@ -783,8 +784,8 @@ function [montage_pairs, montage_sensitivity, montage_coverage] = montage_pairs_
 
 end
 
-function display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
-
+function info = display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, head_vertices_coords)
+    info = "";
     src_indexes = zeros(max(montage_pairs(:, 1)), 1);
     det_indexes = zeros(max(montage_pairs(:, 2)), 1);
     det_next_idx = 1;
@@ -816,14 +817,14 @@ function display_channel_info(montage_pairs, montage_sensitivity, montage_covera
         sensitivity = montage_sensitivity(ipair, :);
         coverage = montage_coverage(ipair, :);
 
-        fprintf('Channel S%dD%d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
+        info = info + sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
     end
     
     mean_distance = mean(tab_dist_mm);
     distance_range = [min(tab_dist_mm), max(tab_dist_mm)];
     total_sensitivity = sum(montage_sensitivity);
     
-    fprintf('TOTAL      >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total Sensitivity: %.3f \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity);
+    info = info + sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total Sensitivity: %.3f \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity);
 end
 
 %==========================================================================
