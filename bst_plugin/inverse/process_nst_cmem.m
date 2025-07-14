@@ -147,7 +147,7 @@ end
 bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
 end
 
-function sResults = Compute(OPTIONS,ChannelMat, sDataIn )
+function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile, 1);

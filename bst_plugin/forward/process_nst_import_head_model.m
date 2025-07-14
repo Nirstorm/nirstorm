@@ -119,7 +119,9 @@ function OutputFiles = Run(sProcess, sInput)
 
     if  ~isempty(error_message)
         bst_report('Error',   sProcess, sInput, error_message);
+        return;
     end
+    
     if  ~isempty(warning_message)
         for iMessage = 1:length(warning_message)
             bst_report('Warning',   sProcess, sInput, warning_message{iMessage});
@@ -191,7 +193,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
 % -- error_message: Description of the error
 % -- warning_message: Description of the warning
 
-
+    Gain            = nan;
     error_message   = '';
     warning_message = {};
 
@@ -239,7 +241,8 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
 
     % If missing fluences, list them, and return.
     if ~isempty(missing_fluences)
-        error_message = list_missing_fluences(flat_fluence_fns);
+        flat_fluence_fns = vertcat(fluence_fns{:});
+        error_message = list_missing_fluences(flat_fluence_fns(:));
         return;
     end
 
@@ -483,7 +486,6 @@ end
 function warning_msg = list_missing_fluences(missing_fluences)
     
     warning_msg = ''; 
-    
     tokens = cellfun( @(x) regexp(x, 'fluence_(\d+)nm_v(\d+)\.mat', 'tokens'), missing_fluences);
     
     % Flatten each inner token (each is a 1x1 cell containing a 1x2 cell)
@@ -500,7 +502,7 @@ function warning_msg = list_missing_fluences(missing_fluences)
 
         for k = 1:length(idx_fluences)
             warning_msg = [ warning_msg, ...
-                            fprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)})];
+                            sprintf('Vertex %s : %s \n', misssing_vertex{idx_fluences(k)},missing_fluences{idx_fluences(k)})];
         end
         warning_msg  = [warning_msg, '\n'];
     end
