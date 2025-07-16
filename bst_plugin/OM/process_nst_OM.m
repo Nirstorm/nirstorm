@@ -401,24 +401,25 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
 
    
     % lambda2 : For coverage montages
-    lambda2 = (0:10); % options.lambda 
-    %TODO : attention au moment de mettre option.lambda, gerer pour la
-    %taille de lambda2
+    lambda2 = [];
+    %lambda2 = (0:0.1:1); % options.lambda 
+
+    % Premature ending in case coverage constraint is not asked
+    if isempty(lambda2)
+        ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
+        montageSufix{1} = 'simple';
+
+        fprintf("\n------ Channels info ------\n")
+        disp("Only sensitivity :")
+        disp(display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords))
+        disp("---------------------------");
+        return;
+    end
+
     % Convert Montage to Brainstorm structure
     montageSufix    = cell(1, length(lambda2)+1);
     ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
     montageSufix{1} = 'simple';
-
-    % Premature ending in case coverage constraint is not asked
-    if isempty(lambda2)
-        montage_pairs = montage_pairs_simple;
-
-        fprintf("\n------ Channels info ------\n")
-        disp("Only sensitivity :")
-        disp(display_channel_info(montage_pairs, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords))
-        disp("---------------------------");
-        return;
-    end
 
     % Display
     display_montages_info = sprintf("\n------ Channels info ------\nOnly sensitivity : \n");
@@ -557,7 +558,7 @@ function [cplex, options] = define_prob(weight_table, head_vertices_coords, opti
         
     %......................................................................
     % DEBUG FUNCTION : normalize weigth table
-    % norm_w_table(weight_table);
+    % weight_table = norm_w_table(weight_table);
     %......................................................................
     
     % Calls function for inequation 2 : wq_V-Sum(Vpq*xp) <= 0 (13)
