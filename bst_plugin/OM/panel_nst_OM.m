@@ -54,7 +54,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     
     OPTIONS = struct_copy_fields(OPTIONS,  getDefaultOptions(), 0);
 
-    if isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
+    if isfield(sProcess.options, 'fluencesCond') && isfield(sProcess.options.fluencesCond,'Value') && ~isempty(sProcess.options.fluencesCond.Value)
         OPTIONS = struct_copy_fields(OPTIONS,  sProcess.options.fluencesCond.Value, 1);
     end
 
@@ -167,6 +167,46 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     ctrl.jPanelScoutsHead = jPanelScoutsHead;
     jPanelLeft.add('br hfill vfill', jPanelScoutsHead);
     
+    % === PANEL: Objective function ====
+    jPanelMontage = gui_river([2,2], [3,5,3,5], 'Objective function');
+    
+    gui_component('label', jPanelMontage, 'br', 'Criteria to optimize:  ', [], [], [], []);
+    jBtnSensitivity = gui_component('checkbox', jPanelMontage, '', 'Sensitivity', [], [], @(h,ev)UpdatePanel(), []);
+    jBtnSensitivity.setSelected(1);
+    jBtnSensitivity.setEnabled(0);    
+ 
+    gui_component('label', jPanelMontage, '', '   ', [], [], [], []);
+    jPanelLeft.add('br hfill vfill', jPanelMontage);
+    
+    jBtnCoverage = gui_component('checkbox', jPanelMontage, '', 'Coverage', [], [], @(h,ev)UpdatePanel(), []); 
+    gui_component('label', jPanelMontage, '', '  ', [], [], [], []);
+    jPanelLeft.add('br hfill vfill', jPanelMontage); 
+    jBtnCoverage.setEnabled(1);
+    ctrl.jBtnSensitivity  = jBtnSensitivity;
+    ctrl.jBtnCoverage     = jBtnCoverage;
+    
+    jPanelOptionCoverage = gui_river([2,2], [3,5,3,5], '');
+
+    gui_component('label', jPanelOptionCoverage, 'br', 'Lambda values (Range):  Min = ', [], [], [], []);
+    jLambda_min = gui_component('text', jPanelOptionCoverage, 'hfill', num2str(OPTIONS.lambda_coverage(1)), [], [], [], []);
+    gui_component('label', jPanelOptionCoverage, '', ' ; Step  = ', [], [], [], []);
+    jLambda_step = gui_component('text', jPanelOptionCoverage, 'hfill', num2str(OPTIONS.lambda_coverage(2)), [], [], [], []);
+    gui_component('label', jPanelOptionCoverage, '', ' ; Max  = ', [], [], [], []);
+    jLambda_max = gui_component('text', jPanelOptionCoverage, 'hfill', num2str(OPTIONS.lambda_coverage(3)), [], [], [], []);
+    
+    gui_component('label', jPanelOptionCoverage, 'hfill', ' ', [], [], [], []);
+    
+    jPanelMontage.add('br hfill', jPanelOptionCoverage);
+
+    ctrl.jLambda_min  = jLambda_min;
+    ctrl.jLambda_step = jLambda_step;
+    ctrl.jLambda_max  = jLambda_max;
+    
+    gui_component('label', jPanelMontage, 'br', 'Folder for weight table:', [], [], [], []);
+    jWeightFolder = gui_component('text', jPanelMontage, 'hfill', OPTIONS.outputdir, [], [], [], []);
+    ctrl.jWeightFolder   = jWeightFolder;
+
+    jPanelRight.add('br hfill', jPanelMontage);
     
     % === PANEL: Montage information ====
     jPanelMontage = gui_river([2,2], [3,5,3,5], 'Montage');
@@ -180,7 +220,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     ctrl.jDetectors = jDetectors;
     
     
-    gui_component('label', jPanelMontage, 'br', 'Number of Adjacent:', [], [], [], []);
+    gui_component('label', jPanelMontage, 'br', 'Number of Adjacence:', [], [], [], []);
     jAdjacent = gui_component('text', jPanelMontage, 'hfill', num2str(OPTIONS.nAdjacentDet), [], [], [], []);
     ctrl.jAdjacent = jAdjacent;
 
@@ -220,11 +260,6 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
     jOutputCondition = gui_component('text', jPanelOutput, 'hfill', OPTIONS.condition_name, [], [], [], []);
     ctrl.jOutputCondition   = jOutputCondition;
-
-    
-    gui_component('label', jPanelOutput, 'br', 'Folder for weight table:', [], [], [], []);
-    jWeightFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
-    ctrl.jWeightFolder   = jWeightFolder;
 
     jPanelRight.add('br hfill', jPanelOutput);
     
@@ -276,7 +311,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     %% ===== UPDATE PANEL ======
     function UpdatePanel()    
         
-        if jUseDefaultSpace.isSelected
+        if jUseDefaultSpace.isSelected()
             jPanelScoutsHead.setVisible(0);
             jExtentTitle.setVisible(1);
             jExtent.setVisible(1);
@@ -287,6 +322,13 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
             jExtent.setVisible(0);
             jExtentTitle2.setVisible(0);
         end    
+        
+        
+        if jBtnCoverage.isSelected()
+            jPanelOptionCoverage.setVisible(1);
+        else
+            jPanelOptionCoverage.setVisible(0);
+        end
         
     end
 
@@ -345,6 +387,7 @@ end
 function options = getDefaultOptions()
     options = struct();
     
+    %ROI
     options.surface         = 'cortex';
     options.ROI_cortex      = [];
     options.Atlas_cortex    = [];
@@ -353,19 +396,26 @@ function options = getDefaultOptions()
     options.Atlas_head      = [];
 
     options.Extent          = 5;
-
+    
+    % Objective function
+    options.lambda_coverage = [0, 1, 1];
+    options.outputdir       = '';
+    
+    % Montage
     options.nb_sources      = 3;
     options.nb_detectors    = 7;
     options.nAdjacentDet    = 7;
     options.sep_optode      = [ 15, 40];
     options.sepmin_SD       =  15;
-
-    options.wavelengths     = 685;
     
-    options.condition_name  = 'planning_optimal_montage';
+    %Fluences info
+    options.wavelengths     = 685;
     options.data_source     = [nst_get_repository_url() '/fluence/'];
-    options.outputdir       = '';
     options.exist_weight    = 1;  
+    
+    %Output
+    options.condition_name  = 'planning_optimal_montage';
+
 end
 
 
@@ -392,6 +442,12 @@ function s = GetPanelContents() %#ok<DEFNU>
     end
     s.SubjectName =  ctrl.SubjectName;
     
+    % Objective function
+    s.include_coverage  = ctrl.jBtnCoverage.isSelected();
+    s.lambda_coverage   = [str2double(ctrl.jLambda_min.getText), str2double(ctrl.jLambda_step.getText), str2double(ctrl.jLambda_max.getText)];
+
+    s.outputdir = strtrim(char(ctrl.jWeightFolder.getText));
+    
     s.nb_sources = str2double(ctrl.jSources.getText);
     s.nb_detectors = str2double(ctrl.jDetectors.getText);
     s.nAdjacentDet = str2double(ctrl.jAdjacent.getText);
@@ -402,7 +458,6 @@ function s = GetPanelContents() %#ok<DEFNU>
     
     s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
-    s.outputdir = strtrim(char(ctrl.jWeightFolder.getText));
     s.exist_weight = 1;  
     
 end

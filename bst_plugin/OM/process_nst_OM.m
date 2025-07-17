@@ -96,38 +96,25 @@ function OutputFile = Run(sProcess, sInput)
     if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
         bst_error('No available Cortex and Head surface for this subject.');
         return;
-    end    
+    end
     
-    [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options);
+
+    
+    [status, error, options] = check_user_inputs(options);
+    if ~status
+        err_msg = sprintf("%d errors occured : \n%s", length(error), strjoin(" - " + error, '\n'));
+        bst_error(err_msg);
         
-    
-    try
-        wavelengths = str2double(strsplit(options.wavelengths,','));
-    catch
-        bst_report('Error', sProcess, [], 'List of wavelengths must be integers separated by comas');
-        return
-    end
-    
-    if(length(wavelengths) < 1) % TODO: at least 2 wavelengths ?
-        bst_report('Error', sProcess, [], 'List of wavelengths must not be empty');
-        return
-    end
-    
-    % Obtain the anatomical MRI
-    sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-    cubeSize = size(sMri.Cube);
-    
-    options.sep_optode_min  = options.sep_optode(1);
-    options.sep_optode_max  = options.sep_optode(2);
-    options.sep_SD_min      = options.sepmin_SD;
-    options.cubeSize        = cubeSize;
-    options.wavelengths     = wavelengths;
-    
-    if options.sep_optode_min > options.sep_SD_min
-        bst_error(sprintf('ERROR: The minimum distance between source and detector has to be larger than the minimum optodes distance'));
         return;
     end
     
+    [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options);
+        
+
+    % Obtain the anatomical MRI
+    sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    options.cubeSize        = size(sMri.Cube);
+
     [options.sensitivity_mat, options.coverage_mat] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
@@ -171,6 +158,84 @@ function OutputFile = Run(sProcess, sInput)
         db_add_data(iStudy, OutputFile{iChannel} , sDataOut);
     end
 
+end
+function [status, error, options] = check_user_inputs(options)
+    status = 1;
+    error = {};
+    
+    
+    mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
+
+    C = setdiff(mandatory_fields, fieldnames(options));
+    
+    if ~isempty(C)
+        status = 0;
+        error{end+1} = sprintf('Missing option fields: %s', strjoin(C, ', '));
+        
+        return;
+    end
+    
+    options.sep_optode_min  = options.sep_optode(1);
+    options.sep_optode_max  = options.sep_optode(2);
+    options.sep_SD_min      = options.sepmin_SD;
+    
+    if ~isfield(options, 'include_coverage') || ~isfield(options, 'lambda_coverage') 
+        options.include_coverage = 0;
+        options.lambda_coverage  = [];
+    end
+
+    % Check wavelength input
+    try
+        options.wavelengths = str2double(strsplit(options.wavelengths,','));
+    catch
+        options.wavelengths = [];
+    end
+    
+    if(length(options.wavelengths) ~= 1) 
+        status = 0;
+        error{end+1} = 'User must specify a wavelength. ';
+        
+    end
+    
+    % Check coverage input
+    if options.include_coverage
+        if options.lambda_coverage(1) > options.lambda_coverage(3) && options.lambda_coverage(3) > 0
+            status = 0;
+            error{end+1} = 'Min Lambda value cannot be greater than final value. ';
+        end
+
+        if options.lambda_coverage(2) == 0
+            status = 0;
+            error{end+1} = 'Step value of lambda cannot be 0 : Infinite loop. ';
+        end
+    end
+    
+    is_positive_integer = @(x) ~isnan(x) && x > 0 && round(x) == x;
+    
+    if ~is_positive_integer(options.nb_sources)
+        status = 0;
+        error{end+1} = 'Number of sources must be a positive integer. ';
+    end
+    
+    if ~is_positive_integer(options.nb_detectors)
+        status = 0;
+        error{end+1} = 'Number of detectors must be a positive integer. ';
+    end
+    
+    if ~is_positive_integer(options.nAdjacentDet)
+        status = 0;
+        error{end+1} = 'Number of adjacence must be a positive integer. ';
+    end
+    
+    if ~isempty(options.outputdir) && ~isfolder(options.outputdir)
+        status = 0;
+        error{end+1} = 'Folder for weight table must exist. ';
+    end
+    
+    if options.sep_optode_min > options.sep_SD_min
+        status = 0;
+        error{end+1} = 'The minimum distance between source and detector has to be larger than the minimum optodes distance';
+    end
 end
 
 function [sensitivity_mat, coverage_mat] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
@@ -399,37 +464,35 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
     [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple] = montage_pairs_and_weight(results,options);
 
-   
-    % lambda2 : For coverage montages
-    lambda2 = [];
-    %lambda2 = (0:0.1:1); % options.lambda 
 
+
+    ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
+    montageSufix{1} = 'simple';
+    
     % Premature ending in case coverage constraint is not asked
-    if isempty(lambda2)
-        ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
-        montageSufix{1} = 'simple';
-
+    if ~options.include_coverage
         fprintf("\n------ Channels info ------\n")
         disp("Only sensitivity :")
         disp(display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords))
         disp("---------------------------");
         return;
     end
-
-    % Convert Montage to Brainstorm structure
-    montageSufix    = cell(1, length(lambda2)+1);
-    ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
-    montageSufix{1} = 'simple';
-
+    
+    %======================================================================
+    % 2) Compute OM by maximizing sensitivity and coverage
+    %======================================================================
+    
+    cov_min  = options.lambda_coverage(1);
+    cov_step = options.lambda_coverage(2);
+    cov_max  = options.lambda_coverage(3);
+    lambda2  = (cov_min:cov_step:cov_max);
+        
     % Display
     display_montages_info = sprintf("\n------ Channels info ------\nOnly sensitivity : \n");
     display_montages_info = display_montages_info + display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, head_vertices_coords);
 
-    %======================================================================
-    % 2) Compute OM by maximizing sensitivity and coverage
-    %======================================================================
-    % Define the cplex problem
 
+    % Define the cplex problem
     for iLambda = 1:length(lambda2)
         lambda1 = 1/sum(montage_sensitivity_simple);
         
@@ -456,8 +519,9 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
     
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
-        montageSufix{iLambda+1} = sprintf('complex - lambda %d', lambda2(iLambda));
+        montageSufix{end+1} = sprintf('complex - lambda %d', lambda2(iLambda));
     end
+    
     display_montages_info = display_montages_info + ("---------------------------");
     disp(display_montages_info);
 end
