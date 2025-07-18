@@ -159,10 +159,10 @@ function OutputFile = Run(sProcess, sInput)
     end
 
 end
+
 function [status, error, options] = check_user_inputs(options)
     status = 1;
     error = {};
-    
     
     mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
 
