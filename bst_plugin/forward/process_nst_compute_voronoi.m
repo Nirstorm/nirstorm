@@ -238,6 +238,18 @@ function voronoi_fn = get_voronoi_fn(sSubject)
     end    
 end
 
+function median_volume = get_median_voronoi_volume(sVoronoi)
+%==========================================================================
+% Returns the median volume of the voronoi cell in mm^3
+% Counts how many voxels are in each voronoi cells
+%==========================================================================
+
+    counts = groupcounts(sVoronoi.Cube(~isnan(sVoronoi.Cube) & sVoronoi.Cube > 0));    % Volume of one voxel in mm^3
+    volume_voxel  = sVoronoi.Voxsize(1) *  sVoronoi.Voxsize(2)  *  sVoronoi.Voxsize(3);    % Median volume of the voronoi cells in mm^3
+    median_volume = median(counts) * volume_voxel;
+end
+
+
 
 function sSubject = add_vol_data(sMri, data, vol_fn, vol_comment, iSubject, history_comment)
 %% Save a volume map to brainstorm with given data

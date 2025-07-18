@@ -119,6 +119,16 @@ if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
     head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
 end
 
+sSubject    = bst_get('Subject', sInputs.SubjectName);
+voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    
+if ~exist(voronoi_fn, 'file')
+    error('Could not find the required Voronoi file.');
+end
+
+ 
+montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
+
 
 sCortex    = in_tess_bst(head_model.SurfaceFile);
 
@@ -183,6 +193,7 @@ if contains(sProcess.options.method.Value,'db')
         sensitivity_surf(mask == 1 ) = 0;
     end
 else
+    for iwl=1:nb_Wavelengths
         mask = zeros(size(sensitivity_surf_sum));
         mask(:,iwl) = sensitivity_surf_sum(:,iwl) < 10^(threshold_value)*max(sensitivity_surf_sum(:,iwl));
         sensitivity_surf_sum(mask == 1) = 0;
@@ -190,10 +201,12 @@ else
         mask = zeros(size(sensitivity_surf));
         mask(:,iwl,:) = sensitivity_surf(:,iwl,:) <  10^(threshold_value)*max(sensitivity_surf(:,iwl,:),[],'all');
         sensitivity_surf(mask == 1 ) = 0;
+    end
 end   
 
 %% Save sensitivity 
 for iwl=1:size(sensitivity_surf, 2)
+
 
     [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
                                          head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
@@ -206,6 +219,39 @@ for iwl=1:size(sensitivity_surf, 2)
     [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
         head_model, ['Sensitivities - WL' num2str(iwl)], ...
         sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
+    OutputFiles{end+1} = ResultFile;
+end
+%% Estimate Coverage
+
+%threshold for coverage
+p_thresh = 1;
+act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
+        
+sVoronoi = in_mri_bst(voronoi_fn);
+
+median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+delta_mu_a = 0.1;
+threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+
+coverage = sensitivity_surf > threshold ;
+
+for iwl=1:size(sensitivity_surf, 2)
+
+    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sum(coverage(:, iwl,:), 3)), [1,2]), [0 1], ...
+                                         head_model, ['Summed Coverage - WL' num2str(iwl)], ...
+                                         sInputs.iStudy, sStudy,  ...
+                                         'sensitivity imported from MCXlab');
+        
+    OutputFiles{end+1} = ResultFile;
+
+    [sStudy, ResultFile] = add_surf_data( ...
+                                         squeeze(coverage(:,iwl,:)), ...
+                                         time, ...
+                                        head_model, ...
+                                        ['Coverage - WL' num2str(iwl)], ...
+                                        sInputs.iStudy, ...
+                                        sStudy, ...
+                                        'sensitivity imported from MCXlab');
     OutputFiles{end+1} = ResultFile;
 end
 
@@ -284,6 +330,16 @@ bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
 
 end
 
+function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
+% @========================================================================
+% compute_threshold computes the threshold to determine the coverage matrix 
+% Formula used : threshold = log((100 + p_thresh) / 100) / ((act_vol / V_hat) * delta_mu_a)
+% ========================================================================@
+        
+        numerator = log10((100 + p_thresh) / 100);
+        denomimator = (act_vol / V_hat) * delta_mu_a;
+        threshold = numerator / denomimator;
+end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
                                               iStudy, sStudy, history_comment)
