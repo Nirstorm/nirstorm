@@ -406,7 +406,8 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
     %TODO : tune parameters
     threshold = process_nst_extract_sensitivity_from_head_model('compute_threshold', p_thresh, act_vol, median_volume, delta_mu_a);
     
-    bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);
+    bst_progress('start', 'Compute weight tables','Computing summed sensitivities of holder pairs...', 1, nHolders^2);    
+    isVertexSeen = false( size(fluences,1), 1);
     for isrc=1:nHolders
         fluenceSrc = fluences(:,isrc);
         for idet=1:nHolders
@@ -415,19 +416,26 @@ function [sensitivity_mat, coverage_mat] = compute_weights(fluence_volumes, head
                     fluenceDet = fluences(:,idet);
                     sensitivity = (fluenceSrc .* fluenceDet) /  ref(isrc,idet); 
                     
+                    isVertexSeen = isVertexSeen |  (sensitivity > 0);
+                    
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity) ;
                     n_sensitivity_val = n_sensitivity_val + 1;
-
-                    coverage = sum(sensitivity > threshold) / length(sensitivity);
+                    
+                    coverage = sum(sensitivity > threshold);
 
                     mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
                     n_coverage_val = n_coverage_val + 1;
+
                 end
             end    
         end
         bst_progress('inc', nHolders);
     end
-
+    
+    % Convert mat_coverage_val to % of the ROI that can be seen
+    mat_coverage_val = mat_coverage_val ./ sum(isVertexSeen);
+    
+    % Generate the matrices
     sensitivity_mat = sparse(mat_sensitivity_idx(1,1:n_sensitivity_val-1),mat_sensitivity_idx(2,1:n_sensitivity_val-1), mat_sensitivity_val(1:n_sensitivity_val-1),nHolders, nHolders); 
     coverage_mat    = sparse(mat_coverage_idx(1,1:n_coverage_val-1),      mat_coverage_idx(2,1:n_coverage_val-1),       mat_coverage_val(1:n_coverage_val-1), nHolders, nHolders);
     
