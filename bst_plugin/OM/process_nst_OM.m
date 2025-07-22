@@ -135,7 +135,7 @@ function OutputFile = Run(sProcess, sInput)
         bst_report('Info',    sProcess, sInput, infos{iChannel});
 
         sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
-        condition_name    = file_unique([options.condition_name, '_', montageSufix{iChannel}], {sSubjStudies.Name}, 1);
+        condition_name    = file_unique([options.condition_name, '_', montageSufix{iChannel}, '_'], {sSubjStudies.Name}, 1);
         
         iStudy = db_add_condition(sSubject.Name, condition_name);
         sStudy = bst_get('Study', iStudy);

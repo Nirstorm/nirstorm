@@ -184,7 +184,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jBtnCoverage = gui_component('checkbox', jPanelMontage, '', 'Coverage', [], [], @(h,ev)UpdatePanel(), []); 
     gui_component('label', jPanelMontage, '', '  ', [], [], [], []);
     jPanelLeft.add('br hfill vfill', jPanelMontage); 
+    jBtnCoverage.setSelected(OPTIONS.include_coverage); 
     jBtnCoverage.setEnabled(1);
+    
     ctrl.jBtnSensitivity  = jBtnSensitivity;
     ctrl.jBtnCoverage     = jBtnCoverage;
     
@@ -568,8 +570,9 @@ function options = getDefaultOptions()
     options.Extent          = 5;
     
     % Objective function
-    options.lambda_coverage = [0, 1, 1];
-    options.outputdir       = '';
+    options.include_coverage = 0;
+    options.lambda_coverage  = [0, 1, 1];
+    options.outputdir        = '';
     
     % Montage
     options.nb_sources      = 3;
