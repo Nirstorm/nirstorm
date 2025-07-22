@@ -127,11 +127,13 @@ function OutputFile = Run(sProcess, sInput)
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
     % Compute Optimal Montage
-    [ChannelMats, montageSufix] = compute_optimal_montage(ROI_head.head_vertices_coords, options);
+    [ChannelMats, montageSufix, infos] = compute_optimal_montage(ROI_head.head_vertices_coords, options);
     OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
         
+        bst_report('Info',    sProcess, sInput, infos{iChannel});
+
         sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
         condition_name    = file_unique([options.condition_name, '_', montageSufix{iChannel}], {sSubjStudies.Name}, 1);
         
@@ -239,7 +241,6 @@ function [status, error, options] = check_user_inputs(options)
         error{end+1} = 'The minimum distance between source and detector has to be larger than the minimum optodes distance';
     end
 end
-
 
 function hFig = display_weight_table(sensitivity_mat, coverage_mat,  ROI_head)
 
@@ -442,17 +443,14 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
             if holder_distances(isrc, idet) > options.sep_SD_min && holder_distances(isrc, idet) < options.sep_optode_max
                 if ref(isrc,idet) ~=0 
                     fluenceDet = fluences(:,idet);
-                    sensitivity = (fluenceSrc .* fluenceDet) /  ref(isrc,idet); 
-                    
-                    vertex_seen = sensitivity > threshold;
-                    listVertexSeen{isrc, idet} = find(vertex_seen);
-                    
-                    isVertexSeen = isVertexSeen | vertex_seen;
+                    sensitivity     = (fluenceSrc .* fluenceDet) /  ref(isrc,idet); 
+                    isVertexSeen    = isVertexSeen | (sensitivity > 0);
                     
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity);
                     n_sensitivity_val = n_sensitivity_val + 1;
                     
                     coverage = sum(sensitivity > threshold);
+                    listVertexSeen{isrc, idet} = find(sensitivity > threshold);
 
                     mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
                     n_coverage_val = n_coverage_val + 1;
@@ -473,8 +471,8 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
     bst_progress('stop');  
 end
 
-function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coords, options)
-    
+function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertices_coords, options)
+    infos = {};
     %======================================================================
     % 1) Compute OM by maximizing sensitivity only
     %======================================================================
@@ -509,10 +507,15 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
     
     % Premature ending in case coverage constraint is not asked
     if ~options.include_coverage
-        fprintf("\n------ Channels info ------\n")
-        disp("Only sensitivity :")
-        disp(display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords))
-        disp("---------------------------");
+        str = sprintf("------ Channels info ------\n") + ...
+              sprintf("Only sensitivity : \n") + ...
+              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
+        
+        infos{end+1} = str;
+        % fprintf("\n------ Channels info ------\n")
+        % disp("Only sensitivity :")
+        % disp(display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords))
+        % disp();
         return;
     end
     
@@ -526,9 +529,11 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
     lambda2  = (cov_min:cov_step:cov_max);
         
     % Display
-    display_montages_info = sprintf("\n------ Channels info ------\nOnly sensitivity : \n");
-    display_montages_info = display_montages_info + display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
+    str = sprintf("------ Channels info ------\n") + ...
+      sprintf("Only sensitivity : \n") + ...
+      display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
 
+    infos{end+1} = str;
 
     % Define the cplex problem
     for iLambda = 1:length(lambda2)
@@ -552,16 +557,18 @@ function [ChannelMat, montageSufix] = compute_optimal_montage(head_vertices_coor
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
         [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results, options);
 
-        display_montages_info = display_montages_info + sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda));
-        display_montages_info = display_montages_info + display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
+        str = sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda)) + ...
+              display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
+
+        infos{end+1} = str;
+
+        % display_montages_info = display_montages_info + sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda));
+        % display_montages_info = display_montages_info + display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
     
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
         montageSufix{end+1} = sprintf('complex - lambda %d', lambda2(iLambda));
     end
-    
-    display_montages_info = display_montages_info + ("---------------------------");
-    disp(display_montages_info);
 end
 
 function [head_vertices, sHead, sSubject] = proj_cortex_scout_to_scalp(cortex_scout, extent_m, save_in_db)
@@ -966,6 +973,7 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
     percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
 
     info = info + sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap );
+    info = strrep(info, '  ', '&nbsp;&nbsp;'); 
 end
 
 %==========================================================================
