@@ -122,7 +122,7 @@ function OutputFile = Run(sProcess, sInput)
     end
     
     % Experimental : Denoise the weight table. (be carefull)
-    hFig = display_weight_table(options.sensitivity_mat, options.coverage_mat,  ROI_head);
+    %hFig = display_weight_table(options.sensitivity_mat, options.coverage_mat,  ROI_head);
     
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
     
@@ -258,6 +258,7 @@ function hFig = display_weight_table(sensitivity_mat, coverage_mat,  ROI_head)
     plot(sensitivity_mat(:), coverage_mat(:), '+')
 
 end
+
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
 
     sensitivity_mat = [];
