@@ -529,9 +529,8 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertic
     lambda2  = (cov_min:cov_step:cov_max);
         
     % Display
-    str = sprintf("------ Channels info ------\n") + ...
-      sprintf("Only sensitivity : \n") + ...
-      display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
+    str = sprintf("Only sensitivity : \n") + ...
+          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
 
     infos{end+1} = str;
 
@@ -557,7 +556,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertic
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
         [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results, options);
 
-        str = sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda)) + ...
+        str = sprintf("Sensitivity and Coverage (lambda = %d):\n", lambda2(iLambda)) + ...
               display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
 
         infos{end+1} = str;
@@ -972,7 +971,7 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
     
     percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
 
-    info = info + sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap );
+    info = info + sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap);
     info = strrep(info, '  ', '&nbsp;&nbsp;'); 
 end
 
