@@ -930,7 +930,7 @@ end
 
 function info = display_channel_info(montage_pairs, montage_sensitivity,  montage_coverage, channels_coverage, head_vertices_coords)
 % @========================================================================
-% display_channel_info is used to create the string containing the channels
+% display_channel_info Used to create the string containing the channels
 % informations
 % ========================================================================@
 
@@ -985,9 +985,10 @@ end
 
 function display_weight_table(options)
 % @========================================================================
-% display_weight_table displays multiple graphs useful to see a
+% display_weight_table Displays multiple graphs useful to see a
 % representation of the sensitivity & coverage matrices
 % ========================================================================@
+
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
     ROI_head        = options.ROI_head;
