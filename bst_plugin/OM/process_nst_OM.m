@@ -108,34 +108,45 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options);
+    [ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);
         
 
     % Obtain the anatomical MRI
     sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     options.cubeSize        = size(sMri.Cube);
 
-    [options.sensitivity_mat, options.coverage_mat, options.listVertexSeen, options.maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head);
+    [options.sensitivity_mat, options.coverage_mat, options.listVertexSeen, options.maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, options.ROI_head);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
     
     % Experimental : Denoise the weight table. (be carefull)
-    %hFig = display_weight_table(options.sensitivity_mat, options.coverage_mat,  ROI_head);
-    
     % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
+
+    %Display sensitivity and coverage mat
+    options.hFig = figure;
+    options.hFigTab = uitabgroup; drawnow;
+    display_weight_table(options);
     
     % Compute Optimal Montage
-    [ChannelMats, montageSufix, infos] = compute_optimal_montage(ROI_head.head_vertices_coords, options);
+    [ChannelMats, montageSufix, infos] = compute_optimal_montage(options.ROI_head.head_vertices_coords, options);
     OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
         
         bst_report('Info',    sProcess, sInput, infos{iChannel});
-
+        
+        %Deal with multiple versions of the folders
         sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
-        condition_name    = file_unique([options.condition_name, '_', montageSufix{iChannel}, '_'], {sSubjStudies.Name}, 1);
+        condition_name    = [options.condition_name, '_', montageSufix{iChannel}];
+
+        if any(strcmp(condition_name, {sSubjStudies.Name}))
+            list_cond = union({sSubjStudies.Name}, [condition_name, '_']);
+
+            [~, tag]    = file_unique([condition_name, '_'], list_cond, 1);
+            condition_name = [condition_name, tag];
+        end
         
         iStudy = db_add_condition(sSubject.Name, condition_name);
         sStudy = bst_get('Study', iStudy);
@@ -242,21 +253,63 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function hFig = display_weight_table(sensitivity_mat, coverage_mat,  ROI_head)
+function display_weight_table(options)
+    
+    sensitivity_mat = options.sensitivity_mat;
+    coverage_mat    = options.coverage_mat;
+    ROI_head        = options.ROI_head;
+    hFig            = options.hFig;
+    hFigTab         = options.hFigTab;
+    
+    if isfield(options, 'lambda1')
+        sensitivity_mat = options.lambda1 * sensitivity_mat;
+    end
+    if isfield(options, 'lambda2') && options.lambda2 > 0
+        coverage_mat = options.lambda2 * coverage_mat;
+    end
 
     distances = squareform(pdist(ROI_head.head_vertices_coords));
     [m,I] = min(median(distances));
-
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
+    sensitivity_mat = sensitivity_mat(order,order);
+    coverage_mat  = coverage_mat(order,order);
 
-    hFig = figure();
-    subplot(1,2,1);
-    imagesc(sensitivity_mat(order,order));
-    subplot(1,2,2);
-    imagesc(coverage_mat(order,order));
+    ratio = zeros(size(coverage_mat));
+    idx_ratio = sensitivity_mat > 0;
+    ratio(idx_ratio) =  log10( 1 +  coverage_mat(idx_ratio) ./ sensitivity_mat(idx_ratio));
+
+    onglet = uitab(hFigTab,'title','Stvity-Cvrge');
+
+    hpc = uipanel('Parent', onglet, ...
+              'Units', 'Normalized', ...
+              'Position', [0.01 0.01 0.98 0.98], ...
+              'FontWeight','demi');
+    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+
+    ax1 = subplot(1, 3, 1, 'parent', hpc);
+    imagesc(ax1, sensitivity_mat);
+    title(ax1, 'Sensitivity matrix');
+    colorbar(ax1);
+    ax2 = subplot(1, 3, 2, 'parent', hpc);
+    imagesc(ax2, coverage_mat);
+    title(ax2, 'Coverage matrix');
+    colorbar(ax2);
+    ax2 = subplot(1, 3, 3, 'parent', hpc);
+    imagesc(ax2, ratio);
+    title(ax2, 'Ratio matrix');
+    colorbar(ax2);
+    onglet = uitab(hFigTab,'title','Comparison');
+
+    hpc = uipanel('Parent', onglet, ...
+              'Units', 'Normalized', ...
+              'Position', [0.01 0.01 0.98 0.98], ...
+              'FontWeight','demi');
+    set(hpc,'Title',' Sensitivity VS. Coverage ','FontSize',8);
     
-    figure;
-    plot(sensitivity_mat(:), coverage_mat(:), '+')
+    ax = axes('parent',hpc);
+    plot(ax, sensitivity_mat(:), coverage_mat(:), '+')
+    xlabel(ax, 'Sensitivity');
+    ylabel(ax, 'Coverage');
 
 end
 
@@ -299,7 +352,7 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
         return;
     end
 
-    weight_cache = struct('name', {}, 'sensitivity_mat', {},'coverage_mat', {}, 'options', {});
+    weight_cache = struct('name', {}, 'sensitivity_mat', {}, 'coverage_mat', {}, 'listVertexSeen', {}, 'maxVertexSeen', {}, 'options', {});
     
     if exist(fullfile(options.outputdir , 'weight_tables.mat'), 'file')
         tmp = load (fullfile(options.outputdir, 'weight_tables.mat'));
@@ -313,16 +366,14 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
             tmp = weight_cache(strcmp( {weight_cache.name}, ROI_cortex.Label));
 
             if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max
-                    
-                    sensitivity_mat = tmp.sensitivity_mat;
-                    coverage_mat    = tmp.coverage_mat;
-                    listVertexSeen  = tmp.listVertexSeen;
-                    maxVertexSeen   = tmp.maxVertexSeen;
-
+                sensitivity_mat = tmp.sensitivity_mat;
+                coverage_mat    = tmp.coverage_mat;
+                listVertexSeen  = tmp.listVertexSeen;
+                maxVertexSeen   = tmp.maxVertexSeen;
             end
             
         elseif options.exist_weight && ~isfield(tmp, 'sensitivity_mat')
-            file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1,1);
+            file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
             bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.")
         end    
     end
@@ -366,18 +417,19 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
         if ~isempty(options.outputdir)
             options_out = options;
             options_out.head_vertex_ids = ROI_head.head_vertex_ids;
-            tmp = struct('name', ROI_cortex.Label, 'sensitivity_mat', sensitivity_mat, 'coverage_mat', coverage_mat, 'listVertexSeen', listVertexSeen, 'maxVertexSeen', maxVertexSeen, 'options', options_out);
+
+            tmp = struct();
+            tmp.name = ROI_cortex.Label; tmp.sensitivity_mat = sensitivity_mat; tmp.coverage_mat = coverage_mat; tmp.listVertexSeen = listVertexSeen; tmp.maxVertexSeen = maxVertexSeen; tmp.options = options_out;
             
             if isempty(weight_cache)
                 weight_cache = tmp;
             else
                 weight_cache(end+1) = tmp;
             end
+            
             save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
         end
-        
     end
-
 end
 
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
@@ -536,9 +588,12 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertic
 
     % Define the cplex problem
     for iLambda = 1:length(lambda2)
-        lambda1 = 1/sum(montage_sensitivity_simple);
-        
-        wt = lambda1 * options.sensitivity_mat  + lambda2(iLambda) * options.coverage_mat;
+        options.lambda1 = 1/sum(montage_sensitivity_simple);
+        options.lambda2 = lambda2(iLambda);
+
+        wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
+        hFig = display_weight_table(options);
+
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
@@ -566,7 +621,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertic
     
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
-        montageSufix{end+1} = sprintf('complex - lambda %d', lambda2(iLambda));
+        montageSufix{end+1} = sprintf('complex_-_lambda_%d', lambda2(iLambda));
     end
 end
 
@@ -911,7 +966,7 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
     coverage_mat = options.listVertexSeen;
     list_vertex_seen = {};
 
-    for iPair = 1:size(montage_pairs)
+    for iPair = 1:size(montage_pairs, 1)
         pair = montage_pairs(iPair, :);
 
         if isempty(list_vertex_seen)
