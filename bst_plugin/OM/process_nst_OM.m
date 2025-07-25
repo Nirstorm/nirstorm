@@ -253,66 +253,6 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function display_weight_table(options)
-    
-    sensitivity_mat = options.sensitivity_mat;
-    coverage_mat    = options.coverage_mat;
-    ROI_head        = options.ROI_head;
-    hFig            = options.hFig;
-    hFigTab         = options.hFigTab;
-    
-    if isfield(options, 'lambda1')
-        sensitivity_mat = options.lambda1 * sensitivity_mat;
-    end
-    if isfield(options, 'lambda2') && options.lambda2 > 0
-        coverage_mat = options.lambda2 * coverage_mat;
-    end
-
-    distances = squareform(pdist(ROI_head.head_vertices_coords));
-    [m,I] = min(median(distances));
-    [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
-    sensitivity_mat = sensitivity_mat(order,order);
-    coverage_mat  = coverage_mat(order,order);
-
-    ratio = zeros(size(coverage_mat));
-    idx_ratio = sensitivity_mat > 0;
-    ratio(idx_ratio) =  log10( 1 +  coverage_mat(idx_ratio) ./ sensitivity_mat(idx_ratio));
-
-    onglet = uitab(hFigTab,'title','Stvity-Cvrge');
-
-    hpc = uipanel('Parent', onglet, ...
-              'Units', 'Normalized', ...
-              'Position', [0.01 0.01 0.98 0.98], ...
-              'FontWeight','demi');
-    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
-
-    ax1 = subplot(1, 3, 1, 'parent', hpc);
-    imagesc(ax1, sensitivity_mat);
-    title(ax1, 'Sensitivity matrix');
-    colorbar(ax1);
-    ax2 = subplot(1, 3, 2, 'parent', hpc);
-    imagesc(ax2, coverage_mat);
-    title(ax2, 'Coverage matrix');
-    colorbar(ax2);
-    ax2 = subplot(1, 3, 3, 'parent', hpc);
-    imagesc(ax2, ratio);
-    title(ax2, 'Ratio matrix');
-    colorbar(ax2);
-    onglet = uitab(hFigTab,'title','Comparison');
-
-    hpc = uipanel('Parent', onglet, ...
-              'Units', 'Normalized', ...
-              'Position', [0.01 0.01 0.98 0.98], ...
-              'FontWeight','demi');
-    set(hpc,'Title',' Sensitivity VS. Coverage ','FontSize',8);
-    
-    ax = axes('parent',hpc);
-    plot(ax, sensitivity_mat(:), coverage_mat(:), '+')
-    xlabel(ax, 'Sensitivity');
-    ylabel(ax, 'Coverage');
-
-end
-
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
 
     sensitivity_mat = [];
@@ -365,7 +305,7 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
             
             tmp = weight_cache(strcmp( {weight_cache.name}, ROI_cortex.Label));
 
-            if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min &&  tmp.options.sep_optode_max == options.sep_optode_max
+            if isequal(tmp.options.head_vertex_ids, ROI_head.head_vertex_ids) && tmp.options.sep_SD_min == options.sep_SD_min && tmp.options.sep_optode_max == options.sep_optode_max
                 sensitivity_mat = tmp.sensitivity_mat;
                 coverage_mat    = tmp.coverage_mat;
                 listVertexSeen  = tmp.listVertexSeen;
@@ -406,12 +346,15 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
 
         % Load and mask fluences
         [fluence_volumes, reference] = process_nst_import_head_model('load_fluence_with_mask', ...
-                                                                                            fluence_fns, ...
-                                                                                            options.cubeSize, ...
-                                                                                            vois);
+                                                                     fluence_fns, ...
+                                                                     options.cubeSize, ...
+                                                                     vois);
 
         % Compute weight table
-        [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, ROI_head.head_vertices_coords, reference, options);
+        [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, ...
+                                                                                         ROI_head.head_vertices_coords, ...
+                                                                                         reference, ...
+                                                                                         options);
         
         % Save the weight table in cache
         if ~isempty(options.outputdir)
@@ -419,7 +362,8 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
             options_out.head_vertex_ids = ROI_head.head_vertex_ids;
 
             tmp = struct();
-            tmp.name = ROI_cortex.Label; tmp.sensitivity_mat = sensitivity_mat; tmp.coverage_mat = coverage_mat; tmp.listVertexSeen = listVertexSeen; tmp.maxVertexSeen = maxVertexSeen; tmp.options = options_out;
+            tmp.name = ROI_cortex.Label; tmp.sensitivity_mat = sensitivity_mat; tmp.coverage_mat = coverage_mat; 
+            tmp.listVertexSeen = listVertexSeen; tmp.maxVertexSeen = maxVertexSeen; tmp.options = options_out;
             
             if isempty(weight_cache)
                 weight_cache = tmp;
@@ -592,7 +536,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertic
         options.lambda2 = lambda2(iLambda);
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
-        hFig = display_weight_table(options);
+        display_weight_table(options);
 
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
@@ -1033,6 +977,75 @@ end
 %==========================================================================
 % DEBUG FUNCTIONS
 %==========================================================================
+
+function display_weight_table(options)
+    sensitivity_mat = options.sensitivity_mat;
+    coverage_mat    = options.coverage_mat;
+    ROI_head        = options.ROI_head;
+    hFigTab         = options.hFigTab;
+    isDefinedLambda = 0;
+    
+    if isfield(options, 'lambda1')
+        sensitivity_mat = options.lambda1 * sensitivity_mat;
+        isDefinedLambda = isDefinedLambda + 1;
+    end
+    if isfield(options, 'lambda2') && options.lambda2 > 0
+        coverage_mat = options.lambda2 * coverage_mat;
+        isDefinedLambda = isDefinedLambda + 1;
+    end
+    
+    if isDefinedLambda == 0
+        onglet = uitab(hFigTab,'title','Stvity-Cvrge');
+    elseif isDefinedLambda == 1
+        onglet = uitab(hFigTab,'title',"Lambda = 0");
+    else
+        onglet = uitab(hFigTab,'title',"Lambda = " + options.lambda2);
+    end
+
+    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    [m,I] = min(median(distances));
+    [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
+    sensitivity_mat = sensitivity_mat(order,order);
+    coverage_mat  = coverage_mat(order,order);
+    
+    hpc = uipanel('Parent', onglet, ...
+              'Units', 'Normalized', ...
+              'Position', [0.01 0.01 0.98 0.98], ...
+              'FontWeight','demi');
+
+    ax1 = subplot(1, 3, 1, 'parent', hpc);
+    imagesc(ax1, sensitivity_mat);
+    title(ax1, 'Sensitivity matrix');
+    colorbar(ax1);
+    
+    ax2 = subplot(1, 3, 2, 'parent', hpc);
+    imagesc(ax2, coverage_mat);
+    title(ax2, 'Coverage matrix');
+    colorbar(ax2);
+    
+    ax3 = subplot(1, 3, 3, 'parent', hpc);
+    if isDefinedLambda == 0
+        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
+        xlabel(ax3, 'Sensitivity');
+        ylabel(ax3, 'Coverage');
+        title(ax3, 'Sensitivity VS. Coverage');
+        set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+    elseif isDefinedLambda == 1
+        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
+        xlabel(ax3, 'Sensitivity');
+        ylabel(ax3, 'Coverage');
+        title(ax3, 'Sensitivity VS. Coverage');
+        set(hpc,'Title',' Lambda = 0 ','FontSize',8);
+    else
+        ratio = zeros(size(coverage_mat));
+        idx_ratio = sensitivity_mat > 0;
+        ratio(idx_ratio) =  log10( 1 +  coverage_mat(idx_ratio) ./ sensitivity_mat(idx_ratio));
+        
+        imagesc(ax3, ratio);
+        title(ax3, 'Ratio matrix');
+        colorbar(ax3);
+    end
+end
 
 function display_eq_matrix(Aeq_1, Aeq_2)
     matrixes2show={Aeq_1, Aeq_2, [Aeq_1 ; Aeq_2]};
