@@ -98,8 +98,6 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-
-    
     [status, error, options] = check_user_inputs(options);
     if ~status
         err_msg = sprintf("%d errors occured : \n%s", length(error), strjoin(" - " + error, '\n'));
@@ -115,7 +113,7 @@ function OutputFile = Run(sProcess, sInput)
     sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     options.cubeSize        = size(sMri.Cube);
 
-    [options.sensitivity_mat, options.coverage_mat, options.listVertexSeen, options.maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, options.ROI_head);
+    [options.sensitivity_mat, options.coverage_mat, options.listVertexSeen, options.maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
@@ -130,7 +128,7 @@ function OutputFile = Run(sProcess, sInput)
     display_weight_table(options);
     
     % Compute Optimal Montage
-    [ChannelMats, montageSufix, infos] = compute_optimal_montage(options.ROI_head.head_vertices_coords, options);
+    [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
     OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
@@ -253,12 +251,13 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex, ROI_head)
+function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex)
 
     sensitivity_mat = [];
     coverage_mat    = [];
     listVertexSeen  = [];
     maxVertexSeen   = 0;
+    ROI_head = options.ROI_head;
 
     sMri        = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
     voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
@@ -467,8 +466,9 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
     bst_progress('stop');  
 end
 
-function [ChannelMat, montageSufix, infos] = compute_optimal_montage(head_vertices_coords, options)
+function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     infos = {};
+    head_vertices_coords = options.ROI_head.head_vertices_coords;
     %======================================================================
     % 1) Compute OM by maximizing sensitivity only
     %======================================================================
@@ -929,6 +929,11 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
 end
 
 function info = display_channel_info(montage_pairs, montage_sensitivity,  montage_coverage, channels_coverage, head_vertices_coords)
+% @========================================================================
+% display_channel_info is used to create the string containing the channels
+% informations
+% ========================================================================@
+
     info = "";
     src_indexes = zeros(max(montage_pairs(:, 1)), 1);
     det_indexes = zeros(max(montage_pairs(:, 2)), 1);
@@ -979,6 +984,10 @@ end
 %==========================================================================
 
 function display_weight_table(options)
+% @========================================================================
+% display_weight_table displays multiple graphs useful to see a
+% representation of the sensitivity & coverage matrices
+% ========================================================================@
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
     ROI_head        = options.ROI_head;
