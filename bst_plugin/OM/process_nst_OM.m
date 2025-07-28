@@ -120,7 +120,7 @@ function OutputFile = Run(sProcess, sInput)
     end
     
     % Experimental : Denoise the weight table. (be carefull)
-    % options.sensitivity_mat = denoise_weight_table(options.sensitivity_mat, threshold);
+    options.sensitivity_mat = denoise_weight_table(options);
 
     %Display sensitivity and coverage mat
     options.hFig = figure;
@@ -1138,31 +1138,54 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, head_vertice
     end
 end
 
-function weight_table = denoise_weight_table(weight_table, threshold)
+function sensitivity_mat = denoise_weight_table(options)
     
-    if nargin < 2 || isempty(threshold)
-        nrqr = 5;
-        threshold = median(weight_table(weight_table>0)) + nrqr* iqr(weight_table(weight_table>0));
+    sensitivity_mat = options.sensitivity_mat;
+    coverage_mat = options.sensitivity_mat;
+    
+    sum_det = full(diff(sensitivity_mat, 1));
+    sum_src = full(sum(sensitivity_mat, 2))';
+    
+    TF_det = isoutlier(sum_det);
+    TF_src = isoutlier(sum_src);
+
+    idx_outlier = find(TF_det | TF_src);
+
+    TF = isoutlier(sensitivity_mat);
+
+
+    weight_table_new = sensitivity_mat;
+    weight_table_new(TF) = 0;
+
+    for i = 1:length(idx_outlier)
+        weight_table_new(idx_outlier(i), :) = 0;
+        weight_table_new(:, idx_outlier(i)) = 0;
+
     end
+    hpc = uipanel('Parent', onglet, ...
+              'Units', 'Normalized', ...
+              'Position', [0.01 0.01 0.98 0.98], ...
+              'FontWeight','demi');
 
-    weight_table_new = weight_table;
-    weight_table_new(weight_table > threshold) = 0;
+    % ax1 = subplot(1, 3, 1, 'parent', hpc);
+    % imagesc(ax1, sensitivity_mat);
+    % 
+    % 
+    % figure;
+    % subplot(221)
+    % imagesc(full(sensitivity_mat))
+    % title('Before Removing supirous node')
+    % 
+    % subplot(222)
+    % imagesc(full(weight_table_new))
+    % title('After Removing supirous node')
+    % 
+    % subplot(223); histogram(sensitivity_mat(sensitivity_mat <= threshold)); 
+    % subplot(224); histogram(sensitivity_mat(sensitivity_mat > threshold));
+    % title(sprintf('Threshold %.f ', threshold))
 
-    figure;
-    subplot(221)
-    imagesc(full(weight_table))
-    title('Before Removing supirous node')
 
-    subplot(222)
-    imagesc(full(weight_table_new))
-    title('After Removing supirous node')
-
-    subplot(223); histogram(weight_table(weight_table <= threshold)); 
-    subplot(224); histogram(weight_table(weight_table > threshold));
-    title(sprintf('Threshold %.f ', threshold))
-
-
-    weight_table  = weight_table_new;
+    sensitivity_mat  = weight_table_new;
     
 end
 
