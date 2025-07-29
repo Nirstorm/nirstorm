@@ -88,7 +88,6 @@ function OutputFile = Run(sProcess, sInput)
         options.condition_name = 'planning_optimal_montage';
     end
     
-    
     SubjectName = options.SubjectName;
     sProcess.options.subjectname.Value = SubjectName;
     
@@ -102,30 +101,30 @@ function OutputFile = Run(sProcess, sInput)
     if ~status
         err_msg = sprintf("%d errors occured : \n%s", length(error), strjoin(" - " + error, '\n'));
         bst_error(err_msg);
-        
         return;
     end
     
-    [ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);
-        
+    [ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);   
 
     % Obtain the anatomical MRI
     sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     options.cubeSize        = size(sMri.Cube);
-
-    [options.sensitivity_mat, options.coverage_mat, options.listVertexSeen, options.maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex);
+    
+    options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex);
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
     
+    %======================================================================
+    % DEBUG FUNCTIONS
+    % Display sensitivity and coverage mat
+    options = display_weight_table(options);
+    
     % Experimental : Denoise the weight table. (be carefull)
-    options.sensitivity_mat = denoise_weight_table(options);
-
-    %Display sensitivity and coverage mat
-    options.hFig = figure;
-    options.hFigTab = uitabgroup; drawnow;
-    display_weight_table(options);
+    [options, voxels_changed, msg] = denoise_weight_table(options);
+    bst_report('Info', sProcess, sInput, msg);
+    %======================================================================
     
     % Compute Optimal Montage
     [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
@@ -133,7 +132,7 @@ function OutputFile = Run(sProcess, sInput)
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
         
-        bst_report('Info',    sProcess, sInput, infos{iChannel});
+        bst_report('Info', sProcess, sInput, infos{iChannel});
         
         %Deal with multiple versions of the folders
         sSubjStudies      = bst_get('StudyWithSubject', sSubject.FileName, 'intra_subject', 'default_study');
@@ -251,7 +250,7 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex)
+function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex)
 
     sensitivity_mat = [];
     coverage_mat    = [];
@@ -373,6 +372,10 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = get_we
             save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');
         end
     end
+    options.sensitivity_mat = sensitivity_mat;
+    options.coverage_mat    = coverage_mat;
+    options.listVertexSeen  = listVertexSeen;
+    options.maxVertexSeen   = maxVertexSeen;
 end
 
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
@@ -503,15 +506,10 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     
     % Premature ending in case coverage constraint is not asked
     if ~options.include_coverage
-        str = sprintf("------ Channels info ------\n") + ...
-              sprintf("Only sensitivity : \n") + ...
+        str = sprintf("Only sensitivity : \n") + ...
               display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
         
         infos{end+1} = str;
-        % fprintf("\n------ Channels info ------\n")
-        % disp("Only sensitivity :")
-        % disp(display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords))
-        % disp();
         return;
     end
     
@@ -537,7 +535,6 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
         display_weight_table(options);
-
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
@@ -560,9 +557,6 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
 
         infos{end+1} = str;
 
-        % display_montages_info = display_montages_info + sprintf("\nSensitivity and Coverage (lambda = %d):\n", lambda2(iLambda));
-        % display_montages_info = display_montages_info + display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
-    
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
         montageSufix{end+1} = sprintf('complex_-_lambda_%d', lambda2(iLambda));
@@ -983,11 +977,15 @@ end
 % DEBUG FUNCTIONS
 %==========================================================================
 
-function display_weight_table(options)
+function options = display_weight_table(options)
 % @========================================================================
 % display_weight_table Displays multiple graphs useful to see a
 % representation of the sensitivity & coverage matrices
 % ========================================================================@
+    if ~isfield(options, 'hFig')
+        options.hFig = figure;
+        options.hFigTab = uitabgroup; drawnow;
+    end
 
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
@@ -1013,7 +1011,7 @@ function display_weight_table(options)
     end
 
     distances = squareform(pdist(ROI_head.head_vertices_coords));
-    [m,I] = min(median(distances));
+    [~, I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);
     coverage_mat  = coverage_mat(order,order);
@@ -1138,56 +1136,107 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, head_vertice
     end
 end
 
-function sensitivity_mat = denoise_weight_table(options)
-    
-    sensitivity_mat = options.sensitivity_mat;
-    coverage_mat = options.sensitivity_mat;
-    
-    sum_det = full(diff(sensitivity_mat, 1));
-    sum_src = full(sum(sensitivity_mat, 2))';
-    
-    TF_det = isoutlier(sum_det);
-    TF_src = isoutlier(sum_src);
-
-    idx_outlier = find(TF_det | TF_src);
-
-    TF = isoutlier(sensitivity_mat);
-
-
-    weight_table_new = sensitivity_mat;
-    weight_table_new(TF) = 0;
-
-    for i = 1:length(idx_outlier)
-        weight_table_new(idx_outlier(i), :) = 0;
-        weight_table_new(:, idx_outlier(i)) = 0;
-
+function [options, voxels_changed, msg] = denoise_weight_table(options)
+% @========================================================================
+% denoise_weight_table Denoises the sensitivity matrix and displays the
+% comparaison
+% ========================================================================@
+    if ~isfield(options, 'hFig')
+        options.hFig = figure;
+        options.hFigTab = uitabgroup; drawnow;
     end
+
+    ROI_head        = options.ROI_head;
+    hFigTab         = options.hFigTab;
+    sensitivity_mat = options.sensitivity_mat;
+    coverage_mat    = options.coverage_mat;
+    
+    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    [~,I] = min(median(distances));
+    [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
+    sensitivity_mat = sensitivity_mat(order,order);
+    coverage_mat  = coverage_mat(order,order);
+    
+    onglet = uitab(hFigTab,'title','Denoise');
+
     hpc = uipanel('Parent', onglet, ...
               'Units', 'Normalized', ...
               'Position', [0.01 0.01 0.98 0.98], ...
               'FontWeight','demi');
+    set(hpc,'Title',' Sensitivity matrix ','FontSize',8);
 
-    % ax1 = subplot(1, 3, 1, 'parent', hpc);
-    % imagesc(ax1, sensitivity_mat);
-    % 
-    % 
-    % figure;
-    % subplot(221)
-    % imagesc(full(sensitivity_mat))
-    % title('Before Removing supirous node')
-    % 
-    % subplot(222)
-    % imagesc(full(weight_table_new))
-    % title('After Removing supirous node')
-    % 
-    % subplot(223); histogram(sensitivity_mat(sensitivity_mat <= threshold)); 
-    % subplot(224); histogram(sensitivity_mat(sensitivity_mat > threshold));
-    % title(sprintf('Threshold %.f ', threshold))
+    % Denoise weight table based on 4 neighbors (cross patern)
+    stvty_mat_full = full(sensitivity_mat);
+    cvge_mat_full  = full(coverage_mat);
 
-
-    sensitivity_mat  = weight_table_new;
+    [max_r, max_c] = size(stvty_mat_full);
     
+    sensitivity_mat_denoised = zeros(max_r, max_c);
+    coverage_mat_denoised = cvge_mat_full;
+    voxels_changed = zeros(max_r, max_c); 
+
+    for r = 1 : max_r
+        for c = 1 : max_c
+            neighbors = list_neighbors(stvty_mat_full, r, c, max_r, max_c);
+            
+            sensitivity_mat_denoised(r, c) = median(neighbors);
+            
+            if sensitivity_mat_denoised(r, c) ~= stvty_mat_full(r, c)
+                voxels_changed (r, c) = 1;
+                neighbors = list_neighbors(cvge_mat_full, r, c, max_r, max_c);
+                coverage_mat_denoised(r, c) = median(neighbors);
+            end
+        end
+    end
+    max_original = max(sensitivity_mat(:));
+    max_filtered = max(sensitivity_mat_denoised(:));
+    tresh = 10;
+
+    if max_filtered > max_original / tresh
+        msg = "The filter was not applied. The original map has been retained.";
+    else
+        sensitivity_mat = sparse(sensitivity_mat_denoised);
+        coverage_mat = sparse(coverage_mat_denoised);
+        msg = "The filter has been applied. The updated map was used.";
+        [~, inverse_order] = sort(order);
+        options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
+        options.covrerage_mat = coverage_mat(inverse_order, inverse_order);
+    end
+
+    ax1 = subplot(1, 3, 1, 'parent', hpc);
+    imagesc(ax1, sensitivity_mat);
+    title(ax1, 'Denoised sensitivity matrix');
+    colorbar(ax1);
+
+    ax2 = subplot(1, 3, 2, 'parent', hpc);
+    imagesc(ax2, coverage_mat);
+    title(ax2, 'Denoised coverage matrix');
+    colorbar(ax2);
+    
+    ax3 = subplot(1, 3, 3, 'parent', hpc);
+    plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
+    xlabel(ax3, 'Sensitivity');
+    ylabel(ax3, 'Coverage');
+    title(ax3, 'Sensitivity VS. Coverage');
+    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
 end
+
+function neighbors = list_neighbors(mat, r, c, max_r, max_c)
+    neighbors = [mat(r, c)];
+    if (r-1) >=1
+        neighbors(end+1) = mat(r-1, c);
+    end
+    if (r+1) <= max_r
+        neighbors(end+1) = mat(r+1, c);
+    end
+    if (c-1) >=1
+        neighbors(end+1) = mat(r, c-1);
+    end
+    if (c+1) <= max_c
+        neighbors(end+1) = mat(r, c+1);
+    end
+end
+                
 
 function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
 
