@@ -96,213 +96,71 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
 OutputFiles = {};
 
-% Save the new head model
+% Load Head Model
 sStudy = bst_get('Study', sInputs.iStudy);
-
 if isempty(sStudy.iHeadModel)
     bst_error('No head model found. Consider process "Compute head model from fluence"');
     return;
 end
 
-bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
-
-ChannelFlag     = bst_chan_data.ChannelFlag;
-ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
-
 head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
+if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
+    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
+end
+
 if ~strcmp(head_model.HeadModelType, 'surface')
     bst_error('Extraction only works for surface head model');
     return;
 end
 
-if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
-    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
-end
+% Load ChannelFlag
+bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
 
+ChannelFlag     = bst_chan_data.ChannelFlag;
+ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
+
+
+% Load Voronoi -- needed for threshold estimation
 sSubject    = bst_get('Subject', sInputs.SubjectName);
+sCortex     = in_tess_bst(head_model.SurfaceFile);
 voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    
 if ~exist(voronoi_fn, 'file')
     error('Could not find the required Voronoi file.');
 end
 
- 
-montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
 
 
-sCortex    = in_tess_bst(head_model.SurfaceFile);
+% Compute sensitivity map
+sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
+for iMap = 1:length(sResults)
 
-montage_info = nst_montage_info_from_bst_channels(ChannelMat.Channel,ChannelFlag);
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+    ResultsMat          = sResults(iMap);
+    %ResultsMat.Options  = OPTIONS;
 
-max_sources          = max(montage_info.src_ids);
-max_dets             = max(montage_info.det_ids);
+    bst_save(ResultFile, ResultsMat, 'v6');
+    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
-nb_nodes            = size(sCortex.Vertices   , 1);
-nb_Wavelengths      = length(ChannelMat.Nirs.Wavelengths);
+    OutputFiles{end+1} = ResultFile;
 
-time        = 1:(max_sources*100 + max_dets);
-isUsedTime  = zeros(1, length(time));
-
-sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
-sensitivity_surf_sum    = zeros(nb_nodes, nb_Wavelengths);
-
-%% Compute sensitivity
-for iwl = 1:nb_Wavelengths
-
-    swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
-    selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
-    idx_chan       = find(selected_chans);
-        
-    sensitivity         = head_model.Gain(idx_chan, :);
-
-
-    for iChan = 1:length(idx_chan)
-        chan = ChannelMat.Channel(idx_chan(iChan));
-        [src_id, det_id] = nst_unformat_channel(chan.Name );
-
-        sensitivity_surf(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
-        isUsedTime(det_id + src_id*100)              = 1;
-    end
-
-    sensitivity_surf_sum(:,iwl) = sum(sensitivity,  1) ;
 end
 
+% Estimate Coverage
+sResults = getCoverage(head_model, ChannelMat, ChannelFlag);
+for iMap = 1:length(sResults)
 
-%% Normalize values and threshold 
-threshold_value = -2; % in db
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+    ResultsMat          = sResults(iMap);
+    %ResultsMat.Options  = OPTIONS;
 
-if contains(sProcess.options.method.Value,'db')
-    for iwl=1:nb_Wavelengths
-        sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ ( eps + max(sensitivity_surf_sum(:,iwl))));
-        mask = zeros(size(sensitivity_surf_sum));
-        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < threshold_value;
-        sensitivity_surf_sum(mask == 1) = 0;
+    bst_save(ResultFile, ResultsMat, 'v6');
+    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
-        k = zeros(1,  size(sensitivity_surf,3));
-
-        if strcmp(sProcess.options.method.Value,'db_local') % channel wise 
-            k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :))) + eps;     
-        else % Global normalisation 
-            k(1,:) = max(max(sensitivity_surf(:, iwl, :))) + eps;   
-        end    
-        
-        sensitivity_surf(:,iwl,isUsedTime == 1) = log10( squeeze(sensitivity_surf(:, iwl, isUsedTime == 1)) ./ repmat(k(isUsedTime == 1),nb_nodes,1));
-        
-        mask = zeros(size(sensitivity_surf));
-        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) < threshold_value;
-        sensitivity_surf(mask == 1 ) = 0;
-    end
-else
-    for iwl=1:nb_Wavelengths
-        mask = zeros(size(sensitivity_surf_sum));
-        mask(:,iwl) = sensitivity_surf_sum(:,iwl) < 10^(threshold_value)*max(sensitivity_surf_sum(:,iwl));
-        sensitivity_surf_sum(mask == 1) = 0;
-
-        mask = zeros(size(sensitivity_surf));
-        mask(:,iwl,:) = sensitivity_surf(:,iwl,:) <  10^(threshold_value)*max(sensitivity_surf(:,iwl,:),[],'all');
-        sensitivity_surf(mask == 1 ) = 0;
-    end
-end   
-
-%% Save sensitivity 
-for iwl=1:size(sensitivity_surf, 2)
-
-
-    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sensitivity_surf_sum(:,iwl)), [1,2]), [0 1], ...
-                                         head_model, ['Summed sensitivities - WL' num2str(iwl)], ...
-                                         sInputs.iStudy, sStudy,  ...
-                                         'sensitivity imported from MCXlab');
-        
-    OutputFiles{end+1} = ResultFile;
-
-
-    [sStudy, ResultFile] = add_surf_data( squeeze(sensitivity_surf(:,iwl,:)), time, ...
-        head_model, ['Sensitivities - WL' num2str(iwl)], ...
-        sInputs.iStudy, sStudy, 'sensitivity imported from MCXlab');
-    OutputFiles{end+1} = ResultFile;
-end
-%% Estimate Coverage
-
-%threshold for coverage
-p_thresh = 1;
-act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
-        
-sVoronoi = in_mri_bst(voronoi_fn);
-
-median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
-delta_mu_a = 0.1;
-threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
-
-coverage = sensitivity_surf > threshold ;
-
-for iwl=1:size(sensitivity_surf, 2)
-
-    [sStudy, ResultFile] = add_surf_data(repmat(squeeze(sum(coverage(:, iwl,:), 3)), [1,2]), [0 1], ...
-                                         head_model, ['Summed Coverage - WL' num2str(iwl)], ...
-                                         sInputs.iStudy, sStudy,  ...
-                                         'sensitivity imported from MCXlab');
-        
-    OutputFiles{end+1} = ResultFile;
-
-    [sStudy, ResultFile] = add_surf_data( ...
-                                         squeeze(coverage(:,iwl,:)), ...
-                                         time, ...
-                                        head_model, ...
-                                        ['Coverage - WL' num2str(iwl)], ...
-                                        sInputs.iStudy, ...
-                                        sStudy, ...
-                                        'sensitivity imported from MCXlab');
     OutputFiles{end+1} = ResultFile;
 end
 
 
-%% Estimate overlaps - Display sensitivity as function of number of overlap
-
-thresholds = linspace(min(sensitivity_surf,[],'all'), max(sensitivity_surf,[],'all'), 10);
-
-
-for iwl=1:size(sensitivity_surf, 2)
-    tmp = squeeze(sensitivity_surf(:,iwl,isUsedTime == 1));
-
-    overlaps = zeros(size(tmp));
-    for iVertex = 1:size(tmp, 1)
-        a  = sort(tmp(iVertex,:)  ,2,'descend');
-
-        if contains(sProcess.options.method.Value,'db')
-            overlaps(iVertex,1:length(find(a<0)))  = a(a < 0); 
-        else
-            overlaps(iVertex,1:length(find(a>0)))  = a(a > 0); 
-        end
-    end
-    
-    overlaps_number = zeros(size(tmp,1), length(thresholds));
-    for iThreshold = 1:length(thresholds)
-        if contains(sProcess.options.method.Value,'db')
-            overlaps_number(:, iThreshold) = sum( tmp > thresholds(iThreshold)  & tmp < 0  ,2 );
-        else
-            overlaps_number(:, iThreshold) = sum( tmp > thresholds(iThreshold)  & tmp > 0  ,2 );
-        end
-    end
-
-    if sProcess.options.export_overlap.Value 
-
-        [sStudy, ResultFile] = add_surf_data(overlaps, 1:size(tmp,2), ...
-                                             head_model, sprintf('Overlap WL %d (sensitivity)',iwl), ...
-                                             sInputs.iStudy, sStudy,  ...
-                                             'sensitivity imported from MCXlab');
-        OutputFiles{end+1} = ResultFile;
-
-        [sStudy, ResultFile] = add_surf_data(overlaps_number, thresholds, ...
-                                         head_model, sprintf('Overlap WL %d (#overlaps)',iwl), ...
-                                         sInputs.iStudy, sStudy,  ...
-                                         'sensitivity imported from MCXlab');
-        OutputFiles{end+1} = ResultFile;
-
-    end
-end
-
-
-%% define the reconstruction FOV
+% Save the NIRS FOV
 thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
 [valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, ChannelFlag);
 
@@ -321,13 +179,6 @@ sCortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sP
 sCortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sCortex.Atlas(iAtlas).Scouts(end), length(sCortex.Atlas(iAtlas).Scouts));
 
 bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
-
-% [sStudy, ResultFile] = add_surf_data(repmat(dis2cortex*100, [1,2]), [0 1], ...
-%                                  head_model, 'Distance to cortex', ...
-%                                  sInputs.iStudy, sStudy,  ...
-%                                  'sensitivity imported from MCXlab');
-
-
 end
 
 function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
@@ -339,6 +190,7 @@ function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
         numerator = log10((100 + p_thresh) / 100);
         denomimator = (act_vol / V_hat) * delta_mu_a;
         threshold = numerator / denomimator;
+
 end
 
 function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
@@ -381,4 +233,142 @@ function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
     sStudy.Result(iResult) = newResult;
     % Update Brainstorm database
     bst_set('Study', iStudy, sStudy);
+end
+
+function  sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, normalization)
+    
+    % load cortex
+    sCortex     = in_tess_bst(head_model.SurfaceFile);
+
+
+    % Get Montage information
+    montage_info    = nst_montage_info_from_bst_channels(ChannelMat.Channel, ChannelFlag);
+    max_sources     = max(montage_info.src_ids);
+    max_dets        = max(montage_info.det_ids);
+    nb_nodes        = size(sCortex.Vertices   , 1);
+    nb_Wavelengths  = length(ChannelMat.Nirs.Wavelengths);
+
+    time        = 1:(max_sources*100 + max_dets);
+    isUsedTime  = zeros(1, length(time));
+    
+    sensitivity_surf        = zeros(nb_nodes, nb_Wavelengths, length(time));
+    sensitivity_surf_sum    = zeros(nb_nodes, nb_Wavelengths);
+
+    %% Compute sensitivity
+    for iwl = 1:nb_Wavelengths
+    
+        swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
+        selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
+        idx_chan       = find(selected_chans);
+    
+        sensitivity         = head_model.Gain(idx_chan, :);
+    
+    
+        for iChan = 1:length(idx_chan)
+            chan = ChannelMat.Channel(idx_chan(iChan));
+            [src_id, det_id] = nst_unformat_channel(chan.Name );
+    
+            sensitivity_surf(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:));
+            isUsedTime(det_id + src_id*100)              = 1;
+        end
+    
+        sensitivity_surf_sum(:,iwl) = sum(sensitivity,  1) ;
+    end
+
+    %% Normalize values and threshold 
+    threshold_value = -2; % in db
+    
+    if contains(normalization,'db')
+        for iwl=1:nb_Wavelengths
+            sensitivity_surf_sum(:,iwl) = log10(sensitivity_surf_sum(:,iwl) ./ ( eps + max(sensitivity_surf_sum(:,iwl))));
+            mask = zeros(size(sensitivity_surf_sum));
+            mask(:,iwl) = sensitivity_surf_sum(:,iwl) < threshold_value;
+            sensitivity_surf_sum(mask == 1) = 0;
+    
+            k = zeros(1,  size(sensitivity_surf,3));
+    
+            if strcmp(normalization,'db_local') % channel wise normalization
+                k(1,:) =  squeeze(max(sensitivity_surf(:, iwl, :))) + eps;     
+            else % Global normalization 
+                k(1,:) = max(max(sensitivity_surf(:, iwl, :))) + eps;   
+            end    
+            
+            sensitivity_surf(:,iwl,isUsedTime == 1) = log10( squeeze(sensitivity_surf(:, iwl, isUsedTime == 1)) ./ repmat(k(isUsedTime == 1),nb_nodes,1));
+            
+            mask = zeros(size(sensitivity_surf));
+            mask(:,iwl,:) = sensitivity_surf(:,iwl,:) < threshold_value;
+            sensitivity_surf(mask == 1 ) = 0;
+        end
+
+        displayUnit = 'dB';
+    else % linear
+
+        for iwl=1:nb_Wavelengths
+            mask = zeros(size(sensitivity_surf_sum));
+            mask(:,iwl) = sensitivity_surf_sum(:,iwl) < 10^(threshold_value)*max(sensitivity_surf_sum(:,iwl));
+            sensitivity_surf_sum(mask == 1) = 0;
+    
+            mask = zeros(size(sensitivity_surf));
+            mask(:,iwl,:) = sensitivity_surf(:,iwl,:) <  10^(threshold_value)*max(sensitivity_surf(:,iwl,:),[],'all');
+            sensitivity_surf(mask == 1 ) = 0;
+        end
+
+        displayUnit = 'mm';
+
+    end   
+
+    sResults               = repmat(db_template('resultsmat'), 1, 2*nb_Wavelengths);
+
+    % Save sensitivity maps
+    for iwl =  1:nb_Wavelengths
+        % Store restult as brainstrom structure 
+        sResults(iwl).Comment       = ['Sensitivities - WL' num2str(iwl)];
+        sResults(iwl).ImageGridAmp  = squeeze(sensitivity_surf(:,iwl,:));
+        sResults(iwl).Time          = time;
+
+        sResults(iwl).DisplayUnits  = displayUnit;
+        sResults(iwl).ChannelFlag   = ChannelFlag;
+        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
+        sResults(iwl).HeadModelType = head_model.HeadModelType;
+        sResults(iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
+        %sResults(1).History       = OPTIONS.History;
+        sResults(iwl) = bst_history('add', sResults(iwl), 'compute', 'sensitivity imported from MCXlab');
+    end
+
+    % Save summed sensitivity maps
+    for iwl =  1:nb_Wavelengths
+
+        % Store restult as brainstrom structure 
+        sResults(nb_Wavelengths + iwl).Comment       =  ['Summed sensitivities - WL' num2str(iwl)];
+        sResults(nb_Wavelengths + iwl).ImageGridAmp  = squeeze(sensitivity_surf_sum(:,iwl));
+        sResults(nb_Wavelengths + iwl).Time          = [1];
+
+        sResults(nb_Wavelengths + iwl).DisplayUnits  = displayUnit;
+        sResults(nb_Wavelengths + iwl).ChannelFlag   = ChannelFlag;
+        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
+        sResults(nb_Wavelengths + iwl).HeadModelType = head_model.HeadModelType;
+        sResults(nb_Wavelengths + iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
+        %sResults(1).History       = OPTIONS.History;
+        sResults(nb_Wavelengths + iwl) = bst_history('add', sResults(nb_Wavelengths + iwl), 'compute', 'Summed sensitivity imported from MCXlab');
+    end
+
+
+end
+
+function sResults = getCoverage(head_model, ChannelMat, ChannelFlag)
+    sResults = [];
+    % todo
+    return;
+
+    %threshold for coverage
+    p_thresh = 1;
+    act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
+    
+    sVoronoi = in_mri_bst(voronoi_fn);
+    
+    median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+    delta_mu_a = 0.1;
+    threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+    
+    coverage = sensitivity_surf > threshold ;
 end
