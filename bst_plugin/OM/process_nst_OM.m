@@ -170,6 +170,7 @@ function OutputFile = Run(sProcess, sInput)
         sStudy = bst_get('Study', iStudy);
         
         % Save channel definition
+
         [~, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
         db_set_channel(iChannelStudy, ChannelMat, 1, 0);
             
@@ -1068,7 +1069,8 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, head_vertice
     ChannelMat.Comment = 'NIRS-BRS channels';
     ChannelMat.Channel = repmat(db_template('channeldesc'), [1, nChannels]);
     ChannelMat.Nirs.Wavelengths = wavelengths;
-
+    ChannelMat = bst_history('Add', ChannelMat, 'Compute', 'Computed optimal montage'  );
+    
     for ipair=1:size(montage_pairs, 1)
         ihead_vertex_src = montage_pairs(ipair, 1);
         ihead_vertex_det = montage_pairs(ipair, 2);
