@@ -113,40 +113,45 @@ if ~strcmp(head_model.HeadModelType, 'surface')
     return;
 end
 
-% Load ChannelFlag
-bst_chan_data = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+% Initialize results
+sResults        = [];
 
+% Load ChannelFlag
+bst_chan_data   = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
 ChannelFlag     = bst_chan_data.ChannelFlag;
 ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
 
 
-% Load Voronoi -- needed for threshold estimation
+% Load Cortex 
 sSubject    = bst_get('Subject', sInputs.SubjectName);
 sCortex     = in_tess_bst(head_model.SurfaceFile);
+
+% Compute sensitivity map
+sSensitivity    = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
+sResults        = [sResults,  sSensitivity];
+
+
+% Estimate Coverage
 voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
 if ~exist(voronoi_fn, 'file')
     error('Could not find the required Voronoi file.');
 end
 
+%threshold for coverage
+p_thresh    = 1;
+act_vol     = 1000; % A definir comme un parametre donne par l'utilisateur
+sVoronoi    = in_mri_bst(voronoi_fn);
+
+median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+delta_mu_a = 0.1;
+threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+
+sCoverage = getCoverage(head_model, ChannelMat, ChannelFlag, threshold);
+sResults  = [sResults,  sCoverage];
 
 
-% Compute sensitivity map
-sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
-for iMap = 1:length(sResults)
 
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
-    ResultsMat          = sResults(iMap);
-    %ResultsMat.Options  = OPTIONS;
-
-    bst_save(ResultFile, ResultsMat, 'v6');
-    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
-
-    OutputFiles{end+1} = ResultFile;
-
-end
-
-% Estimate Coverage
-sResults = getCoverage(head_model, ChannelMat, ChannelFlag);
+% Save results
 for iMap = 1:length(sResults)
 
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
@@ -191,48 +196,6 @@ function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
         denomimator = (act_vol / V_hat) * delta_mu_a;
         threshold = numerator / denomimator;
 
-end
-
-function [sStudy, ResultFile] = add_surf_data(data, time, head_model, name, ...
-                                              iStudy, sStudy, history_comment)
-                                          
-%% Save a cortical map to brainstorm with given data
-
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                            ['results_NIRS_' nst_protect_fn_str(name)]);
-                        
-    % ===== CREATE FILE STRUCTURE =====
-    ResultsMat = db_template('resultsmat');
-    ResultsMat.Comment       = name;
-    ResultsMat.Function      = '';
-    ResultsMat.ImageGridAmp = data;
-    ResultsMat.Time          = time;
-    ResultsMat.DataFile      = [];
-    ResultsMat.HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName; 
-    ResultsMat.HeadModelType = head_model.HeadModelType;
-    ResultsMat.ChannelFlag   = [];
-    ResultsMat.GoodChannel   = [];
-    ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc    = [];
-    ResultsMat.GridOrient = [];
-    ResultsMat.nAvg      = 1;
-    % History
-    ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
-    % Save new file structure
-    bst_save(ResultFile, ResultsMat, 'v6');
-    % ===== REGISTER NEW FILE =====
-    % Create new results structure
-    newResult = db_template('results');
-    newResult.Comment       = name;
-    newResult.FileName      = file_short(ResultFile);
-    newResult.DataFile      = ''; %sInputs.FileName;
-    newResult.isLink        = 0;
-    newResult.HeadModelType = ResultsMat.HeadModelType;
-    % Add new entry to the database
-    iResult = length(sStudy.Result) + 1;
-    sStudy.Result(iResult) = newResult;
-    % Update Brainstorm database
-    bst_set('Study', iStudy, sStudy);
 end
 
 function  sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, normalization)
@@ -355,20 +318,83 @@ function  sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, no
 
 end
 
-function sResults = getCoverage(head_model, ChannelMat, ChannelFlag)
+function sResults = getCoverage(head_model, ChannelMat, ChannelFlag, threshold)
+    
     sResults = [];
-    % todo
-    return;
 
-    %threshold for coverage
-    p_thresh = 1;
-    act_vol = 1000; % A definir comme un parametre donne par l'utilisateur
+    % load cortex
+    sCortex     = in_tess_bst(head_model.SurfaceFile);
+
+
+    % Get Montage information
+    montage_info    = nst_montage_info_from_bst_channels(ChannelMat.Channel, ChannelFlag);
+    max_sources     = max(montage_info.src_ids);
+    max_dets        = max(montage_info.det_ids);
+    nb_nodes        = size(sCortex.Vertices   , 1);
+    nb_Wavelengths  = length(ChannelMat.Nirs.Wavelengths);
+
+    time        = 1:(max_sources*100 + max_dets);
+    isUsedTime  = zeros(1, length(time));
     
-    sVoronoi = in_mri_bst(voronoi_fn);
+    coverage_channel        = zeros(nb_nodes, nb_Wavelengths, length(time));
+    overlap                 = zeros(nb_nodes, nb_Wavelengths);
+
+    %% Compute sensitivity
+    for iwl = 1:nb_Wavelengths
     
-    median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
-    delta_mu_a = 0.1;
-    threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+        swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
+        selected_chans = strcmpi({ChannelMat.Channel.Group}, swl) & (ChannelFlag>0)';
+        idx_chan       = find(selected_chans);
     
-    coverage = sensitivity_surf > threshold ;
+        sensitivity         = head_model.Gain(idx_chan, :);
+    
+    
+        for iChan = 1:length(idx_chan)
+            chan = ChannelMat.Channel(idx_chan(iChan));
+            [src_id, det_id] = nst_unformat_channel(chan.Name );
+    
+            coverage_channel(:, iwl, det_id + src_id*100) = squeeze(sensitivity(iChan,:) > threshold);
+            isUsedTime(det_id + src_id*100)               = any(sensitivity(iChan,:) > threshold);
+        end
+    
+        overlap(:,iwl) = sum(coverage_channel,  3) ;
+    end
+    
+
+    % Save coverage maps
+    sResults               = repmat(db_template('resultsmat'), 1, 2*nb_Wavelengths);
+
+    for iwl =  1:nb_Wavelengths
+        % Store restult as brainstrom structure 
+        sResults(iwl).Comment       = ['Coverage - WL' num2str(iwl)];
+        sResults(iwl).ImageGridAmp  = squeeze(coverage_channel(:,iwl,:));
+        sResults(iwl).Time          = time;
+
+        sResults(iwl).DisplayUnits  = '';
+        sResults(iwl).ChannelFlag   = ChannelFlag;
+        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
+        sResults(iwl).HeadModelType = head_model.HeadModelType;
+        sResults(iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
+        %sResults(1).History       = OPTIONS.History;
+        sResults(iwl) = bst_history('add', sResults(iwl), 'compute', 'Computed channel coverage');
+    end
+
+    % Save summed sensitivity maps
+    for iwl =  1:nb_Wavelengths
+
+        % Store restult as brainstrom structure 
+        sResults(nb_Wavelengths + iwl).Comment       =  ['Overlap measure - WL' num2str(iwl)];
+        sResults(nb_Wavelengths + iwl).ImageGridAmp  = squeeze(overlap(:,iwl));
+        sResults(nb_Wavelengths + iwl).Time          = [1];
+
+        sResults(nb_Wavelengths + iwl).DisplayUnits  = '# channel';
+        sResults(nb_Wavelengths + iwl).ChannelFlag   = ChannelFlag;
+        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
+        sResults(nb_Wavelengths + iwl).HeadModelType = head_model.HeadModelType;
+        sResults(nb_Wavelengths + iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
+        %sResults(1).History       = OPTIONS.History;
+        sResults(nb_Wavelengths + iwl) = bst_history('add', sResults(nb_Wavelengths + iwl), 'compute', 'Computed overlap measure');
+    end
+
+
 end
