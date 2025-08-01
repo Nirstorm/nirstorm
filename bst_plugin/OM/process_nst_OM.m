@@ -1157,18 +1157,21 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
         end
     end
     
-    ratio = zeros(size(sensitivity_mat));
-    idx_ratio = sensitivity_mat > 0;
-    ratio(idx_ratio) = sensitivity_mat_denoised(idx_ratio) ./ sensitivity_mat(idx_ratio);
 
-    tresh          = 10;
-    voxels_changed = any(ratio > tresh);
-    if ~any(voxels_changed)
+    max_original = max(sensitivity_mat(:));
+    max_filtered = max(sensitivity_mat_denoised(:));
+    tresh = 10;
+    if max_original < tresh * max_filtered 
         voxels_changed = [];
         msg = "";
         return;
     end
-    
+
+    ratio       = zeros(size(sensitivity_mat));
+    idx_ratio   = sensitivity_mat > 0;
+    ratio(idx_ratio)    = sensitivity_mat_denoised(idx_ratio) ./ sensitivity_mat(idx_ratio);
+    voxels_changed      = any(ratio > tresh);
+
     sensitivity_mat = sparse(sensitivity_mat_denoised);
     coverage_mat    = sparse(coverage_mat_denoised);
     
