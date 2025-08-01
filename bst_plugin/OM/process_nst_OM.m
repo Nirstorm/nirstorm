@@ -846,14 +846,18 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
 
                 montage_pairs(ipair,:)          = [isources(isrc) idetectors(idet)];
                 montage_sensitivity(ipair,:)    = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
-                channels_coverage(ipair,:)       = full(options.coverage_mat(isources(isrc), idetectors(idet)));
+                channels_coverage(ipair,:)      = full(options.coverage_mat(isources(isrc), idetectors(idet)));
             end
         end
     end
-
-    coverage_mat = options.listVertexSeen;
+    
+     % Make sure the matrix is the right size
+    montage_pairs       = montage_pairs(1:ipair, :);
+    montage_sensitivity = montage_sensitivity(1:ipair, :);
+    coverage_mat        = options.listVertexSeen;
+    
+    % Compute montage coverage
     list_vertex_seen = {};
-
     for iPair = 1:size(montage_pairs, 1)
         pair = montage_pairs(iPair, :);
 
@@ -864,12 +868,8 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
         end
     end
 
-    % Make sure the matrix is the right size
-    montage_pairs       = montage_pairs(1:ipair, :);
-    montage_sensitivity = montage_sensitivity(1:ipair, :);
     montage_coverage    = length(list_vertex_seen) / options.maxVertexSeen;
     channels_coverage   = channels_coverage(1:ipair, :);
-
 end
 
 function info = display_channel_info(montage_pairs, montage_sensitivity,  montage_coverage, channels_coverage, head_vertices_coords)
