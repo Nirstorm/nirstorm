@@ -115,15 +115,37 @@ function OutputFile = Run(sProcess, sInput)
         return
     end
     
-    %======================================================================
+    %......................................................................
     % DEBUG FUNCTIONS
     % Display sensitivity and coverage mat
     options = display_weight_table(options);
     
     % Experimental : Denoise the weight table. (be carefull)
     [options, voxels_changed, msg] = denoise_weight_table(options);
-    bst_report('Info', sProcess, sInput, msg);
-    %======================================================================
+    
+    if ~isempty(msg)
+        bst_report('Warning', sProcess, sInput, msg);
+
+        sHead    = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
+
+        if any(strcmp({sHead.Atlas.Name},'NIRS-Fluences'))
+            iAtlas = find(strcmp({sHead.Atlas.Name},'NIRS-Fluences'));
+        else
+            sHead.Atlas(end+1).Name = 'NIRS-Fluences';
+            iAtlas = length( sHead.Atlas);
+        end
+        
+        
+        sHead.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
+        sHead.Atlas(iAtlas).Scouts(end).Vertices       = options.ROI_head.head_vertex_ids(voxels_changed);
+        sHead.Atlas(iAtlas).Scouts(end).Seed           = sHead.Atlas(iAtlas).Scouts(end).Vertices(1);
+        sHead.Atlas(iAtlas).Scouts(end).Label          = sprintf('Invalid fluences (%s)', options.ROI_cortex);
+        sHead.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sHead.Atlas(iAtlas).Scouts(end), length(sHead.Atlas(iAtlas).Scouts));
+        
+        bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead)
+    end
+    
+    %......................................................................
     
     % Compute Optimal Montage
     [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
@@ -311,7 +333,7 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
             
         elseif options.exist_weight && ~isfield(weight_cache, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
-            bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.")
+            bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.");
         end    
     end
     
@@ -1119,36 +1141,40 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     
     sensitivity_mat_denoised = zeros(max_r, max_c);
     coverage_mat_denoised = cvge_mat_full;
-    voxels_changed = zeros(max_r, max_c); 
 
     for r = 1 : max_r
         for c = 1 : max_c
             neighbors = list_neighbors(stvty_mat_full, r, c, max_r, max_c);
-            
             sensitivity_mat_denoised(r, c) = median(neighbors);
             
             if sensitivity_mat_denoised(r, c) ~= stvty_mat_full(r, c)
-                voxels_changed (r, c) = 1;
                 neighbors = list_neighbors(cvge_mat_full, r, c, max_r, max_c);
                 coverage_mat_denoised(r, c) = median(neighbors);
             end
         end
     end
-    max_original = max(sensitivity_mat(:));
-    max_filtered = max(sensitivity_mat_denoised(:));
-    tresh = 10;
+    
+    ratio = zeros(size(sensitivity_mat));
+    idx_ratio = sensitivity_mat > 0;
+    ratio(idx_ratio) = sensitivity_mat_denoised(idx_ratio) ./ sensitivity_mat(idx_ratio);
 
-    if max_filtered > max_original / tresh
-        msg = "The filter was not applied. The original map has been retained.";
-    else
-        sensitivity_mat = sparse(sensitivity_mat_denoised);
-        coverage_mat = sparse(coverage_mat_denoised);
-        msg = "The filter has been applied. The updated map was used.";
-        [~, inverse_order] = sort(order);
-        options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
-        options.covrerage_mat = coverage_mat(inverse_order, inverse_order);
+    tresh          = 10;
+    voxels_changed = any(ratio > tresh);
+    if ~any(voxels_changed)
+        voxels_changed = [];
+        msg = "";
+        return;
     end
-
+    
+    sensitivity_mat = sparse(sensitivity_mat_denoised);
+    coverage_mat    = sparse(coverage_mat_denoised);
+    
+    msg = "The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy, please recalculate the specific fluences detailed in the atlas: NIRS-fluences > Invalid fluences.";
+    [~, inverse_order] = sort(order);
+    options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
+    options.coverage_mat    = coverage_mat(inverse_order, inverse_order);
+    voxels_changed          = find(voxels_changed(inverse_order));
+   
     ax1 = subplot(1, 3, 1, 'parent', hpc);
     imagesc(ax1, sensitivity_mat);
     title(ax1, 'Denoised sensitivity matrix');
@@ -1165,6 +1191,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     ylabel(ax3, 'Coverage');
     title(ax3, 'Sensitivity VS. Coverage');
     set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+
 end
 
 function neighbors = list_neighbors(mat, r, c, max_r, max_c)
