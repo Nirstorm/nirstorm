@@ -123,7 +123,7 @@ function OutputFile = Run(sProcess, sInput)
     % Experimental : Denoise the weight table. (be carefull)
     [options, voxels_changed, msg] = denoise_weight_table(options);
     
-    if ~isempty(msg)
+    if ~isempty(voxels_changed)
         bst_report('Warning', sProcess, sInput, msg);
 
         sHead    = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
@@ -1163,7 +1163,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     tresh = 10;
     if max_original < tresh * max_filtered 
         voxels_changed = [];
-        msg = "";
+        msg = '';
         return;
     end
 
@@ -1175,7 +1175,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     sensitivity_mat = sparse(sensitivity_mat_denoised);
     coverage_mat    = sparse(coverage_mat_denoised);
     
-    msg = "The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy, please recalculate the specific fluences detailed in the atlas: NIRS-fluences > Invalid fluences.";
+    msg = 'The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy, please recalculate the specific fluences detailed in the atlas: NIRS-fluences > Invalid fluences.';
     [~, inverse_order] = sort(order);
     options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
     options.coverage_mat    = coverage_mat(inverse_order, inverse_order);
