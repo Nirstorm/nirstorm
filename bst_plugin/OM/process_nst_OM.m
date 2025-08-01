@@ -115,8 +115,6 @@ function OutputFile = Run(sProcess, sInput)
         return
     end
     
-    %......................................................................
-    % DEBUG FUNCTIONS
     % Display sensitivity and coverage mat
     options = display_weight_table(options);
     
@@ -125,27 +123,7 @@ function OutputFile = Run(sProcess, sInput)
     
     if ~isempty(voxels_changed)
         bst_report('Warning', sProcess, sInput, msg);
-
-        sHead    = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
-
-        if any(strcmp({sHead.Atlas.Name},'NIRS-Fluences'))
-            iAtlas = find(strcmp({sHead.Atlas.Name},'NIRS-Fluences'));
-        else
-            sHead.Atlas(end+1).Name = 'NIRS-Fluences';
-            iAtlas = length( sHead.Atlas);
-        end
-        
-        
-        sHead.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
-        sHead.Atlas(iAtlas).Scouts(end).Vertices       = options.ROI_head.head_vertex_ids(voxels_changed);
-        sHead.Atlas(iAtlas).Scouts(end).Seed           = sHead.Atlas(iAtlas).Scouts(end).Vertices(1);
-        sHead.Atlas(iAtlas).Scouts(end).Label          = sprintf('Invalid fluences (%s)', options.ROI_cortex);
-        sHead.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sHead.Atlas(iAtlas).Scouts(end), length(sHead.Atlas(iAtlas).Scouts));
-        
-        bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead)
     end
-    
-    %......................................................................
     
     % Compute Optimal Montage
     [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
@@ -1175,7 +1153,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     sensitivity_mat = sparse(sensitivity_mat_denoised);
     coverage_mat    = sparse(coverage_mat_denoised);
     
-    msg = 'The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy, please recalculate the specific fluences detailed in the atlas: NIRS-fluences > Invalid fluences.';
+    msg = 'The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy when computing the head model, please recalculate the fluences for the generated montage with higher number of photons.';
     [~, inverse_order] = sort(order);
     options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
     options.coverage_mat    = coverage_mat(inverse_order, inverse_order);
