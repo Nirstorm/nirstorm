@@ -94,96 +94,96 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
 
-OutputFiles = {};
-
-% Load Head Model
-sStudy = bst_get('Study', sInputs.iStudy);
-if isempty(sStudy.iHeadModel)
-    bst_error('No head model found. Consider process "Compute head model from fluence"');
-    return;
-end
-
-head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
-if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
-    head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
-end
-
-if ~strcmp(head_model.HeadModelType, 'surface')
-    bst_error('Extraction only works for surface head model');
-    return;
-end
-
-% Initialize results
-sResults        = [];
-
-% Load ChannelFlag
-bst_chan_data   = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
-ChannelFlag     = bst_chan_data.ChannelFlag;
-ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
-
-
-% Load Cortex 
-sSubject    = bst_get('Subject', sInputs.SubjectName);
-sCortex     = in_tess_bst(head_model.SurfaceFile);
-
-% Compute sensitivity map
-sSensitivity    = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
-sResults        = [sResults,  sSensitivity];
-
-
-% Estimate Coverage
-voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-if ~exist(voronoi_fn, 'file')
-    error('Could not find the required Voronoi file.');
-end
-
-%threshold for coverage
-p_thresh    = 1;
-act_vol     = 1000; % A definir comme un parametre donne par l'utilisateur
-sVoronoi    = in_mri_bst(voronoi_fn);
-
-median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
-delta_mu_a = 0.1;
-threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
-
-sCoverage = getCoverage(head_model, ChannelMat, ChannelFlag, threshold);
-sResults  = [sResults,  sCoverage];
-
-
-
-% Save results
-for iMap = 1:length(sResults)
-
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
-    ResultsMat          = sResults(iMap);
-    %ResultsMat.Options  = OPTIONS;
-
-    bst_save(ResultFile, ResultsMat, 'v6');
-    db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
-
-    OutputFiles{end+1} = ResultFile;
-end
-
-
-% Save the NIRS FOV
-thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
-[valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, ChannelFlag);
-
-if any(strcmp({sCortex.Atlas.Name},'NIRS-FOV'))
-    iAtlas = find(strcmp({sCortex.Atlas.Name},'NIRS-FOV'));
-else
-    sCortex.Atlas(end+1).Name = 'NIRS-FOV';
-    iAtlas = length( sCortex.Atlas);
-end
-
-
-sCortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
-sCortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
-sCortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
-sCortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
-sCortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sCortex.Atlas(iAtlas).Scouts(end), length(sCortex.Atlas(iAtlas).Scouts));
-
-bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
+    OutputFiles = {};
+    
+    % Load Head Model
+    sStudy = bst_get('Study', sInputs.iStudy);
+    if isempty(sStudy.iHeadModel)
+        bst_error('No head model found. Consider process "Compute head model from fluence"');
+        return;
+    end
+    
+    head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
+    if ~isfield(head_model, 'NIRSMethod') && ndims(head_model.Gain) == 3
+        head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
+    end
+    
+    if ~strcmp(head_model.HeadModelType, 'surface')
+        bst_error('Extraction only works for surface head model');
+        return;
+    end
+    
+    % Initialize results
+    sResults        = [];
+    
+    % Load ChannelFlag
+    bst_chan_data   = load(file_fullpath(sInputs.FileName), 'ChannelFlag');
+    ChannelFlag     = bst_chan_data.ChannelFlag;
+    ChannelMat      = in_bst_channel(sInputs(1).ChannelFile);
+    
+    
+    % Load Cortex 
+    sSubject    = bst_get('Subject', sInputs.SubjectName);
+    sCortex     = in_tess_bst(head_model.SurfaceFile);
+    
+    % Compute sensitivity map
+    sSensitivity    = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
+    sResults        = [sResults,  sSensitivity];
+    
+    
+    % Estimate Coverage
+    voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+    if ~exist(voronoi_fn, 'file')
+        error('Could not find the required Voronoi file.');
+    end
+    
+    %threshold for coverage
+    p_thresh    = 1;
+    act_vol     = 1000; % A definir comme un parametre donne par l'utilisateur
+    sVoronoi    = in_mri_bst(voronoi_fn);
+    
+    median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+    delta_mu_a = 0.1;
+    threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+    
+    sCoverage = getCoverage(head_model, ChannelMat, ChannelFlag, threshold);
+    sResults  = [sResults,  sCoverage];
+    
+    
+    
+    % Save results
+    for iMap = 1:length(sResults)
+    
+        ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+        ResultsMat          = sResults(iMap);
+        %ResultsMat.Options  = OPTIONS;
+    
+        bst_save(ResultFile, ResultsMat, 'v6');
+        db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
+    
+        OutputFiles{end+1} = ResultFile;
+    end
+    
+    
+    % Save the NIRS FOV
+    thresh_dis2cortex           = sProcess.options.thresh_dis2cortex.Value{1}*0.01;
+    [valid_nodes,dis2cortex]    = nst_headmodel_get_FOV(ChannelMat, sCortex, thresh_dis2cortex, ChannelFlag);
+    
+    if any(strcmp({sCortex.Atlas.Name},'NIRS-FOV'))
+        iAtlas = find(strcmp({sCortex.Atlas.Name},'NIRS-FOV'));
+    else
+        sCortex.Atlas(end+1).Name = 'NIRS-FOV';
+        iAtlas = length( sCortex.Atlas);
+    end
+    
+    
+    sCortex.Atlas(iAtlas).Scouts(end+1)              = db_template('Scout'); 
+    sCortex.Atlas(iAtlas).Scouts(end).Vertices       = valid_nodes;
+    sCortex.Atlas(iAtlas).Scouts(end).Seed           = valid_nodes(1);
+    sCortex.Atlas(iAtlas).Scouts(end).Label          = sprintf('NIRS FOV (%d cm)',sProcess.options.thresh_dis2cortex.Value{1} );
+    sCortex.Atlas(iAtlas).Scouts(end)                = panel_scout('SetColorAuto',sCortex.Atlas(iAtlas).Scouts(end), length(sCortex.Atlas(iAtlas).Scouts));
+    
+    bst_save(file_fullpath(head_model.SurfaceFile), sCortex)
 end
 
 function threshold = compute_threshold(p_thresh, act_vol, V_hat, delta_mu_a)
