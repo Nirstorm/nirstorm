@@ -42,10 +42,20 @@ function sProcess = GetDescription() %#ok<DEFNU>
 
 
     % === Process description
+    sProcess.options.label0.Comment = ['<b>Measure of Sensitivity</b> <BR>'];
+    sProcess.options.label0.Type = 'label';
+
+    sProcess.options.export_stvty.Comment = 'Export measure of sensitivity';
+    sProcess.options.export_stvty.Type    = 'checkbox';
+    sProcess.options.export_stvty.Value   = 1;    
+    sProcess.options.export_stvty.Controller = 'sensitivity';
+
+
     sProcess.options.label1.Comment = ['<b>Light sensitivity scale.</b> <BR>' ...
                                         'Export the nirs global and channel specific sensitivity based on the head model<BR>', ...
                                        'Note: if the sensitivity is exported in the log scale (db), the map is thresholded at -2db.'];
-    sProcess.options.label1.Type = 'label';
+    sProcess.options.label1.Type    = 'label';
+    sProcess.options.label1.Class   = 'sensitivity';
 
 
     sProcess.options.method.Comment = {['Linear'], ...
@@ -56,14 +66,16 @@ function sProcess = GetDescription() %#ok<DEFNU>
                                        'linear', 'db_global','db_local'};
     sProcess.options.method.Type    = 'radio_label';
     sProcess.options.method.Value   = 'linear';
+    sProcess.options.method.Class   = 'sensitivity';
 
-
+    
     sProcess.options.label2.Comment = ['<b>Measure of overlap</b> <BR>'];
     sProcess.options.label2.Type = 'label';
 
-    sProcess.options.export_overlap.Comment = 'Export measure of overlap';
-    sProcess.options.export_overlap.Type    = 'checkbox';
-    sProcess.options.export_overlap.Value   = 1;    
+    sProcess.options.export_overlap.Comment     = 'Export measure of overlap';
+    sProcess.options.export_overlap.Type        = 'checkbox';
+    sProcess.options.export_overlap.Value       = 1;    
+    sProcess.options.export_overlap.Controller  = 'overlap';
 
 
     
@@ -127,28 +139,30 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     sCortex     = in_tess_bst(head_model.SurfaceFile);
     
     % Compute sensitivity map
-    sSensitivity    = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
-    sResults        = [sResults,  sSensitivity];
-    
-    
-    % Estimate Coverage
-    voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
-    if ~exist(voronoi_fn, 'file')
-        error('Could not find the required Voronoi file.');
+    if sProcess.options.export_stvty.Value 
+        sSensitivity    = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, sProcess.options.method.Value);
+        sResults        = [sResults,  sSensitivity];
     end
     
-    %threshold for coverage
-    p_thresh    = 1;
-    act_vol     = 1000; % A definir comme un parametre donne par l'utilisateur
-    sVoronoi    = in_mri_bst(voronoi_fn);
-    
-    median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
-    delta_mu_a = 0.1;
-    threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
-    
-    sCoverage = getCoverage(head_model, ChannelMat, ChannelFlag, threshold);
-    sResults  = [sResults,  sCoverage];
-    
+    % Estimate Coverage
+    if sProcess.options.export_overlap.Value 
+        voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+        if ~exist(voronoi_fn, 'file')
+            error('Could not find the required Voronoi file.');
+        end
+        
+        %threshold for coverage
+        p_thresh    = 1;
+        act_vol     = 1000; % A definir comme un parametre donne par l'utilisateur
+        sVoronoi    = in_mri_bst(voronoi_fn);
+        
+        median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
+        delta_mu_a = 0.1;
+        threshold = compute_threshold(p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
+        
+        sCoverage = getCoverage(head_model, ChannelMat, ChannelFlag, threshold);
+        sResults  = [sResults,  sCoverage];
+    end
     
     
     % Save results
@@ -284,8 +298,9 @@ function  sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, no
 
     % Save sensitivity maps
     for iwl =  1:nb_Wavelengths
+
         % Store restult as brainstrom structure 
-        sResults(iwl).Comment       = ['Sensitivities - WL' num2str(iwl)];
+        sResults(iwl).Comment       = sprintf('Sensitivities - WL %d nm', ChannelMat.Nirs.Wavelengths(iwl));
         sResults(iwl).ImageGridAmp  = squeeze(sensitivity_surf(:,iwl,:));
         sResults(iwl).Time          = time;
 
@@ -302,7 +317,7 @@ function  sResults = get_sensitivity_map(head_model, ChannelMat, ChannelFlag, no
     for iwl =  1:nb_Wavelengths
 
         % Store restult as brainstrom structure 
-        sResults(nb_Wavelengths + iwl).Comment       =  ['Summed sensitivities - WL' num2str(iwl)];
+        sResults(nb_Wavelengths + iwl).Comment       = sprintf('Summed Sensitivities - WL %d nm', ChannelMat.Nirs.Wavelengths(iwl)); 
         sResults(nb_Wavelengths + iwl).ImageGridAmp  = squeeze(sensitivity_surf_sum(:,iwl));
         sResults(nb_Wavelengths + iwl).Time          = [1];
 
@@ -366,33 +381,29 @@ function sResults = getCoverage(head_model, ChannelMat, ChannelFlag, threshold)
 
     for iwl =  1:nb_Wavelengths
         % Store restult as brainstrom structure 
-        sResults(iwl).Comment       = ['Coverage - WL' num2str(iwl)];
+        sResults(iwl).Comment       = sprintf('Coverage - WL %d nm', ChannelMat.Nirs.Wavelengths(iwl)); 
         sResults(iwl).ImageGridAmp  = squeeze(coverage_channel(:,iwl,:));
         sResults(iwl).Time          = time;
 
         sResults(iwl).DisplayUnits  = '';
         sResults(iwl).ChannelFlag   = ChannelFlag;
-        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
         sResults(iwl).HeadModelType = head_model.HeadModelType;
         sResults(iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
-        %sResults(1).History       = OPTIONS.History;
         sResults(iwl) = bst_history('add', sResults(iwl), 'compute', 'Computed channel coverage');
     end
 
     % Save summed sensitivity maps
     for iwl =  1:nb_Wavelengths
 
-        % Store restult as brainstrom structure 
-        sResults(nb_Wavelengths + iwl).Comment       =  ['Overlap measure - WL' num2str(iwl)];
+        % Store restult as brainstrom structure
+        sResults(nb_Wavelengths + iwl).Comment       =  sprintf('Overlap measure - WL %d nm', ChannelMat.Nirs.Wavelengths(iwl));
         sResults(nb_Wavelengths + iwl).ImageGridAmp  = squeeze(overlap(:,iwl));
         sResults(nb_Wavelengths + iwl).Time          = [1];
 
         sResults(nb_Wavelengths + iwl).DisplayUnits  = '# channel';
         sResults(nb_Wavelengths + iwl).ChannelFlag   = ChannelFlag;
-        %sResults(iwl).HeadModelFile = OPTIONS.HeadModelFile;
         sResults(nb_Wavelengths + iwl).HeadModelType = head_model.HeadModelType;
         sResults(nb_Wavelengths + iwl).SurfaceFile   = file_short(head_model.SurfaceFile);
-        %sResults(1).History       = OPTIONS.History;
         sResults(nb_Wavelengths + iwl) = bst_history('add', sResults(nb_Wavelengths + iwl), 'compute', 'Computed overlap measure');
     end
 
