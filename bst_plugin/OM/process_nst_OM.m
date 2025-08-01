@@ -183,7 +183,8 @@ function OutputFile = Run(sProcess, sInput)
         sDataOut.DataType     = 'recordings';
         sDataOut.nAvg         = 1;
         sDataOut.DisplayUnits = 'cm';
-        
+        sDataOut = bst_history('Add', sDataOut, 'Compute', 'Computed optimal montage'  );
+
         % Generate a new file name in the same folder
         OutputFile{iChannel} = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_chan_dist');
         bst_save(OutputFile{iChannel} , sDataOut, 'v7');
@@ -1070,7 +1071,7 @@ function ChannelMat = create_channelMat_from_montage(montage_pairs, head_vertice
     ChannelMat.Channel = repmat(db_template('channeldesc'), [1, nChannels]);
     ChannelMat.Nirs.Wavelengths = wavelengths;
     ChannelMat = bst_history('Add', ChannelMat, 'Compute', 'Computed optimal montage'  );
-    
+
     for ipair=1:size(montage_pairs, 1)
         ihead_vertex_src = montage_pairs(ipair, 1);
         ihead_vertex_det = montage_pairs(ipair, 2);
