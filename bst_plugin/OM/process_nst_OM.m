@@ -118,7 +118,7 @@ function OutputFile = Run(sProcess, sInput)
     % Display sensitivity and coverage mat
     options = display_weight_table(options);
     
-    % Experimental : Denoise the weight table. (be carefull)
+    % Denoise of the weight table
     [options, voxels_changed, msg] = denoise_weight_table(options);
     
     if ~isempty(voxels_changed)
