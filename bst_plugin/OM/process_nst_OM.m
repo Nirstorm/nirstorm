@@ -27,7 +27,7 @@ end
 
 function sProcess = GetDescription() 
 
-% Description the process
+% Description of the process
 sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
@@ -47,7 +47,6 @@ sProcess.options.fluencesCond.Type    = 'editpref';
 sProcess.options.fluencesCond.Value   = [];
 
 end
-
 
 function s = str_pad(s,padsize)
     if (length(s) < padsize)
@@ -310,7 +309,7 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
                 maxVertexSeen   = tmp.maxVertexSeen;
             end
             
-        elseif options.exist_weight && ~isfield(tmp, 'sensitivity_mat')
+        elseif options.exist_weight && ~isfield(weight_cache, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
             bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.")
         end    
@@ -481,13 +480,6 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     
     % Progress bar
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
-    
-    %======================================================================
-    % initial condition : find sources whose pairs have maximum energy then
-    % complete with detectors
-    % Uncomment the line to use initial condition
-    % cplex = init_solution(cplex, options.sensitivity_mat, options.nH, options.nb_sources, options.nb_detectors);
-    %======================================================================
   
     results = cplex.solve();
     if ~isfield(results, 'x')
@@ -656,11 +648,6 @@ function [cplex, options] = define_prob(weight_table, head_vertices_coords, opti
     %======================================================================
     % Calls function for inequation 1 : wq_V-Myq<=0 (12)
     [Aineq_1, I_1] = create_ineq_matrix(nH, nVar);
-        
-    %......................................................................
-    % DEBUG FUNCTION : normalize weigth table
-    % weight_table = norm_w_table(weight_table);
-    %......................................................................
     
     % Calls function for inequation 2 : wq_V-Sum(Vpq*xp) <= 0 (13)
     [Aineq_2, I_2] = detect_activ_constr(nH, nVar, weight_table);
@@ -828,43 +815,6 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
         A = [];
         I = [];
     end
-end
-
-function cplex = init_solution(cplex, weight_table, nH, nS, nD)
-%@=========================================================================
-% INITIAL SOLUTION FUNCTIONS (cplex)
-%=========================================================================@
-    
-    xp_0 = zeros(nH, 1);
-    yq_0 = zeros(nH, 1);
-    [~,idx] = sort(weight_table(:), 'descend');
-    % Seems to only needed if holder list is not the same size as weight_table
-    
-    [src_pos_idx, ~] = ind2sub(size(weight_table), idx(1:nS));
-    
-    src_weight_table = weight_table(src_pos_idx,:);
-    [~, idx] = sort(src_weight_table(:), 'descend');
-    
-    [~, det_pos_idx] = ind2sub(size(src_weight_table), idx(1:nD));
-    
-    xp_0(src_pos_idx) = 1;
-    yq_0(det_pos_idx) = 1;
-    
-    wq_V_O = zeros(nH, 1);
-    for ii = 1:numel(yq_0)
-        if yq_0(ii) == 1
-            wq_V_O(ii) = sum(weight_table(src_pos_idx, ii));
-        end
-    end
-    
-    incumbent_x0 = full(sum(reshape(weight_table(src_pos_idx, det_pos_idx), [], 1)));
-    fprintf('incumbent=%g\n', incumbent_x0)
-    x0 = [xp_0 ; yq_0 ; wq_V_O];
-
-    cplex.MipStart(1).name='optim';
-    cplex.MipStart(1).effortlevel=1;
-    cplex.MipStart(1).x=x0;
-    cplex.MipStart(1).xindices=int32((1:numel(x0))');
 end
 
 function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results,options)
@@ -1067,10 +1017,6 @@ function display_eq_matrix(Aeq_1, Aeq_2)
     end
 end
 
-function weight_table = norm_w_table(weight_table)
-    weight_table = weight_table/max(weight_table(:));
-end
-
 function display_ineq_matrix(Aineq_1, Aineq_2, Aineq_3, Aineq_4, Aineq_5)
     matrixes2show={Aineq_1, Aineq_2, Aineq_3, Aineq_4, [Aineq_1 ; Aineq_2 ; Aineq_3 ; Aineq_4 ; Aineq_5]};
     for ii=1:5
@@ -1222,6 +1168,11 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
 end
 
 function neighbors = list_neighbors(mat, r, c, max_r, max_c)
+% @========================================================================
+% list_neighbors Extracts the list of values arround a pixel in a + shape
+% mat : Matrix studied ; (r, c) coordinates of the pixel studied ; 
+% max_r : max rows ; max_c : max columns
+% ========================================================================@
     neighbors = [mat(r, c)];
     if (r-1) >=1
         neighbors(end+1) = mat(r-1, c);
@@ -1235,8 +1186,7 @@ function neighbors = list_neighbors(mat, r, c, max_r, max_c)
     if (c+1) <= max_c
         neighbors(end+1) = mat(r, c+1);
     end
-end
-                
+end               
 
 function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
 
