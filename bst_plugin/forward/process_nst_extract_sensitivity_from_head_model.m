@@ -372,7 +372,7 @@ function sResults = getCoverage(head_model, ChannelMat, ChannelFlag, threshold)
             isUsedTime(det_id + src_id*100)               = any(sensitivity(iChan,:) > threshold);
         end
     
-        overlap(:,iwl) = sum(coverage_channel,  3) ;
+        overlap(:,iwl) = sum(coverage_channel(:, iwl, :),  3) ;
     end
     
 
