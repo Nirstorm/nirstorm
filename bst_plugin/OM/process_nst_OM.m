@@ -1005,6 +1005,12 @@ function options = display_weight_table(options)
         title(ax3, 'Ratio matrix');
         colorbar(ax3);
     end
+    
+    %......................................................................
+    % Save figures in the wt folder
+    % save_figure(options, onglet, hpc);
+    %......................................................................
+
 end
 
 function display_eq_matrix(Aeq_1, Aeq_2)
@@ -1090,11 +1096,6 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
 % denoise_weight_table Denoises the sensitivity matrix and displays the
 % comparaison
 % ========================================================================@
-    if ~isfield(options, 'hFig')
-        options.hFig = figure;
-        options.hFigTab = uitabgroup; drawnow;
-    end
-
     ROI_head        = options.ROI_head;
     hFigTab         = options.hFigTab;
     sensitivity_mat = options.sensitivity_mat;
@@ -1105,14 +1106,6 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);
     coverage_mat  = coverage_mat(order,order);
-    
-    onglet = uitab(hFigTab,'title','Denoise');
-
-    hpc = uipanel('Parent', onglet, ...
-              'Units', 'Normalized', ...
-              'Position', [0.01 0.01 0.98 0.98], ...
-              'FontWeight','demi');
-    set(hpc,'Title',' Sensitivity matrix ','FontSize',8);
 
     % Denoise weight table based on 4 neighbors (cross patern)
     stvty_mat_full = full(sensitivity_mat);
@@ -1134,7 +1127,6 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
             end
         end
     end
-    
 
     max_original = max(sensitivity_mat(:));
     max_filtered = max(sensitivity_mat_denoised(:));
@@ -1144,6 +1136,20 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
         msg = '';
         return;
     end
+
+    % For display
+    if ~isfield(options, 'hFig')
+        options.hFig = figure;
+        options.hFigTab = uitabgroup; drawnow;
+    end
+    
+    onglet = uitab(hFigTab,'title','Denoise');
+
+    hpc = uipanel('Parent', onglet, ...
+              'Units', 'Normalized', ...
+              'Position', [0.01 0.01 0.98 0.98], ...
+              'FontWeight','demi');
+    set(hpc,'Title',' Sensitivity matrix ','FontSize',8);
 
     ratio       = zeros(size(sensitivity_mat));
     idx_ratio   = sensitivity_mat > 0;
@@ -1175,7 +1181,11 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     ylabel(ax3, 'Coverage');
     title(ax3, 'Sensitivity VS. Coverage');
     set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
-
+    
+    %......................................................................
+    % Save figures in the wt folder
+    % save_figure(options,onglet,hpc);
+    %......................................................................
 end
 
 function neighbors = list_neighbors(mat, r, c, max_r, max_c)
@@ -1233,4 +1243,14 @@ function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
     head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
     
     ROI_head = struct('head_vertex_ids',head_vertex_ids, 'head_vertices_coords', head_vertices_coords);
+end
+
+function save_figure(options, onglet, hpc)
+% @========================================================================
+% save_figure Function used to save any figure created during the process
+% ========================================================================@
+tabTitle = onglet.Title;
+safeFilename = matlab.lang.makeValidName(tabTitle);
+fullFilePath = fullfile(options.outputdir, [safeFilename, '.png']);
+exportgraphics(hpc, fullFilePath, 'Resolution', 300);
 end
