@@ -185,9 +185,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         OPTIONS.Data            = sDataIn.F(selected_chans,:);
     
         
-        % Remove 0 from the gain matrix
         HM.Gain = nirs_head_model.Gain(selected_chans, valid_nodes); 
-        HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
         
         %% launch MEM (cMEM only in current version)
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
