@@ -234,7 +234,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
-    jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwirte existing fluences', [], [], [], []);
+    jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwrite existing fluences', [], [], [], []);
     jOverwrite.setSelected(OPTIONS.mcxlab_overwrite_fluences);
 
     gui_component('label', jPanelOutput, 'br', '', [], [], [], []);
