@@ -313,7 +313,7 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
             
         elseif options.exist_weight && ~isfield(weight_cache, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
-            bst_report('Warning', sProcess, sInput, "Weight table format updated. Old file has been deleted and WT has been recomputed.");
+            bst_report('Warning', sProcess, sInput, 'Weight table format updated. Old file has been deleted and WT has been recomputed.');
         end    
     end
     
@@ -500,8 +500,8 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     
     % Premature ending in case coverage constraint is not asked
     if ~options.include_coverage
-        str = sprintf("Only sensitivity : \n") + ...
-              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
+        str = [sprintf('Only sensitivity : \n'), ...
+              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
         
         infos{end+1} = str;
         return;
@@ -517,8 +517,8 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     lambda2  = (cov_min:cov_step:cov_max);
         
     % Display
-    str = sprintf("Only sensitivity : \n") + ...
-          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords);
+    str = [sprintf('Only sensitivity : \n'), ...
+          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
 
     infos{end+1} = str;
 
@@ -546,8 +546,8 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
         [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results, options);
 
-        str = sprintf("Sensitivity and Coverage (lambda = %d):\n", lambda2(iLambda)) + ...
-              display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords);
+        str = [sprintf('Sensitivity and Coverage (lambda = %d):\n', lambda2(iLambda)), ...
+              display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords)];
 
         infos{end+1} = str;
 
@@ -880,7 +880,7 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
 % informations
 % ========================================================================@
 
-    info = "";
+    info = '';
     src_indexes = zeros(max(montage_pairs(:, 1)), 1);
     det_indexes = zeros(max(montage_pairs(:, 2)), 1);
     det_next_idx = 1;
@@ -912,7 +912,7 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
         sensitivity = montage_sensitivity(ipair, :);
         coverage = channels_coverage(ipair, :);
 
-        info = info + sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100);
+        info = [info, sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100)];
     end
     
     mean_distance = mean(tab_dist_mm);
@@ -921,7 +921,7 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
     
     percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
 
-    info = info + sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap);
+    info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap)];
     info = strrep(info, '  ', '&nbsp;&nbsp;'); 
 end
 
@@ -957,9 +957,9 @@ function options = display_weight_table(options)
     if isDefinedLambda == 0
         onglet = uitab(hFigTab,'title','Stvity-Cvrge');
     elseif isDefinedLambda == 1
-        onglet = uitab(hFigTab,'title',"Lambda = 0");
+        onglet = uitab(hFigTab,'title','Lambda = 0');
     else
-        onglet = uitab(hFigTab,'title',"Lambda = " + options.lambda2);
+        onglet = uitab(hFigTab,'title',['Lambda = ', options.lambda2]);
     end
 
     distances = squareform(pdist(ROI_head.head_vertices_coords));
