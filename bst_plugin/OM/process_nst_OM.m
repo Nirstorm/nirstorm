@@ -965,7 +965,7 @@ function options = display_weight_table(options)
     elseif isDefinedLambda == 1
         onglet = uitab(hFigTab,'title','Lambda = 0');
     else
-        onglet = uitab(hFigTab,'title',['Lambda = ', options.lambda2]);
+        onglet = uitab(hFigTab,'title',['Lambda = ', num2str(options.lambda2)]);
     end
 
     distances = squareform(pdist(ROI_head.head_vertices_coords));
