@@ -121,9 +121,10 @@ elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
         head_vertices = union(head_vertices, sHead.Atlas(i_atlas).Scouts(i_scout).Vertices);    
     end  
     
-    
-    % TODO: properly select atlas
-    exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+    iHeadAtlas      = find(strcmp({sHead.Atlas.Name}, 'User scouts'));
+    iScoutExclude   = find(strcmp({sHead.Atlas(iHeadAtlas).Scouts.Label},'FluenceExclude'));
+    exclude_scout   = sHead.Atlas(iHeadAtlas).Scouts(iScoutExclude);
+
     if ~isempty(exclude_scout)
         head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
     end
