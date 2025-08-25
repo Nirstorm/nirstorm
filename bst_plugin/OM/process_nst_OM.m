@@ -926,9 +926,10 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
     total_sensitivity = sum(montage_sensitivity);
     
     percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
-
-    info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap)];
-    info = strrep(info, '  ', '&nbsp;&nbsp;'); 
+    if ~isempty(distance_range)
+        info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap)];
+        info = strrep(info, '  ', '&nbsp;&nbsp;');
+    end
 end
 
 %==========================================================================
@@ -1136,8 +1137,10 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
 
     max_original = max(sensitivity_mat(:));
     max_filtered = max(sensitivity_mat_denoised(:));
+    nnz_original = nnz(sensitivity_mat);
+    nnz_filtered = nnz(sensitivity_mat_denoised);
     tresh = 10;
-    if max_original < tresh * max_filtered 
+    if max_original < tresh * max_filtered || nnz_original > tresh * nnz_filtered
         voxels_changed = [];
         msg = '';
         return;
