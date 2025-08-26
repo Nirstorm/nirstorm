@@ -3,7 +3,6 @@ function [idx, dist] = nst_knnsearch(X,Y,varargin)
 % For compatibility
 try
     [idx, dist] = knnsearch(X,Y,varargin{:});
-    pp
 catch
     % Alternate implementation from file exchange
     % https://www.mathworks.com/matlabcentral/fileexchange/19345-efficient-k-nearest-neighbor-search-using-jit
