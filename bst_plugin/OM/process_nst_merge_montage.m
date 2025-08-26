@@ -105,11 +105,23 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         end
    end
    
-    detect_conflict(sources_pos, sources_pos, 1, {'Source', 'Source'});
+    msg_s_s = detect_conflict(sources_pos, sources_pos, 1, {'Source', 'Source'});
    
-    detect_conflict(det_pos, det_pos , 1 ,{'Detector', 'Detector'});
+    msg_d_d = detect_conflict(det_pos, det_pos , 1 ,{'Detector', 'Detector'});
 
-    detect_conflict(sources_pos, det_pos, 0,{'Source', 'Detector'});
+    msg_s_d = detect_conflict(sources_pos, det_pos, 0,{'Source', 'Detector'});
+    
+    if ~isempty(msg_s_s)
+        bst_report('Warning', sProcess, sInputs, msg_s_s);
+    end
+    
+    if ~isempty(msg_d_d)
+        bst_report('Warning', sProcess, sInputs, msg_d_d);
+    end
+    
+    if ~isempty(msg_s_d)
+        bst_report('Warning', sProcess, sInputs, msg_s_d);
+    end
 
     [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs(1).SubjectFile,'intra_subject', 'default_study');
     newCondition = file_unique([sInputs(1).Condition, '_merge'], {sSubjStudies.Name}, 1);
@@ -158,8 +170,8 @@ function d = euc_dist(p1, p2)
     d = sqrt(sum((p1 - p2).^2));
 end
 
-function conflict = detect_conflict(pos1, pos2, isSymetrical, labels)
-
+function msg = detect_conflict(pos1, pos2, isSymetrical, labels)
+    msg = '';
     conflict =cell(1, size(pos1,2));
     for i = 1:size(pos1,2)
         D = zeros(1, size(pos2,2));
@@ -178,10 +190,10 @@ function conflict = detect_conflict(pos1, pos2, isSymetrical, labels)
     end  
 
     if any(~cellfun(@isempty,conflict))
-        fprintf('%s - %s conflicts: \n', labels{1},labels{2});
+        msg = [msg, sprintf('%s - %s conflicts: \n', labels{1},labels{2})];
         for i=1:length(conflict)
             if ~isempty(conflict{i})
-                fprintf('%s %d and %s %s are conflicting \n',labels{1}, i, labels{2}, strjoin(strsplit(num2str(conflict{i})), ' - '));
+                msg = [msg, sprintf('%s %d and %s %s are conflicting \n',labels{1}, i, labels{2}, strjoin(strsplit(num2str(conflict{i})), ' ; '))];
            end 
         end
     end
