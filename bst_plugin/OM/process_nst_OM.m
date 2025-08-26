@@ -966,7 +966,7 @@ function options = display_weight_table(options)
     end
     
     if isDefinedLambda == 0
-        onglet = uitab(hFigTab,'title','Stvity-Cvrge');
+        onglet = uitab(hFigTab,'title','Weight tables');
     elseif isDefinedLambda == 1
         onglet = uitab(hFigTab,'title','Lambda = 0');
     else
