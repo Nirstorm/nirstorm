@@ -110,6 +110,27 @@ function OutputFiles = Run(sProcess, sInputs)
     isRaw       = isempty(sDataIn.DisplayUnits) || ~contains(sDataIn.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
 
     signals = sDataIn.F(nirs_ichans,:);
+    
+
+    if isRaw
+        [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
+            
+        newCondition = strrep(sInputs.Condition, '@raw', '');
+        if ~any( strcmp({sSubjStudies.Name}, newCondition))
+
+            % Create a new condition and update channel
+            iStudy = db_add_condition(sInputs.SubjectName, newCondition);
+
+            [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+            db_set_channel(iChannelStudy, ChannelMat, 2, 0);
+        else
+            iStudy = find( strcmp({sSubjStudies.Name}, newCondition));
+        end
+
+    else
+        iStudy = sInputs.iStudy;
+    end
+    sStudy = bst_get('Study', iStudy);
 
     if sProcess.options.option_coefficient_variation.Value
 
@@ -135,12 +156,11 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        sStudy = bst_get('Study', sInputs.iStudy);
         OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        db_add_data(iStudy, OutputFile, sDataOut);
         OutputFiles{end+1} = OutputFile;
     end
 
@@ -167,12 +187,11 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        sStudy = bst_get('Study', sInputs.iStudy);
         OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        db_add_data(iStudy, OutputFile, sDataOut);
         OutputFiles{end+1} = OutputFile;
 
     
@@ -190,12 +209,11 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        sStudy = bst_get('Study', sInputs.iStudy);
         OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        db_add_data(iStudy, OutputFile, sDataOut);
         OutputFiles{end+1} = OutputFile;
 
         % Save time-series data
@@ -212,12 +230,11 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = 'Hz';
     
         % Generate a new file name in the same folder
-        sStudy = bst_get('Study', sInputs.iStudy);
         OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
-        db_add_data(sInputs.iStudy, OutputFile, sDataOut);
+        db_add_data(iStudy, OutputFile, sDataOut);
     
         OutputFiles{end+1} = OutputFile;
     end
