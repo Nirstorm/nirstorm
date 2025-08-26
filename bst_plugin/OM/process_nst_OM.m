@@ -114,9 +114,10 @@ function OutputFile = Run(sProcess, sInput)
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
-    
-    % Display sensitivity and coverage mat
-    options = display_weight_table(options);
+
+    if options.flag_display
+        options = display_weight_table(options);
+    end
     
     % Denoise of the weight table
     [options, voxels_changed, msg] = denoise_weight_table(options);
@@ -534,7 +535,10 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
         options.lambda2 = lambda2(iLambda);
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
-        display_weight_table(options);
+        
+        if options.flag_display
+            options = display_weight_table(options);
+        end
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
@@ -559,7 +563,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
 
         % Convert Montage to Brainstorm structure
         ChannelMat = [ ChannelMat , create_channelMat_from_montage(montage_pairs, head_vertices_coords, options.wavelengths)];
-        montageSufix{end+1} = sprintf('complex_-_lambda_%d', lambda2(iLambda));
+        montageSufix{end+1} = sprintf('complex_lambda_%d', lambda2(iLambda));
     end
 end
 
@@ -1020,6 +1024,16 @@ function options = display_weight_table(options)
 
 end
 
+function save_figure(options, onglet, hpc)
+% @========================================================================
+% save_figure Function used to save any figure created during the process
+% ========================================================================@
+    tabTitle = onglet.Title;
+    safeFilename = matlab.lang.makeValidName(tabTitle);
+    fullFilePath = fullfile(options.outputdir, [safeFilename, '.png']);
+    exportgraphics(hpc, fullFilePath, 'Resolution', 300);
+end
+
 function display_eq_matrix(Aeq_1, Aeq_2)
     matrixes2show={Aeq_1, Aeq_2, [Aeq_1 ; Aeq_2]};
     for ii=1:2
@@ -1104,7 +1118,6 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
 % comparaison
 % ========================================================================@
     ROI_head        = options.ROI_head;
-    hFigTab         = options.hFigTab;
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
     
@@ -1140,25 +1153,13 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     nnz_original = nnz(sensitivity_mat);
     nnz_filtered = nnz(sensitivity_mat_denoised);
     tresh = 10;
+
+    % Early return if conditions are not respected
     if max_original < tresh * max_filtered || nnz_original > tresh * nnz_filtered
         voxels_changed = [];
         msg = '';
         return;
     end
-
-    % For display
-    if ~isfield(options, 'hFig')
-        options.hFig = figure;
-        options.hFigTab = uitabgroup; drawnow;
-    end
-    
-    onglet = uitab(hFigTab,'title','Denoise');
-
-    hpc = uipanel('Parent', onglet, ...
-              'Units', 'Normalized', ...
-              'Position', [0.01 0.01 0.98 0.98], ...
-              'FontWeight','demi');
-    set(hpc,'Title',' Sensitivity matrix ','FontSize',8);
 
     ratio       = zeros(size(sensitivity_mat));
     idx_ratio   = sensitivity_mat > 0;
@@ -1168,33 +1169,19 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     sensitivity_mat = sparse(sensitivity_mat_denoised);
     coverage_mat    = sparse(coverage_mat_denoised);
     
-    msg = 'The sensitivity matrix has been denoised to compensate for abnormally high values. For greater accuracy when computing the head model, please recalculate the fluences for the generated montage with higher number of photons.';
+    msg = ['The sensitivity matrix has been denoised to compensate for abnormally high values. ' ...
+           'For greater accuracy when computing the head model, please recalculate the fluences ' ...
+           'for the generated montage with higher number of photons.'];
+
     [~, inverse_order] = sort(order);
     options.sensitivity_mat = sensitivity_mat(inverse_order, inverse_order);
     options.coverage_mat    = coverage_mat(inverse_order, inverse_order);
     voxels_changed          = find(voxels_changed(inverse_order));
-   
-    ax1 = subplot(1, 3, 1, 'parent', hpc);
-    imagesc(ax1, sensitivity_mat);
-    title(ax1, 'Denoised sensitivity matrix');
-    colorbar(ax1);
 
-    ax2 = subplot(1, 3, 2, 'parent', hpc);
-    imagesc(ax2, coverage_mat);
-    title(ax2, 'Denoised coverage matrix');
-    colorbar(ax2);
-    
-    ax3 = subplot(1, 3, 3, 'parent', hpc);
-    plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
-    xlabel(ax3, 'Sensitivity');
-    ylabel(ax3, 'Coverage');
-    title(ax3, 'Sensitivity VS. Coverage');
-    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
-    
-    %......................................................................
-    % Save figures in the wt folder
-    % save_figure(options,onglet,hpc);
-    %......................................................................
+    if options.flag_display
+        options = display_denoise_weight(options);
+    end
+
 end
 
 function neighbors = list_neighbors(mat, r, c, max_r, max_c)
@@ -1216,7 +1203,49 @@ function neighbors = list_neighbors(mat, r, c, max_r, max_c)
     if (c+1) <= max_c
         neighbors(end+1) = mat(r, c+1);
     end
-end               
+end
+
+function options = display_denoise_weight(options)
+% @========================================================================
+% disp_denoise_weight Function used to display the denoised version of
+% sentitivity and coverage matrices
+% ========================================================================@
+    % For display
+    if ~isfield(options, 'hFig')
+        options.hFig = figure;
+        options.hFigTab = uitabgroup; drawnow;
+    end
+    
+    onglet = uitab(options.hFigTab,'title','Denoise');
+    
+    hpc = uipanel('Parent', onglet, ...
+        'Units', 'Normalized', ...
+        'Position', [0.01 0.01 0.98 0.98], ...
+        'FontWeight','demi');
+    set(hpc,'Title',' Sensitivity matrix ','FontSize',8);
+    
+    ax1 = subplot(1, 3, 1, 'parent', hpc);
+    imagesc(ax1, options.sensitivity_mat);
+    title(ax1, 'Denoised sensitivity matrix');
+    colorbar(ax1);
+    
+    ax2 = subplot(1, 3, 2, 'parent', hpc);
+    imagesc(ax2, options.coverage_mat);
+    title(ax2, 'Denoised coverage matrix');
+    colorbar(ax2);
+    
+    ax3 = subplot(1, 3, 3, 'parent', hpc);
+    plot(ax3, options.sensitivity_mat(:), options.coverage_mat(:), '+')
+    xlabel(ax3, 'Sensitivity');
+    ylabel(ax3, 'Coverage');
+    title(ax3, 'Sensitivity VS. Coverage');
+    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+
+    %......................................................................
+    % Save figures in the wt folder
+    % save_figure(options,onglet,hpc);
+    %......................................................................
+end
 
 function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
 
@@ -1252,14 +1281,4 @@ function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
     head_vertices_coords = sHead.Vertices(head_vertex_ids, :);
     
     ROI_head = struct('head_vertex_ids',head_vertex_ids, 'head_vertices_coords', head_vertices_coords);
-end
-
-function save_figure(options, onglet, hpc)
-% @========================================================================
-% save_figure Function used to save any figure created during the process
-% ========================================================================@
-tabTitle = onglet.Title;
-safeFilename = matlab.lang.makeValidName(tabTitle);
-fullFilePath = fullfile(options.outputdir, [safeFilename, '.png']);
-exportgraphics(hpc, fullFilePath, 'Resolution', 300);
 end
