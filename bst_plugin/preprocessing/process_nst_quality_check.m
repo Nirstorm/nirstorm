@@ -112,7 +112,7 @@ function OutputFiles = Run(sProcess, sInputs)
     signals = sDataIn.F(nirs_ichans,:);
     
 
-    if isRaw
+    if strcmp(sInputs.FileType, 'raw')
         [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
             
         newCondition = strrep(sInputs.Condition, '@raw', '');
