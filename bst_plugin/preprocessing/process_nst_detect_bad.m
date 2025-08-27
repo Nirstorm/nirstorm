@@ -198,17 +198,14 @@ end
 
 
 %% ===== Compute =====
-function [channel_flags, removed_channel_names,criteria] = Compute(sData, channel_def, options)
-%% Update the given channel flags to indicate which pairs are to be removed:
-%% - negative values
-%% - saturating
-%% - too long or too short separation
+function [channel_flags, removed_channel_names, criteria] = Compute(sData, channel_def, options)
+% Update the given channel flags to indicate which pairs are to be removed
 %
 % Args
 %    - nirs_sig: matrix of double, size: time x nb_channels 
 %        nirs signals to be filtered
 %    - channel_def: struct
-%        Defintion of channels as given by brainstorm
+%        Definition of channels as given by brainstorm
 %        Used fields: Nirs.Wavelengths, Channel
 %    - channels_flags: array of int, size: nb_channels
 %        channel flags to update (1 is good, 0 is bad)
@@ -291,7 +288,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         
         window_length = 10;
 
-        % Replace Coeficient of Variation by Standard Deviation 
+        % Replace Coefficient of Variation by Standard Deviation 
         % for OD and HB as the mean is 0. 
         if isRaw
             [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
