@@ -243,7 +243,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     prev_channel_flags  = sData.ChannelFlag;
     channel_flags       = sData.ChannelFlag;
     nirs_flags          = strcmpi({channel_def.Channel.Type}, 'NIRS');
-    isRaw = isempty(sData.DisplayUnits)  || ~contains(sData.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
+    isRaw = isempty(sData.DisplayUnits)  || ~contains(sData.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT'});
 
     signal      = sData.F';
     nirs_signal = signal(:,nirs_flags);
