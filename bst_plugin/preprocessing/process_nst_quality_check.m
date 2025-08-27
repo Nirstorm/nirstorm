@@ -90,22 +90,22 @@ function Comment = FormatComment(sProcess)
     Comment = sProcess.Comment;
 end
 
-function OutputFiles = Run(sProcess, sInputs)
+function OutputFiles = Run(sProcess, sInput)
 
     OutputFiles = {};
 
     % Load recordings
-    if strcmp(sInputs.FileType, 'data')     % Imported data structure
-        sDataIn = in_bst_data(sInputs.FileName);
-    elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-        sDataIn = in_bst(sInputs.FileName, [], 1, 1, 'no');
-        sDataRaw = in_bst_data(sInputs.FileName, 'F');
+    if strcmp(sInput.FileType, 'data')     % Imported data structure
+        sDataIn = in_bst_data(sInput.FileName);
+    elseif strcmp(sInput.FileType, 'raw')  % Continuous data file
+        sDataIn = in_bst(sInput.FileName, [], 1, 1, 'no');
+        sDataRaw = in_bst_data(sInput.FileName, 'F');
         sDataIn.Events = sDataRaw.F.events;
     end
     
     window_length = sProcess.options.window_length.Value{1};
 
-    ChannelMat  = in_bst_channel(sInputs.ChannelFile);
+    ChannelMat  = in_bst_channel(sInput.ChannelFile);
     nirs_ichans = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
     isRaw       = isempty(sDataIn.DisplayUnits) || ~contains(sDataIn.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
 
@@ -114,9 +114,9 @@ function OutputFiles = Run(sProcess, sInputs)
     % Get the output condition - create it if it doesn't exist
     if strcmpi(sInput.FileType, 'raw')
       % Create or get the target study
-      newCondition = strrep(sInputs.Condition, '@raw', '');
-      iStudy = db_add_condition(sInputs.SubjectName, newCondition);
-      db_set_channel(iStudy, sInputs.ChannelFile, 2, 0);
+      newCondition = strrep(sInput.Condition, '@raw', '');
+      iStudy = db_add_condition(sInput.SubjectName, newCondition);
+      db_set_channel(iStudy, sInput.ChannelFile, 2, 0);
     else
       iStudy = sInput.iStudy;
     end
