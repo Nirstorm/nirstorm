@@ -355,13 +355,11 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     end 
     
 
-   % Remove a channel if one of the wavevlength is marked as bad channel
+   % Remove a channel if one of the wavelength is marked as bad channel
    channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
-                                                        channel_def.Nirs.Wavelengths, ...
-                                                        channel_flags(nirs_flags) * -1) * -1;
+                                                        channel_flags(nirs_flags));
    
-   
-   % Remove auxilary signal
+   % Remove auxiliary signal
    if options.auxilary_signal.Value{1} == 2 % remove flat signal
        flat_aux =  false(1,nb_chnnels);
        flat_aux(~nirs_flags)= std(signal(:,~nirs_flags),1) < 1; % might need a better threshold 
@@ -376,40 +374,24 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
    
 end
 
-function fixed_chan_flags = fix_chan_flags_wrt_pairs(channel_def, wls, chan_flags)
-% Make flags consistent: if flag of a channel is 1, set to 1 all channels
-% involved in the same pair
-
-fixed_chan_flags = chan_flags;
-nb_wavelengths = length(wls);
-nb_channels = length(channel_def);
-ichan_to_scan = find(chan_flags==1);
-for ii=1:length(ichan_to_scan)
-    ichan = ichan_to_scan(ii);
-    chan_name = channel_def(ichan).Name;
-    pair_prefix = chan_name(1:strfind(chan_name, 'WL'));
-    nb_fixed_chans = 0;
-    search = {ichan+1:nb_channels ; 1:ichan-1};
-    for isearch=1:length(search)
-        for i_other_chan=search{isearch}
-            if ~isempty(strfind(channel_def(i_other_chan).Name, pair_prefix))
-                fixed_chan_flags(i_other_chan) = 1;
-                nb_fixed_chans = nb_fixed_chans + 1;
-            end
-            if nb_fixed_chans == nb_wavelengths-1
-                break;
-            end
+function fixed_chan_flags = fix_chan_flags_wrt_pairs(channel_def, chan_flags)
+% Make flags consistent: 
+% if flag of a channel is -1, set to -1 all channels with the same source
+% and detector
+    
+    [idx_src, idx_det] = nst_unformat_channels({channel_def.Name});
+    fixed_chan_flags = chan_flags;
+    
+    for iChan=1:length(channel_def)
+    
+        if chan_flags(iChan) == 1
+            continue
         end
-        if nb_fixed_chans == nb_wavelengths-1
-            break;
-        end
+
+        % if the channel is bad, we mark all the other channels as bad
+        [i_src, i_det] = nst_unformat_channel(channel_def(iChan).Name);
+        to_be_bad = (idx_src  == i_src & idx_det == i_det);
+        fixed_chan_flags(to_be_bad) = -1;
     end
-    if nb_fixed_chans ~= nb_wavelengths-1
-        throw(MException('NSTError:InconsistentChannel', ...
-                         ['Channels paired to ' chan_name ' were not all flagged']));
-    end
+
 end
-end
-
-
-

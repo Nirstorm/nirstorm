@@ -5,8 +5,7 @@
 Current features include:
 - classical within-subject analysis comprising motion correction, MBLL, and window-averaging.
 - statistical analysis using GLM
-- optimal montages that optimize the sensitivity to a given cortical
-region of interest
+- optimal montages that optimize the sensitivity to a given cortical region of interest
 - source reconstruction (cMEM, MNE)
 - precomputed fluence template based on Colin27
 
