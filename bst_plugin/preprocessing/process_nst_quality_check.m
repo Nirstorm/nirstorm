@@ -111,27 +111,20 @@ function OutputFiles = Run(sProcess, sInputs)
 
     signals = sDataIn.F(nirs_ichans,:);
     
-
-    if strcmp(sInputs.FileType, 'raw')
-        [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
-            
-        newCondition = strrep(sInputs.Condition, '@raw', '');
-        if ~any( strcmp({sSubjStudies.Name}, newCondition))
-
-            % Create a new condition and update channel
-            iStudy = db_add_condition(sInputs.SubjectName, newCondition);
-
-            [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
-            db_set_channel(iChannelStudy, ChannelMat, 2, 0);
-        else
-            iStudy = find( strcmp({sSubjStudies.Name}, newCondition));
-        end
-
-    else
-        iStudy = sInputs.iStudy;
+    % Get the output condition - create it if it doesn't exist
+    [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
+    newCondition = strrep(sInputs.Condition, '@raw', '');
+    iStudy =  find(strcmp({sSubjStudies.Name}, newCondition));
+    
+    if isempty(iStudy)
+        iStudy = db_add_condition(sInputs.SubjectName, newCondition);
+    
+        [tmp, iChannelStudy] = bst_get('ChannelForStudy', iStudy);
+        db_set_channel(iChannelStudy, ChannelMat, 2, 0);
     end
     sStudy = bst_get('Study', iStudy);
 
+    % Compute the different quality metrics
     if sProcess.options.option_coefficient_variation.Value
 
         if isRaw
