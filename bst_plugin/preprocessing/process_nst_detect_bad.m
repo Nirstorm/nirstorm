@@ -121,8 +121,8 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
     % Assume that the same montage is used for each file
     
     bad_chan_names  = cell(1, length(sInputs));
-    bad_chan_msg = cell(1, length(sInputs));
-    nirs_flags = cell(1, length(sInputs));
+    bad_chan_msg    = cell(1, length(sInputs));
+    nirs_flags      = cell(1, length(sInputs));
 
     all_bad_channels = {}; 
     for i_input = 1:length(sInputs)
@@ -140,9 +140,10 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         nirs_flags{i_input} = nirs_flag;
         nb_channel          = sum(nirs_flag);
 
-        [new_ChannelFlag, bad_chan, msg] = Compute(sData, ChanneMat, sProcess.options);
+        [~, bad_chan, msg]  = Compute(sData, ChanneMat, sProcess.options);
+
         bad_chan_names{i_input} = bad_chan;
-        bad_chan_msg{i_input} = msg;
+        bad_chan_msg{i_input}   = msg;
         
         all_bad_channels = union(all_bad_channels, bad_chan);
     end
@@ -192,7 +193,6 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
    end     
    
     bst_report('Open', 'current');                                      
-    % Add bad channels
     OutputFiles = {sInputs.FileName};
 end
 
