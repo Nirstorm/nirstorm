@@ -156,7 +156,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_cv');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
@@ -209,7 +209,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_cardiac_strg');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
@@ -230,7 +230,7 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataOut.DisplayUnits = 'Hz';
     
         % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_sci');
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_cardiac_power');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
