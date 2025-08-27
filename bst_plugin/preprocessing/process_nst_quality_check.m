@@ -38,7 +38,7 @@ sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
-sProcess.OutputTypes = {'data','raw'};
+sProcess.OutputTypes = {'data','data'};
 
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 1;
