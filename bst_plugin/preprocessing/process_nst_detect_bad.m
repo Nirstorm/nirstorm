@@ -121,8 +121,8 @@ function OutputFiles = Run(sProcess, sInputs)
     % Assume that the same montage is used for each file
     
     bad_chan_names  = cell(1, length(sInputs));
-    bad_chan_msg = cell(1, length(sInputs));
-    nirs_flags = cell(1, length(sInputs));
+    bad_chan_msg    = cell(1, length(sInputs));
+    nirs_flags      = cell(1, length(sInputs));
 
     all_bad_channels = {}; 
     for i_input = 1:length(sInputs)
@@ -140,11 +140,16 @@ function OutputFiles = Run(sProcess, sInputs)
         nirs_flags{i_input} = nirs_flag;
         nb_channel          = sum(nirs_flag);
 
-        [new_ChannelFlag, bad_chan, msg] = Compute(sData, ChanneMat, sProcess.options);
-        bad_chan_names{i_input} = bad_chan;
-        bad_chan_msg{i_input} = msg;
+        [already_bad_channel_names, new_bad_chan, msg]  = Compute(sData, ChanneMat, sProcess.options);
+
+        if ~isempty(already_bad_channel_names)
+            bst_report('Info',    sProcess, sInputs(i_input), sprintf('%d bad channels found in the file', length(already_bad_channel_names)))
+        end
+
+        bad_chan_names{i_input} = new_bad_chan;
+        bad_chan_msg{i_input}   = msg;
         
-        all_bad_channels = union(all_bad_channels, bad_chan);
+        all_bad_channels = union(all_bad_channels, new_bad_chan);
     end
     
     % Set the bad channel in all inputs
@@ -162,18 +167,27 @@ function OutputFiles = Run(sProcess, sInputs)
         comon_bad_channel = intersect( comon_bad_channel, intersect( bad_chan_names{i_input}, {ChanneMat.Channel(nirs_flags{i_input}).Name} ));
     end
    
-   ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
-   all_bad_channels_nirs = intersect( all_bad_channels,  {ChanneMat.Channel(nirs_flags{1}).Name});
-   
+    ChanneMat = in_bst_channel(sInputs(1).ChannelFile);
+
+    all_bad_channels_nirs = intersect( all_bad_channels,  {ChanneMat.Channel(nirs_flags{1}).Name});
+    if isempty(all_bad_channels_nirs)
+        return
+    end
+
+    comon_bad_channel = channel_name_from_full(comon_bad_channel);
+    all_bad_channels_nirs = channel_name_from_full(all_bad_channels_nirs);
+    
+    nb_channel = nb_channel / length(unique({ChanneMat.Channel(nirs_flags{1}).Group}));
+
    fraction= round(100* length(all_bad_channels_nirs)/nb_channel);
    if fraction > 80  % send an error if more than 80% of the channels are marked bad
-        bst_report('Error',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
+        bst_report('Error',    sProcess, sInputs, sprintf('%d Channels removed from the file(%d%% of the channels)', length(all_bad_channels_nirs),fraction))
    elseif fraction> 20 % send a warning if more than 20% of the channels are marked bad
-        bst_report('Warning',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
+        bst_report('Warning',    sProcess, sInputs, sprintf('%d Channels removed from the file(%d%% of the channels)', length(all_bad_channels_nirs),fraction))
    elseif fraction > 0
-        bst_report('Info',    sProcess, sInputs, sprintf('%d Channels removed from the files(%d%% of the channels)',length(all_bad_channels_nirs),fraction))
-   else 
-        bst_report('Info',    sProcess, sInputs, sprintf('No bad channel removed from the files'))
+        bst_report('Info',    sProcess, sInputs, sprintf('%d Channels removed from the file(%d%% of the channels)', length(all_bad_channels_nirs),fraction))
+   else
+        bst_report('Info',    sProcess, sInputs, sprintf('No additional channel removed from the file'))
    end
    
    if fraction > 0
@@ -184,31 +198,27 @@ function OutputFiles = Run(sProcess, sInputs)
          end      
    end
 
-   for i=1: length(sInputs) 
-       C = setdiff( intersect(bad_chan_names{i},{ChanneMat.Channel(nirs_flags{1}).Name}),comon_bad_channel); 
+   for i=1:length(sInputs) 
+       C = setdiff( intersect(channel_name_from_full(bad_chan_names{i}),channel_name_from_full({ChanneMat.Channel(nirs_flags{i}).Name})), comon_bad_channel); 
        if ~isempty(C) > 0
-          bst_report('Info',    sProcess, sInputs(i), sprintf('Bad channels: %s', strjoin(C, ' ,')));
+          bst_report('Info',    sProcess, sInputs(i), sprintf('Bad channels: %s', strjoin(C, ', ')));
        end
    end     
    
     bst_report('Open', 'current');                                      
-    % Add bad channels
     OutputFiles = {sInputs.FileName};
 end
 
 
 %% ===== Compute =====
-function [channel_flags, removed_channel_names,criteria] = Compute(sData, channel_def, options)
-%% Update the given channel flags to indicate which pairs are to be removed:
-%% - negative values
-%% - saturating
-%% - too long or too short separation
+function [already_bad_channel_names, removed_channel_names, criteria] = Compute(sData, channel_def, options)
+% Update the given channel flags to indicate which pairs are to be removed
 %
 % Args
 %    - nirs_sig: matrix of double, size: time x nb_channels 
 %        nirs signals to be filtered
 %    - channel_def: struct
-%        Defintion of channels as given by brainstorm
+%        Definition of channels as given by brainstorm
 %        Used fields: Nirs.Wavelengths, Channel
 %    - channels_flags: array of int, size: nb_channels
 %        channel flags to update (1 is good, 0 is bad)
@@ -291,7 +301,7 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
         
         window_length = 10;
 
-        % Replace Coeficient of Variation by Standard Deviation 
+        % Replace Coefficient of Variation by Standard Deviation 
         % for OD and HB as the mean is 0. 
         if isRaw
             [~,  CV ] = process_nst_quality_check('compute_CV', sData.Time, nirs_signal', window_length);
@@ -355,13 +365,11 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
     end 
     
 
-   % Remove a channel if one of the wavevlength is marked as bad channel
+   % Remove a channel if one of the wavelength is marked as bad channel
    channel_flags(nirs_flags) = fix_chan_flags_wrt_pairs(channel_def.Channel(nirs_flags), ...
-                                                        channel_def.Nirs.Wavelengths, ...
-                                                        channel_flags(nirs_flags) * -1) * -1;
+                                                        channel_flags(nirs_flags));
    
-   
-   % Remove auxilary signal
+   % Remove auxiliary signal
    if options.auxilary_signal.Value{1} == 2 % remove flat signal
        flat_aux =  false(1,nb_chnnels);
        flat_aux(~nirs_flags)= std(signal(:,~nirs_flags),1) < 1; % might need a better threshold 
@@ -373,43 +381,40 @@ function [channel_flags, removed_channel_names,criteria] = Compute(sData, channe
    
    removed =  (prev_channel_flags ~= -1 & channel_flags == -1);
    removed_channel_names = {channel_def.Channel(removed).Name};
-   
+   already_bad_channel_names = {channel_def.Channel(prev_channel_flags == -1).Name};
 end
 
-function fixed_chan_flags = fix_chan_flags_wrt_pairs(channel_def, wls, chan_flags)
-% Make flags consistent: if flag of a channel is 1, set to 1 all channels
-% involved in the same pair
-
-fixed_chan_flags = chan_flags;
-nb_wavelengths = length(wls);
-nb_channels = length(channel_def);
-ichan_to_scan = find(chan_flags==1);
-for ii=1:length(ichan_to_scan)
-    ichan = ichan_to_scan(ii);
-    chan_name = channel_def(ichan).Name;
-    pair_prefix = chan_name(1:strfind(chan_name, 'WL'));
-    nb_fixed_chans = 0;
-    search = {ichan+1:nb_channels ; 1:ichan-1};
-    for isearch=1:length(search)
-        for i_other_chan=search{isearch}
-            if ~isempty(strfind(channel_def(i_other_chan).Name, pair_prefix))
-                fixed_chan_flags(i_other_chan) = 1;
-                nb_fixed_chans = nb_fixed_chans + 1;
-            end
-            if nb_fixed_chans == nb_wavelengths-1
-                break;
-            end
+function fixed_chan_flags = fix_chan_flags_wrt_pairs(channel_def, chan_flags)
+% Make flags consistent: 
+% if flag of a channel is -1, set to -1 all channels with the same source
+% and detector
+    
+    [idx_src, idx_det] = nst_unformat_channels({channel_def.Name});
+    fixed_chan_flags = chan_flags;
+    
+    for iChan=1:length(channel_def)
+    
+        if chan_flags(iChan) == 1
+            continue
         end
-        if nb_fixed_chans == nb_wavelengths-1
-            break;
-        end
+
+        % if the channel is bad, we mark all the other channels as bad
+        [i_src, i_det] = nst_unformat_channel(channel_def(iChan).Name);
+        to_be_bad = (idx_src  == i_src & idx_det == i_det);
+        fixed_chan_flags(to_be_bad) = -1;
     end
-    if nb_fixed_chans ~= nb_wavelengths-1
-        throw(MException('NSTError:InconsistentChannel', ...
-                         ['Channels paired to ' chan_name ' were not all flagged']));
-    end
-end
+
 end
 
 
+function channel_names = channel_name_from_full(names)
 
+    channel_names = cell(size(names));
+    [idx_src, idx_det] = nst_unformat_channels(names);
+
+    for iChan = 1:length(names)
+        channel_names{iChan} = sprintf('S%dD%d', idx_src(iChan), idx_det(iChan));
+    end
+
+    channel_names = unique(channel_names);
+end
