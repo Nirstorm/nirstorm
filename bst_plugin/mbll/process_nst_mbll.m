@@ -32,7 +32,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', 'dOD and MBLL'};
     sProcess.Index       = 1304; %0: not shown, >0: defines place in the list of processes
-    sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Compute_.5BHb.5D_variations_-_Modified_Beer-Lambert_Law';
+    sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Delta_OD_to_delta_.5BHbO.5D.2C_.5BHbR.5D_.26_.5BHbT.5D';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process

@@ -29,7 +29,7 @@ sProcess.Comment     = 'Setup workshop PERFORM 2018';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
 sProcess.Index       = 1903;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Workshop-PERFORM-Week-2018#download-data-sets-and-check-installation';
+sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process

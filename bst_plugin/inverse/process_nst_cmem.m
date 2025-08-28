@@ -33,7 +33,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.SubGroup    = {'NIRS', 'Sources'};
     sProcess.isSeparator = 0;
     sProcess.Index       = 1502;
-    sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping';
+    sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Inverse_problem_using_cMEM';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'raw', 'data'};
     % Definition of the outputs of this process

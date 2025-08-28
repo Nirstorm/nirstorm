@@ -44,7 +44,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
+    sProcess.Description = '';
     % todo add a new tutorials
     
     % Definition of the input accepted by this process

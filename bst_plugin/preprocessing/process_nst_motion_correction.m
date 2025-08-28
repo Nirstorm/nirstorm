@@ -32,7 +32,7 @@ sProcess.FileTag     = '_motioncorr';
 sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1305; 
-sProcess.Description = 'http://neuroimage.usc.edu/brainstorm/Tutorials/NIRSFingerTapping#Movement_correction';
+sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Motion_correction';
 sProcess.isSeparator = 0; 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw'};

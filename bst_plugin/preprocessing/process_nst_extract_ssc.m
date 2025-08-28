@@ -32,7 +32,7 @@ sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1307;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
+sProcess.Description = '';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};

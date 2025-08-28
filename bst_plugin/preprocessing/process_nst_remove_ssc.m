@@ -33,7 +33,7 @@ sProcess.FileTag     = @GetFileTag;
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1308;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
+sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Regressing_out_superficial_noise';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};
