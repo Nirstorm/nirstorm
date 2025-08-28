@@ -29,7 +29,7 @@ end
 
 
 %% ===== CREATE PANEL =====
-function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
+function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) 
     panelName = 'OMOptions';
     % Java initializations
     import java.awt.*;
@@ -593,7 +593,7 @@ end
 
 
 %% ===== GET PANEL CONTENTS =====
-function s = GetPanelContents() %#ok<DEFNU>
+function s = GetPanelContents() 
     % Get panel controls handles
     ctrl = bst_get('PanelControls', 'OMOptions');
     if isempty(ctrl)

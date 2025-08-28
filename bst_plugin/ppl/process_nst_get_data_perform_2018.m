@@ -23,13 +23,13 @@ function varargout = process_nst_get_data_perform_2018( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Setup workshop PERFORM 2018';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = 'NIRS';
 sProcess.Index       = 1903;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Workshop-PERFORM-Week-2018#download-data-sets-and-check-installation';
+sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'import'};
 % Definition of the outputs of this process
@@ -74,12 +74,12 @@ sProcess.options.confirm_download.Value   = 0;
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
 Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 global GlobalData;
 
 OutputFiles = {};

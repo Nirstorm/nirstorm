@@ -25,7 +25,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Raw to delta OD';
     sProcess.FileTag     = ' | dOD';
@@ -87,7 +87,7 @@ end
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     
     % Get baseline
     if isfield(sProcess.options, 'timewindow') && isfield(sProcess.options.timewindow, 'Value') && iscell(sProcess.options.timewindow.Value) && ~isempty(sProcess.options.timewindow.Value)
@@ -106,7 +106,7 @@ function Comment = FormatComment(sProcess) %#ok<DEFNU>
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFile = Run(sProcess, sInputs) 
    
     % Load channel file
     ChanneMat = in_bst_channel(sInputs(1).ChannelFile);

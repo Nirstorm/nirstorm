@@ -23,14 +23,14 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - group t-contrast mask';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1606;
     sProcess.isSeparator = 0;
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
+    sProcess.Description = '';
     % todo add a new tutorial
     
     % Definition of the input accepted by this process
@@ -57,11 +57,11 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment; 
 end
 
-function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput) 
     OutputFiles={};
     
     [StatThreshOptions, strCorrect] = process_extract_pthresh('GetOptions', sProcess);
