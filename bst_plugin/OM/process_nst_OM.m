@@ -164,7 +164,7 @@ function OutputFile = Run(sProcess, sInput)
         % Register in database
         db_add_data(iStudy, OutputFile{iChannel} , sDataOut);
     end
-
+    bst_report('Open', 'current'); 
 end
 
 function succeeded = check_cplex(cplex_url)
