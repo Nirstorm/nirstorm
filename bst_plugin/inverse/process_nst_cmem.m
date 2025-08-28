@@ -24,7 +24,7 @@ function varargout = process_nst_cmem( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 
     % Description the process
     sProcess.Comment     = 'Compute sources: BEst';
@@ -55,13 +55,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
 OutputFiles = {};
 MethodOptions.MEMpaneloptions = sProcess.options.mem.Value.MEMpaneloptions;

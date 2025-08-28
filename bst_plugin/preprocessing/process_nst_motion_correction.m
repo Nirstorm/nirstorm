@@ -25,7 +25,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Motion correction';
 sProcess.FileTag     = '_motioncorr';
@@ -93,7 +93,7 @@ function [Comment, fileTag] = FormatComment(sProcess)
 end
 
 %% ===== RUN =====
-function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
+function sInputs = Run(sProcess, sInputs) 
 
 if strcmp(sProcess.options.method.Value,'spline')
     if ~license('test', 'Curve_Fitting_Toolbox')
@@ -172,7 +172,7 @@ end
 
 
 %% ===== Compute =====
-function [data_corr] = Compute(nirs_sig, t, event, method,exta_parameters) %#ok<DEFNU>
+function [data_corr] = Compute(nirs_sig, t, event, method,exta_parameters) 
 if nargin < 4
     method = 'spline';
 end

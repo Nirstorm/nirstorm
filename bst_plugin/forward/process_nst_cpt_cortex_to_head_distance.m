@@ -25,7 +25,7 @@ function varargout = process_nst_cpt_cortex_to_head_distance( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Compute distance from cortical surface to head surface';
     sProcess.Category    = 'Custom';
@@ -48,13 +48,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 OutputFiles = {};
 
 % Get subject name

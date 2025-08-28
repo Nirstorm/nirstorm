@@ -26,7 +26,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     %TOCHECK: how do we limit the input file types (only NIRS data)?
     sProcess.Comment     = 'Detect bad channels';
@@ -110,12 +110,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
     % Compute bad channel for each Input file
     % Assume that the same montage is used for each file

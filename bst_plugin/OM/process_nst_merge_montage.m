@@ -26,7 +26,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     sProcess.Comment     = 'Merge Montage';
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
@@ -49,12 +49,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
    OutputFiles = {};
    

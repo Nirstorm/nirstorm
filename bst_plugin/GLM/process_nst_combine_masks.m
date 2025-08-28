@@ -23,7 +23,7 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Combine masks';
     sProcess.Category    = 'Custom';
@@ -50,7 +50,7 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment; 
 end
 
@@ -59,7 +59,7 @@ function operations = get_mask_combinations()
    operations.union = 2;
 end
 
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
     OutputFiles={};
     
     operations = get_mask_combinations();

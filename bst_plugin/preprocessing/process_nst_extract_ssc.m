@@ -25,7 +25,7 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Split short separation channels';
 sProcess.Category    = 'Custom';

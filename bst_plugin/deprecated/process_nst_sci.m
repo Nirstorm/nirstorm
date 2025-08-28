@@ -26,7 +26,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Scalp Coupling Index';
 sProcess.Category    = 'Custom';

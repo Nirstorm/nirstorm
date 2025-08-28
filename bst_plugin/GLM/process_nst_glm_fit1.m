@@ -36,7 +36,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 
 
     sProcess = process_nst_glm_fit('GetDescription');
@@ -54,6 +54,6 @@ function Comment = FormatComment(sProcess)
     Comment = sProcess.Comment;
 end
 
-function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput) 
     OutputFiles = process_nst_glm_fit('Run',sProcess,sInput,[]);
 end

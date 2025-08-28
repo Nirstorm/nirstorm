@@ -25,7 +25,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'MBLL - delta OD to delta [HbO], [HbR] & [HbT]';
     sProcess.FileTag     = '_Hb';
@@ -62,12 +62,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment =  process_nst_dOD('FormatComment', sProcess);
 end
 
 %% ===== RUN =====
-function OutputFile = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFile = Run(sProcess, sInputs) 
     OutputFile = {};
     
     age             = sProcess.options.option_age.Value{1};

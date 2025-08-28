@@ -24,7 +24,7 @@ function varargout = process_nst_wmne( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Source reconstruction - wMNE';
     sProcess.FileTag     = '';
@@ -75,7 +75,7 @@ function s = str_pad(s,padsize)
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 

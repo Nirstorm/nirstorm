@@ -29,7 +29,7 @@ end
 
 
 %% ===== CREATE PANEL =====
-function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) %#ok<DEFNU>
+function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles) 
     panelName = 'FluenceOptions';
     % Java initializations
     import java.awt.*;
@@ -433,7 +433,7 @@ function [software, info] = loadSoftware()
 end
 
 %% ===== GET PANEL CONTENTS =====
-function s = GetPanelContents() %#ok<DEFNU>
+function s = GetPanelContents() 
     % Get panel controls handles
     ctrl = bst_get('PanelControls', 'FluenceOptions');
     if isempty(ctrl)

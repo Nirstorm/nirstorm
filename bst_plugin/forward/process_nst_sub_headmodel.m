@@ -26,7 +26,7 @@ eval(macro_method);
 end
 
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Head model from precomputed one';
 sProcess.FileTag     = '';
@@ -45,13 +45,13 @@ sProcess.isPaired    = 0;
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputA, sInputB) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputA, sInputB) 
 OutputFiles = {};
 
 % sInputA: for which to compute sub head models based on actual montage

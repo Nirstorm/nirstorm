@@ -25,7 +25,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 
     % Description the process
     sProcess.Comment     = 'Remove glitches';
@@ -51,12 +51,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
+function sInputs = Run(sProcess, sInputs) 
 sInputs.A = Compute(sInputs.A, sProcess.options.factor_std_grad.Value{1});
 end
 

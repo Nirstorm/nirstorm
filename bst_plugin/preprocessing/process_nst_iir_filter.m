@@ -25,7 +25,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Band-pass filter (IIR)';
     sProcess.FileTag     = @GetFileTag; 
@@ -133,7 +133,7 @@ end
 
 
 %% ===== RUN =====
-function sInputs = Run(sProcess, sInputs) %#ok<DEFNU>
+function sInputs = Run(sProcess, sInputs) 
 
     % Get option values
     [low_cutoff, high_cutoff,filter_type,order,keep_mean] = GetOptions(sProcess);
@@ -269,7 +269,7 @@ function transient = ComputeTransient(b,a,sfreq)
     transient      = iE99 / sfreq ;  
 end
 %% ===== DISPLAY FILTER SPECS =====
-function DisplaySpec(iProcess, sfreq) %#ok<DEFNU>
+function DisplaySpec(iProcess, sfreq) 
     % Get current process options
     global GlobalData;
     sProcess = GlobalData.Processes.Current(iProcess);

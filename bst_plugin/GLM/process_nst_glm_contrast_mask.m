@@ -23,7 +23,7 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - group t-contrast mask';
     sProcess.Category    = 'File';
@@ -57,11 +57,11 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment; 
 end
 
-function OutputFiles = Run(sProcess, sInput) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput) 
     OutputFiles={};
     
     [StatThreshOptions, strCorrect] = process_extract_pthresh('GetOptions', sProcess);

@@ -25,7 +25,7 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Remove superficial noise';
 sProcess.Category    = 'Filter';

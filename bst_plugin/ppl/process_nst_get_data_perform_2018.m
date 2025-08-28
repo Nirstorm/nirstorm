@@ -23,7 +23,7 @@ function varargout = process_nst_get_data_perform_2018( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Setup workshop PERFORM 2018';
 sProcess.Category    = 'Custom';
@@ -74,12 +74,12 @@ sProcess.options.confirm_download.Value   = 0;
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
 Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 global GlobalData;
 
 OutputFiles = {};

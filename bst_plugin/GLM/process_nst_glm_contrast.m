@@ -29,7 +29,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - 1st level contrast';
     sProcess.Category    = 'Custom';
@@ -52,12 +52,12 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment;
     % Comment = [ Comment ' C = ' sProcess.options.Contrast.Value ]; 
 end
 
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
     OutputFiles = [];
         
     if isempty(sProcess.options.Contrast.Value)
