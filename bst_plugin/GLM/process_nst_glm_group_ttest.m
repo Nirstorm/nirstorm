@@ -28,14 +28,14 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - MFX group t-test';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1605;
     sProcess.isSeparator = 0;
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM-implementation';
+    sProcess.Description = '';
     % todo add a new tutorial
     
     % Definition of the input accepted by this process
@@ -68,11 +68,11 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment; 
 end
 
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
     OutputFiles={};
     
     output_condition = sProcess.options.output_condition.Value;

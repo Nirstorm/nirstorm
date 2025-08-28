@@ -25,7 +25,7 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Remove slow fluctuations';
 sProcess.FileTag     = '_detrend'; 
@@ -33,7 +33,7 @@ sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1309;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
+sProcess.Description = '';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};

@@ -23,7 +23,7 @@ function varargout = process_nst_mask_from_atlas( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Cortical mask from atlas scouts';
 sProcess.Category    = 'Custom';
@@ -57,12 +57,12 @@ sProcess.options.output_comment.Value    = 'Atlas-based mask';
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
 Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
 % Get scout vertices & load head mesh
 atlas_name = sProcess.options.atlas.Value;

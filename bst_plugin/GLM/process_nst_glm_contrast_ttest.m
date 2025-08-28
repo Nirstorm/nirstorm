@@ -32,14 +32,14 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - contrast t-test';
     sProcess.Category    = 'Stat1';
     sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1604;
     sProcess.isSeparator = 0;
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
+    sProcess.Description = '';
     
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'results'};
@@ -57,12 +57,12 @@ end
 
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess)  %#ok<DEFNU>
+function Comment = FormatComment(sProcess)  
     Comment = sProcess.Comment;
     % Comment = [ Comment ' C = ' sProcess.options.Contrast.Value ]; 
 end
 
-function sOutput = Run(sProcess, sInputs) %#ok<DEFNU>
+function sOutput = Run(sProcess, sInputs) 
     sOutput = [];
     
     con_data = in_bst_data(sInputs(1).FileName);

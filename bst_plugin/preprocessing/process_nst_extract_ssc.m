@@ -25,14 +25,14 @@ eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Split short separation channels';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
 sProcess.Index       = 1307;
 sProcess.isSeparator = 0;
-sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
+sProcess.Description = '';
 
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data','raw'};

@@ -25,7 +25,7 @@ function varargout = process_nst_cpt_fluences( varargin )
 eval(macro_method);
 end
 
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Compute fluences';
 sProcess.Category    = 'Custom';
@@ -61,13 +61,13 @@ function s = str_pad(s,padsize)
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
 Comment = sProcess.Comment;
 end
 
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 %isOk = bst_plugin('Load','mcxlab');
 [isOk,] = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
 if ~isOk 

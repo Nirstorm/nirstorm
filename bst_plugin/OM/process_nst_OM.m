@@ -32,7 +32,7 @@ sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1406;
-sProcess.Description = '';
+sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRS_Optimal_montage';
 sProcess.InputTypes  = {'import'};
 sProcess.OutputTypes = {'import'};
 sProcess.nInputs     = 1;
@@ -69,19 +69,12 @@ function OutputFile = Run(sProcess, sInput)
         bst_error('Optimum montage is not available in the compiled version of brainstorm');
         return;
     end        
-    
     cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    try
-        cplx = Cplex();
-        if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
-            bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-            return
-        end
-    catch
-        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-        return
-    end
     
+    if ~check_cplex(cplex_url)
+        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    end
+
     options     = sProcess.options.fluencesCond.Value;
     if ~isfield(options, 'condition_name') || isempty(options.condition_name)
         options.condition_name = 'planning_optimal_montage';
@@ -171,7 +164,35 @@ function OutputFile = Run(sProcess, sInput)
         % Register in database
         db_add_data(iStudy, OutputFile{iChannel} , sDataOut);
     end
+    bst_report('Open', 'current'); 
+end
 
+function succeeded = check_cplex(cplex_url)
+% @========================================================================
+% check_cplex Function that checks if the cplex software is accessible by 
+% matlab 
+% ========================================================================@
+    num_try     = 3;
+    succeeded   = false;
+    while num_try > 0 & ~succeeded
+    
+        num_try = num_try -1;
+        try
+            cplx = Cplex();
+    
+            if bst_plugin('CompareVersions', cplx.getVersion(),'12.3')  < 0 
+                throw(['CPLEX >12.3 required. See ' cplex_url]);
+            end
+    
+            succeeded = true;
+        catch e
+    
+            selpath = uigetdir([], sprintf('%s. Please select the cplex directory', e.message));
+            if selpath
+                addpath(genpath(selpath))
+            end
+        end
+    end
 end
 
 function [status, error, options] = check_user_inputs(options)
@@ -374,7 +395,14 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
             if isempty(weight_cache)
                 weight_cache = tmp;
             else
-                weight_cache(end+1) = tmp;
+                
+                % Force the new structure
+                try
+                    weight_cache(end+1) = tmp;
+                catch
+                    weight_cache = tmp;
+                end
+
             end
             
             save(fullfile(options.outputdir, 'weight_tables.mat'), 'weight_cache');

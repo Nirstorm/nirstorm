@@ -36,7 +36,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - 1st level design and fit';
     sProcess.Category    = 'File2';
@@ -44,7 +44,7 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.Index       = 1601;
     sProcess.isSeparator = 0;
 
-    sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/%5BWIP%5D-GLM';
+    sProcess.Description = '';
     % todo add a new tutorials
     
     % Definition of the input accepted by this process
@@ -174,7 +174,7 @@ function Comment = FormatComment(sProcess)
     Comment = sProcess.Comment; 
 end
 
-function OutputFiles = Run(sProcess, sInput, sInput_ext) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInput, sInput_ext) 
 
     OutputFiles = {};
 
