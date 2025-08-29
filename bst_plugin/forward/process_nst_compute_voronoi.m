@@ -91,10 +91,21 @@ segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
 
-if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value              
+if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value  
+
+
+    sMri            = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    sSegmentation   = in_mri_bst(sSubject.Anatomy(segmentation_id).FileName);
+
+    if ~all(round(sMri.Voxsize(1:3) .* 1000) == round(sSegmentation.Voxsize(1:3) .* 1000))
+        bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
+        return
+    end
+
     [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
+
 elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value 
     
     msg = '';
@@ -108,6 +119,7 @@ elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value
     [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName);
 end
+
 bst_progress('inc',1);
 bst_progress('text', 'Saving results');
 
@@ -183,8 +195,7 @@ vox_size    = sMri.Voxsize ;
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 
 if nargin > 2
-
-    GM_mask = get_grey_matter_mask(segmentation_file);
+    GM_mask = get_grey_matter_mask(sSegmentation);
 
     tmp = -1 * ones(size(vol_voro));
     tmp(GM_mask) = vol_voro(GM_mask);
