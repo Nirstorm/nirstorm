@@ -195,7 +195,7 @@ vox_size    = sMri.Voxsize ;
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 
 if nargin > 2
-    GM_mask = get_grey_matter_mask(sSegmentation);
+    GM_mask = get_grey_matter_mask(segmentation_file);
 
     tmp = -1 * ones(size(vol_voro));
     tmp(GM_mask) = vol_voro(GM_mask);
