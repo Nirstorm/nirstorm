@@ -116,7 +116,7 @@ function OutputFiles = Run(sProcess, sInputs)
     end
     
     head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
-    if ~(isfield(nirs_head_model, 'NIRSMethod') && ~isempty(nirs_head_model.NIRSMethod))
+    if ndims(nirs_head_model.Gain) == 3
         ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
         head_model = process_nst_import_head_model('convert_head_model', ChannelMat, head_model, 0);
     end
