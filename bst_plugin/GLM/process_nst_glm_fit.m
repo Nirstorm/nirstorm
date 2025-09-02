@@ -213,7 +213,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
         channel_data = in_bst_data(DataMat.DataFile);
 
         % Make sure time axis is consistent
-        assert(all(channel_data.Time == DataMat.Time));
+        assert(all(round(channel_data.Time,6)   == round(DataMat.Time,6)));
         if (~isfield(DataMat,'Events') || isempty(DataMat.Events) )&& isfield(channel_data, 'Events')  
             DataMat.Events = channel_data.Events;
         end
