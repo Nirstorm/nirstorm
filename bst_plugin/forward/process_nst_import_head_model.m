@@ -137,11 +137,9 @@ function OutputFiles = Run(sProcess, sInput)
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
     HeadModelMat.GridOrient     = sCortex.VertNormals;
     HeadModelMat.Comment        = 'NIRS head model';
-    HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
-                                         'smoothing_method', OPTIONS.smoothing_method, ...
-                                         'smoothing_fwhm',   OPTIONS.smoothing_fwhm);
-    
-    HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
+
+    strHistory =  [sprintf('Fluence: %s, SmoothMethod: %s, SmoothFWHM: %1.3f', OPTIONS.FluenceFolder, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm)];
+    HeadModelMat = bst_history('add', HeadModelMat, 'compute', ['Compute head model: ##', 'Import (NIRS)' , '##' strHistory]);
 
 
     % Save Head Model
