@@ -154,7 +154,8 @@ function OutputFiles = Run(sProcess, sInput)
     newHeadModel.FileName = file_short(HeadModelFile);
     newHeadModel.Comment = 'NIRS head model from fluence';
     newHeadModel.HeadModelType  = 'surface';    
-    
+    newHeadModel.NIRSMethod     = 'MCXlab';
+
     iHeadModel = length(sStudy.HeadModel) + 1;
     if ~isempty(sStudy.HeadModel)
         sStudy.HeadModel(end+1) = newHeadModel(1);
