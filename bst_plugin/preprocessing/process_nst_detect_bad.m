@@ -171,6 +171,10 @@ function OutputFiles = Run(sProcess, sInputs)
 
     all_bad_channels_nirs = intersect( all_bad_channels,  {ChanneMat.Channel(nirs_flags{1}).Name});
     if isempty(all_bad_channels_nirs)
+        
+        bst_report('Open', 'current');                                      
+        OutputFiles = {sInputs.FileName};
+
         return
     end
 
