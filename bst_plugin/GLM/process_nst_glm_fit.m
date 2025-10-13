@@ -439,8 +439,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
     if save_betas
         % Saving B as maps
         for i_reg_name=1:length(model.reg_names)
-            data_out = zeros(size(DataMat.F, 1), 1);
-
             output_tag = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
             output_comment = [output_prefix '- beta ' model.reg_names{i_reg_name}];
 
@@ -448,10 +446,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
                 [sStudy, ResultFile] = nst_bst_add_surf_data(results.B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
             else
-                data_out(nirs_ichans,:) = results.B(i_reg_name,:);
                 sDataOut = db_template('data');
-                sDataOut.F            = data_out;
-                sDataOut.Comment      = output_tag;
+                sDataOut.F            = results.B(i_reg_name,:)';
+                sDataOut.Comment      = output_comment;
                 sDataOut.ChannelFlag  = DataMat.ChannelFlag;
                 sDataOut.Time         = [1];
                 sDataOut.DataType     = 'recordings';
