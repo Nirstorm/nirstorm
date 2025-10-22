@@ -1001,7 +1001,7 @@ function options = display_weight_table(options)
         onglet = uitab(hFigTab,'title',['Lambda = ', num2str(options.lambda2)]);
     end
 
-    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    distances = nst_pdist(ROI_head.head_vertices_coords,ROI_head.head_vertices_coords);
     [~, I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);
@@ -1149,7 +1149,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
     
-    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    distances =nst_pdist(ROI_head.head_vertices_coords, ROI_head.head_vertices_coords);
     [~,I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);
