@@ -307,7 +307,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     UpdateScoutList(jComboCortex,jListCortex, AtlasCortex.Atlas, AtlasCortex.iAtlas, AtlasCortex.iScout);
     UpdatePanel();
     
-    
+    checkSelectionROI();
+
     
 %% =================================================================================
 %  === LOCAL CALLBACKS  ============================================================

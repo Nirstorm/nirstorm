@@ -63,23 +63,22 @@ end
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInput) 
 
-    OutputFile = {};
-    
+    OutputFile  = {};
+    options     = sProcess.options.fluencesCond.Value;
+    if isempty(options)
+        bst_error(['Please check the advanced options of the process "', sProcess.Comment, '" before running the pipeline.'], 'Pipeline editor', 0);
+        return 
+    end
+
     if bst_iscompiled()
         bst_error('Optimum montage is not available in the compiled version of brainstorm');
         return;
     end        
     cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    
     if ~check_cplex(cplex_url)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
     end
 
-    options     = sProcess.options.fluencesCond.Value;
-    if ~isfield(options, 'condition_name') || isempty(options.condition_name)
-        options.condition_name = 'planning_optimal_montage';
-    end
-    
     SubjectName = options.SubjectName;
     sProcess.options.subjectname.Value = SubjectName;
     
