@@ -53,6 +53,10 @@ sProcess.options.window_length.Value   = {10, 's', 0};
 sProcess.options.text1.Comment   = '<b>Export the following indicator</b>'; 
 sProcess.options.text1.Type    = 'label';
 
+sProcess.options.option_negative_values.Comment = 'Detection of negative values';
+sProcess.options.option_negative_values.Type    = 'checkbox';
+sProcess.options.option_negative_values.Value   = 1;
+
 
 sProcess.options.option_coefficient_variation.Comment = 'Coefficient of variation';
 sProcess.options.option_coefficient_variation.Type    = 'checkbox';
@@ -123,6 +127,34 @@ function OutputFiles = Run(sProcess, sInput)
     sStudy = bst_get('Study', iStudy);
 
     % Compute the different quality metrics
+
+    if sProcess.options.option_negative_values.Value 
+
+        % Save time-series data
+        data_out = zeros(size(sDataIn.F));
+        data_out(nirs_ichans,:) = sDataIn.F(nirs_ichans, : ) <= 0;
+
+        sDataOut = db_template('data');
+        sDataOut.F            = data_out;
+        sDataOut.Comment      = 'Negative values';
+        sDataOut.ChannelFlag  = sDataIn.ChannelFlag;
+        sDataOut.Time         = sDataIn.Time;
+        sDataOut.Events       = sDataIn.Events;
+        sDataOut.DataType     = 'recordings';
+        sDataOut.nAvg         = 1;
+        sDataOut.DisplayUnits = '%';
+    
+        % Generate a new file name in the same folder
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_negative');
+        sDataOut.FileName = file_short(OutputFile);
+        bst_save(OutputFile, sDataOut, 'v7');
+        % Register in database
+        db_add_data(iStudy, OutputFile, sDataOut);
+        OutputFiles{end+1} = OutputFile;
+
+    end
+
+
     if sProcess.options.option_coefficient_variation.Value
 
         if isRaw
