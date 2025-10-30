@@ -71,9 +71,9 @@ function OutputFiles = Run(sProcess, sInput)
     % Get the output condition - create it if it doesn't exist
     if strcmpi(sInput.FileType, 'raw')
       % Create or get the target study
-      newCondition = strrep(sInputs.Condition, '@raw', '');
-      iStudy = db_add_condition(sInputs.SubjectName, newCondition);
-      db_set_channel(iStudy, sInputs.ChannelFile, 2, 0);
+      newCondition = strrep(sInput.Condition, '@raw', '');
+      iStudy = db_add_condition(sInput.SubjectName, newCondition);
+      db_set_channel(iStudy, sInput.ChannelFile, 2, 0);
     else
       iStudy = sInput.iStudy;
     end
