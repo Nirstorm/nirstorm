@@ -145,7 +145,7 @@ function OutputFiles = Run(sProcess, sInput)
         sDataOut.DisplayUnits = '%';
     
         % Generate a new file name in the same folder
-        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_cv');
+        OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_negative');
         sDataOut.FileName = file_short(OutputFile);
         bst_save(OutputFile, sDataOut, 'v7');
         % Register in database
