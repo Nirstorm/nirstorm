@@ -24,7 +24,12 @@ Current features include:
 
 ## Usage
 
-The primary documentation is available on the [nirstorm GitHub project wiki](https://github.com/Nirstorm/nirstorm/wiki#tutorials).
+The primary documentation is available on the [website of Brainstorm](https://neuroimage.usc.edu/brainstorm/Tutorials).
+
+## Citation
+If you are using NIRSTORM, please cite:
+
+Édouard Delaire, Thomas Vincent, Zhengchen Cai, Alexis Machado, Laurent Hugueville, Denis Schwartz, Francois Tadel, Raymundo Cassani, Louis Bherer, Jean-Marc Lina, Mélanie Pélégrini-Issac, Christophe Grova, NIRSTORM: A brainstorm extension dedicated to fNIRS data analysis, advanced 3D reconstructions, and optimal probe design, Neurophoton. 12(2), 025011 (2025), doi: 10.1117/1.NPh.12.2.025011.
 
 ## Installation
 
