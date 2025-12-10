@@ -104,7 +104,12 @@ SurfaceFile = sSubject.Surface(sSubject.iCortex).FileName;
 sCortex     = in_tess_bst(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes    = size(sCortex.Vertices, 1);
 
-voronoi         = process_nst_import_head_model('get_voronoi',sProcess, sInputs);
+voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+if ~exist(voronoi_fn,"file")
+    bst_error(sprintf('Voronoi is missing for subject %s ', subjectName));
+end
+sVoronoi        = in_mri_bst(voronoi_fn);
+voronoi         = sVoronoi.Cube;
 voronoi_mask    = (voronoi > -1) & ~isnan(voronoi);
 
 if ~( size(fMRI_map,1) == size(voronoi,1) &&...
