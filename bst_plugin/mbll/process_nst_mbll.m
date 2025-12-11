@@ -136,7 +136,9 @@ function OutputFile = Run(sProcess, sInputs)
     [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs.SubjectFile,'intra_subject', 'default_study');
     newCondition = file_unique(newCondition, {sSubjStudies.Name}, 1);
 
-    iStudy = db_add_condition(sInputs.SubjectName, newCondition);
+    oldStudy = bst_get('Study', sInputs(1).iStudy); 
+    iStudy = db_add_condition(sInputs.SubjectName, newCondition, 1, oldStudy.DateOfStudy);
+    
     sStudy = bst_get('Study', iStudy);
     
     % Save channel definition
