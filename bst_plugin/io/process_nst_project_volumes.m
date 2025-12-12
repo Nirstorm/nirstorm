@@ -110,7 +110,7 @@ if ~exist(voronoi_fn,"file")
 end
 sVoronoi        = in_mri_bst(voronoi_fn);
 voronoi         = sVoronoi.Cube;
-voronoi_mask    = (voronoi > -1) & ~isnan(voronoi);
+voronoi_mask    = (voronoi > 0) & ~isnan(voronoi);
 
 if ~( size(fMRI_map,1) == size(voronoi,1) &&...
       size(fMRI_map,2) == size(voronoi,2) && ...
