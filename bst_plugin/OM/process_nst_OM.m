@@ -305,7 +305,7 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
     end
     
     GM_mask = process_nst_compute_voronoi('get_grey_matter_mask',sSubject.Anatomy(iseg).FileName);
-    voronoi_mask = (voronoi > -1) &  ~isnan(voronoi) & GM_mask & ismember(voronoi, ROI_cortex.Vertices);
+    voronoi_mask = (voronoi > 0) &  ~isnan(voronoi) & GM_mask & ismember(voronoi, ROI_cortex.Vertices);
     
     voi               = zeros(options.cubeSize(1), options.cubeSize(2), options.cubeSize(3));
     voi(voronoi_mask) = 1;

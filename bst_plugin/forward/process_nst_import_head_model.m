@@ -214,7 +214,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     % Get Voronoi
     voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
     voronoi     = voronoi_bst.Cube;
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
+    voronoi_mask = (voronoi > 0) & ~isnan(voronoi);
 
     % Load montage informations
     montage_info    = nst_montage_info_from_bst_channels(sChannelsNIRS);

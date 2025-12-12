@@ -198,12 +198,15 @@ vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 if nargin > 2
     GM_mask = get_grey_matter_mask(segmentation_file);
 
-    tmp = -1 * ones(size(vol_voro));
+    tmp = zeros(size(vol_voro));
     tmp(GM_mask) = vol_voro(GM_mask);
 
     vol_voro = tmp; 
 
 end
+
+vol_voro(vol_voro < 0 )  = 0;
+
 end
 
 
@@ -243,7 +246,7 @@ function voronoi_fn = get_voronoi_fn(sSubject)
     else
         [cortex_root, cortex_bfn, cortex_ext] = fileparts(sSubject.Surface(sSubject.iCortex).FileName);
         [anat_root, anat_bfn, anat_ext] = fileparts(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-        voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi' anat_ext];
+        voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi_volatlas' anat_ext];
         subjectSubDir = bst_fileparts(sSubject.FileName);
         ProtocolInfo = bst_get('ProtocolInfo');
         voronoi_fn =  bst_fullfile(ProtocolInfo.SUBJECTS, subjectSubDir, voronoi_bfn);
@@ -287,6 +290,8 @@ end
 sMri.Cube       = data;
 sMri.Comment    = vol_comment;
 sMri.Histogram  = mri_histogram(sMri.Cube);
+[Labels, AtlasName] = mri_getlabels(vol_fn, sMri, 1);
+sMri.Labels = Labels;
 
 if nargin > 5
     sMri = bst_history('add', sMri, 'import', history_comment);
