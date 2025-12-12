@@ -19,6 +19,7 @@ function varargout = process_nst_compute_voronoi( varargin )
 % =============================================================================@
 %
 % Authors: Thomas Vincent, ZhengChen Cai (2017)
+%          Edouard Delaire (2025)
 
 eval(macro_method);
 end
@@ -218,7 +219,7 @@ function GM_mask = get_grey_matter_mask(segmentation_file)
 
     idx = [];
     if any(contains({sSegmentation.Labels{:,2}}, 'Cortex'))
-        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Cortex'),1}});
+        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, {'Cortex', 'Hippocampus', 'Thalamus', 'Caudate', 'Putamen', 'Pallidum', 'Amygdala', 'Cerebellum R', 'Cerebellum L'}),1}});
     elseif any(contains({sSegmentation.Labels{:,2}}, 'Gray'))
         idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Gray'),1}});
     end
