@@ -32,7 +32,7 @@ end
 function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'GLM - 1st level contrast';
-    sProcess.Category    = 'Custom';
+    sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', 'GLM'};
     sProcess.Index       = 1602;
     sProcess.isSeparator = 0;
@@ -64,7 +64,12 @@ function OutputFiles = Run(sProcess, sInputs)
        error('Empty contrast');
     end
      
-    glm_fit = in_bst_data(sInputs(1).FileName);
+    if strcmp(sInputs.FileType, 'data')     % Imported data structure
+        glm_fit = in_bst_data(sInput.FileName);
+    elseif strcmp(sInputs.FileType, 'results') 
+        glm_fit = in_bst_results(sInputs.FileName, 1);
+    end
+
     if isfield(glm_fit, 'SurfaceFile') && ~isempty(glm_fit.SurfaceFile)
         surface_data = 1;
         B = glm_fit.ImageGridAmp';

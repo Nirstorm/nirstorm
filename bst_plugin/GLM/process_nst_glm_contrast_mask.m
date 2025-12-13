@@ -65,7 +65,7 @@ function OutputFiles = Run(sProcess, sInput)
     OutputFiles={};
     
     [StatThreshOptions, strCorrect] = process_extract_pthresh('GetOptions', sProcess);
-    ResultsMat = in_bst_results(sInput.FileName, 0);
+    ResultsMat = in_bst_results(sInput.FileName, 1);
   
     if sProcess.options.do_atlas_inter.Value
         % from process_source_atlas.m

@@ -209,7 +209,7 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
     elseif strcmp(sInput.FileType, 'results')  % Imported data on the cortex
         surface_data = 1;
         
-        DataMat = in_bst_results(sInput.FileName);
+        DataMat = in_bst_results(sInput.FileName, 1);
         channel_data = in_bst_data(DataMat.DataFile);
 
         % Make sure time axis is consistent
