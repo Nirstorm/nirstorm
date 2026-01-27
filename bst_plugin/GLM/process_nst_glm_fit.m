@@ -1,4 +1,4 @@
-                                                function varargout = process_nst_glm_fit( varargin )
+function varargout = process_nst_glm_fit( varargin )
 % process_compute_glm: compute the glm : find B such as Y = XB +e with X
 % 
 % OlS_fit use an ordinary least square algorithm to find B : B= ( X^{T}X)^{-1} X^{T} Y 
@@ -192,8 +192,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     
-    % Load Channels informations
-    ChannelMat = in_bst_channel(sInput.ChannelFile);
 
     % Load recordings
     surface_data = 0;
@@ -203,8 +201,14 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
         sDataRaw = in_bst_data(sInput.FileName, 'F');
         DataMat.Events = sDataRaw.F.events;
 
+        % Load Channels informations
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
+
     elseif strcmp(sInput.FileType, 'data')     % Imported data structure
         DataMat = in_bst_data(sInput.FileName);
+
+        % Load Channels informations
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
 
     elseif strcmp(sInput.FileType, 'results')  % Imported data on the cortex
         surface_data = 1;
@@ -217,6 +221,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
         if (~isfield(DataMat,'Events') || isempty(DataMat.Events) )&& isfield(channel_data, 'Events')  
             DataMat.Events = channel_data.Events;
         end
+
+        % Load Channels informations
+        ChannelMat = [];
     end
 
     data_types = {}; % Chromophore present in the data (eg HbO, HbR, or WL860)
