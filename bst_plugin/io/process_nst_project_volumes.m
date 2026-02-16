@@ -93,9 +93,9 @@ sSubject            = bst_get('Subject', subjectName);
 iStudy = db_add_condition(subjectName, sProcess.options.out_name.Value);
 sStudy = bst_get('Study', iStudy);
 
-% Load anat mri
+% Load fMRI volume and convert to double
 fMRI_vol = in_mri(sProcess.options.fMRI.Value{1});
-fMRI_map = fMRI_vol.Cube;
+fMRI_map = double(fMRI_vol.Cube);
 
 %% using Voronoi partitionning
 bst_progress('start', 'Volume projection','projecting...');
