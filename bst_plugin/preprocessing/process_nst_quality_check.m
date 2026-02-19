@@ -110,7 +110,7 @@ function OutputFiles = Run(sProcess, sInput)
     window_length = sProcess.options.window_length.Value{1};
 
     ChannelMat  = in_bst_channel(sInput.ChannelFile);
-    nirs_ichans = good_channel(ChannelMat.Channel,sDataIn.ChannelFlag,  'NIRS');
+    nirs_ichans = good_channel(ChannelMat.Channel, [],  'NIRS');
     isRaw       = isempty(sDataIn.DisplayUnits) || ~contains(sDataIn.DisplayUnits, {'OD', 'HbO', 'HbR', 'HbT0'});
 
     signals = sDataIn.F(nirs_ichans,:);
