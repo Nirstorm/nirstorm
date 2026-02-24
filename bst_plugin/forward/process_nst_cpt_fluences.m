@@ -312,7 +312,12 @@ for ivertx = 1:nb_vertex
             bst_progress('inc', 1);
         else
 
-            cfg.prop = nst_get_tissues_optical_properties(tissues,wl);
+            [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl);
+            if ~isempty(errors)
+                bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  error_list], newline))
+                return;
+            end
+    
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
             if strcmp(options.software, 'mcxlab-cuda')
