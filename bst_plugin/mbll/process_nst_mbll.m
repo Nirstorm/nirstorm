@@ -199,15 +199,14 @@ function OutputFile = Run(sProcess, sInputs)
     end
 end
 
-function [fdata, fchannel_def] = ...
-    filter_bad_channels(data, channel_def, channel_flags)
+function [fdata, fchannel_def] =  filter_bad_channels(data, channel_def, channel_flags)
 %% Filter the given data based on bad channel flags
 %
 % Args:
 %    - data: matrix of double, size: nb_samples x nb_channels
 %      data time-series to filter
 %    - channel_def: struct
-%        Defintion of channels as given by brainstorm
+%        Definition of channels as given by brainstorm
 %        Used field: Channel
 %    - channel_flags: array of int, default: []
 %        Channel flags. Channel with flag -1 are filtered
@@ -216,17 +215,29 @@ if nargin < 3 || isempty(channel_flags)
     channel_flags = ones(length(channel_def.Channel), 1);
 end
 
-kept_ichans = channel_flags' ~= -1;
+kept_ichans = (channel_flags == 1)';
 
-fchannel_def = channel_def;
-fchannel_def.Channel = channel_def.Channel(kept_ichans);
-fdata = data(:, kept_ichans);
+fchannel_def            = channel_def;
+fchannel_def.Channel    = channel_def.Channel(kept_ichans);
+
+% Only keep the good sensors in the clusters
+if ~isempty(fchannel_def.Clusters)
+    for iCluster = 1:length(fchannel_def.Clusters)
+        
+        cluster_sensors = fchannel_def.Clusters(iCluster).Sensors;
+        good_sensors = intersect(cluster_sensors, {fchannel_def.Channel.Name});
+        
+        fchannel_def.Clusters(iCluster).Sensors = good_sensors;
+    end
 end
 
 
-function [fdata, fchannel_def, data_other, channel_def_other] = ...
-    filter_data_by_channel_type(data, channel_def, channel_types)
+fdata = data(:, kept_ichans);
 
+end
+
+
+function [fdata, fchannel_def, data_other, channel_def_other] =  filter_data_by_channel_type(data, channel_def, channel_types)
 %    - channel_types: str or cell array of str
 %        Channel types to keep.
 %        If [] is given then all channels are kept.
