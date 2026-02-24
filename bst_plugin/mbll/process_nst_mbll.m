@@ -316,11 +316,10 @@ function [nirs_hb, channel_hb_def] = ...
 %                                          % input channel_def, same as paired 
 %                                          % channel ichan1)
 %           Channel(ichan3).Group = 'HbT'; 
-% TODO: check negative values
+
 if nargin < 3
     age = 25;
 end
-
 
 if nargin < 5
    do_plp_corr = 1; 
@@ -345,9 +344,8 @@ nirs_hb_p = zeros(nb_pairs, 3, nb_samples);
 for ipair=1:size(nirs_psig, 1)
     hb_extinctions = nst_get_hb_extinctions(channel_def.Nirs.Wavelengths); % cm^-1.l.mol^-1
     
-    if ~ isempty(dOD_params)
-        delta_od = process_nst_dOD('Compute', squeeze(nirs_psig(ipair, :, :)), ...
-                                   dOD_params);
+    if ~isempty(dOD_params)
+        delta_od = process_nst_dOD('Compute', squeeze(nirs_psig(ipair, :, :)), dOD_params);
     else 
         delta_od = squeeze(nirs_psig(ipair, :, :));
     end   
@@ -420,11 +418,48 @@ for ipair=1:size(nirs, 1)
     end
 end
 
-channel_hb_def.Nirs = rmfield(channel_hb_def.Nirs, 'Wavelengths');
+% Convert cluster from wavelength to cluster
+if ~isempty(channel_hb_def.Clusters)
 
-channel_hb_def.Nirs.Hb = hb_names;
-channel_hb_def.Channel = Channel;
-channel_hb_def.Comment = ['NIRS-BRS sensors (' num2str(length(Channel)) ')'];
+    new_clusters = repmat(db_template('cluster'), 1, 1);
+    old_groups = unique({channel_hb_def.Channel.Group});
+    k = 1;
+    for iCluster = 1:length(channel_hb_def.Clusters)
+        
+        isNIRS = contains(channel_hb_def.Clusters(iCluster).Sensors, old_groups);
+        isMixed = any(sum(cell2mat(cellfun( @(x) contains(channel_hb_def.Clusters(iCluster).Sensors,x)',  old_groups,  'UniformOutput',  false)), 2) > 1);
+            
+        if ~isNIRS
+            new_clusters(k) = channel_hb_def.Clusters(iCluster);
+            k = k +1;
+            continue;
+        end
+
+        if isMixed 
+            warning('Cannot convert cluster %s',  channel_hb_def.Clusters(iCluster).Label)
+            continue;
+        end
+        
+        iGroup  =  find(cellfun(@(x) contains(channel_hb_def.Clusters(iCluster).Sensors(1),x),  old_groups));
+        
+        for iHb = 1:length(hb_names)
+            tmp         = channel_hb_def.Clusters(iCluster);
+            tmp.Label   = strrep(tmp.Label, old_groups{iGroup}, hb_names{iHb});
+            tmp.Sensors = cellfun(@(x) strrep(x, old_groups{iGroup}, hb_names{iHb}), tmp.Sensors, 'UniformOutput', false);
+
+            if ~any(strcmp({new_clusters.Label}, tmp.Label))
+                new_clusters(k) = tmp;
+                k = k +1;
+            end
+        end
+    end
+end
+
+channel_hb_def.Nirs = rmfield(channel_hb_def.Nirs, 'Wavelengths');
+channel_hb_def.Nirs.Hb  = hb_names;
+channel_hb_def.Channel  = Channel;
+channel_hb_def.Clusters = new_clusters;
+channel_hb_def.Comment  = ['NIRS-BRS sensors (' num2str(length(Channel)) ')'];
 end
 
 function delta_od_fixed = fix_ppf(delta_od, wavelengths, age, pvf, dpf_method)
