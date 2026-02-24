@@ -1,17 +1,21 @@
 function  [prop, error_list] = nst_get_tissues_optical_properties(tissues, wavelength, FilesTissuesProperty)
     
-    if nargin < 3 || isempty(FilesTissuesProperty) || ~file_exist(FilesTissuesProperty)
+    if nargin < 3 || isempty(FilesTissuesProperty) 
         FilesTissuesProperty = fullfile(fileparts(which('nst_get_tissues_optical_properties')),  'tissues_property.json');
+    end
+
+    % [mua, mus, g, n]
+    prop        = nan(size(tissues,1), 4 );
+    error_list  = {};
+
+    if ~file_exist(FilesTissuesProperty)
+        error_list{end+1} = sprintf('%s does not exist', FilesTissuesProperty);
+        return;
     end
 
     txt  = fileread(FilesTissuesProperty);
     data = jsondecode(txt);
     
-    
-    % [mua, mus, g, n]
-    prop        = nan(size(tissues,1), 4 );
-    error_list  = {};
-
     for iTissue = 1:size(tissues,1)
     
         tissues_name    = tissues{iTissue,2};

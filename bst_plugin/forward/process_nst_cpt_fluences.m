@@ -228,6 +228,14 @@ if ~isfield(sSegmentation,'Labels') || isempty(sSegmentation.Labels)
 end
 tissues         = sSegmentation.Labels;
 
+% Load tissue property
+if isfield(options, 'FilesTissuesProperty')
+    FilesTissuesProperty = options.FilesTissuesProperty;
+else
+    FilesTissuesProperty = '';
+end
+
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri   = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
@@ -254,6 +262,7 @@ nb_vertex       = length(valid_vertices);
 
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
 
+
 cfg.gpuid       = options.mcxlab_gpuid;
 cfg.autopilot   = 1;
 cfg.respin      = 1;
@@ -277,7 +286,7 @@ options.proj.stepAlongNorm      = 1;
 options.meshes.skin.vertices    = head_vertices_mri;
 options.meshes.skin.faces       = sHead.Faces;
 
-[vertex_pos,invalid_id]=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
+[vertex_pos,invalid_id] = mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
 
 if ~isempty(invalid_id)
     
@@ -292,14 +301,13 @@ if ~isempty(invalid_id)
 
     bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
     db_save();
-    % remove vertices from fluence
 
+    % remove vertices from fluence
     valid_vertices = setdiff(valid_vertices,valid_vertices(invalid_id));
 end
     
 tic
-bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), ...
-             1, nb_vertex * nb_wavelengths);
+bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 1, nb_vertex * nb_wavelengths);
 for ivertx = 1:nb_vertex
     cfg.srcpos=vertex_pos(ivertx,:);    
     cfg.srcdir=head_normals(valid_vertices(ivertx),:);
@@ -312,7 +320,7 @@ for ivertx = 1:nb_vertex
             bst_progress('inc', 1);
         else
 
-            [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl);
+            [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl, FilesTissuesProperty);
             if ~isempty(errors)
                 bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  error_list], newline))
                 return;
