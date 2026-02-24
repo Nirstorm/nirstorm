@@ -203,8 +203,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         jWavelengths.setEnabled(0);
     end    
 
-    jPanelRight.add('br hfill', jPanelForward);    
-     
+    jCustomTissue = gui_component('checkbox', jPanelForward, 'br', 'Use custom tissue property', [], [], [], []);
+    jCustomTissue.setSelected(1);
+
+    gui_component('label', jPanelForward, 'br', 'Tissue property filer:', [], [], [], []);
+    jTissuePropertyFile = gui_component('text', jPanelForward, 'hfill', '', [], [], [], []);
+
+    jPanelRight.add('br hfill', jPanelForward);  
+
+
+
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');    
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
