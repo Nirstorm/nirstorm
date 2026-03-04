@@ -125,12 +125,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
     % Add or replace clusters in the channel file
     for i = 1:length(sClusters)
-
-        if isempty(sClusters(i).Sensors)
-            % do not create empty cluster
-            continue
-        end
-
+        
         % If cluster already exists, update it, otherwise create a new entry
         if ~isfield(ChannelMat, 'Clusters') || isempty(ChannelMat.Clusters)
             ChannelMat.Clusters = repmat(db_template('cluster'), 0, 1);
@@ -141,6 +136,17 @@ function OutputFiles = Run(sProcess, sInputs)
                 iCluster = length(ChannelMat.Clusters) + 1;
             end
         end
+
+        if isempty(sClusters(i).Sensors) 
+            % do not create empty cluster
+            if iCluster <= length(ChannelMat.Clusters)
+                % Remove previous cluster
+                ChannelMat.Clusters(iCluster) = []; 
+            end
+
+            continue
+        end
+
         % Copy all the fields
         ChannelMat.Clusters(iCluster).Sensors  = sClusters(i).Sensors;
         ChannelMat.Clusters(iCluster).Label    = sClusters(i).Label;
