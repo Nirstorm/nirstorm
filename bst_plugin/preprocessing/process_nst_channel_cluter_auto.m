@@ -90,16 +90,28 @@ function OutputFiles = Run(sProcess, sInputs)
         return;
     end
     iScouts = cellfun(@(x) find(strcmp({sCortex.Atlas(iAtlas).Scouts.Label}, x)), sProcess.options.scouts.Value{2});
-    sScout = sCortex.Atlas(iAtlas).Scouts(iScouts);
+    if isempty(iScouts)
+        bst_error(sprintf('Unable to find scout %s.', sProcess.options.scouts.Value{2}))
+        return;
+    end
+    sScout  = sCortex.Atlas(iAtlas).Scouts(iScouts);
     nScouts = length(sScout);
+
+    % Load headmodel
+    if strcmp(sProcess.options.clustering_type.Value, 'sensitivity')
+        sStudy = bst_get('Study', sInputs.iStudy);
+        if isempty(sStudy.HeadModel)
+            bst_error('Unable to find NIRS headmodel')
+            return;
+        end
+        sHead = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
+    end
 
     % Cluster channels
     switch(sProcess.options.clustering_type.Value)
         case 'distance'
             idx_roi  = ClusterChannelUsingDistance(sCortex, sChannel, sScout);
         case 'sensitivity'
-            sStudy = bst_get('Study', sInputs.iStudy);
-            sHead = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
             idx_roi  = ClusterChannelUsingSensitivity(sHead, sChannel, sScout);
         otherwise
             error('Unknown method %s', sProcess.options.clustering_type.Value)
@@ -125,7 +137,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
     % Add or replace clusters in the channel file
     for i = 1:length(sClusters)
-        
+
         % If cluster already exists, update it, otherwise create a new entry
         if ~isfield(ChannelMat, 'Clusters') || isempty(ChannelMat.Clusters)
             ChannelMat.Clusters = repmat(db_template('cluster'), 0, 1);
