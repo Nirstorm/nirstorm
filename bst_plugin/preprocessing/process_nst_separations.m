@@ -31,7 +31,7 @@ function sProcess = GetDescription()
 sProcess.Comment     = 'Compute separations';
 sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1202;
+sProcess.Index       = 1203;
 sProcess.isSeparator = 1;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 
