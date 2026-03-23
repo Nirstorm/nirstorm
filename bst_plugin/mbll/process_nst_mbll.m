@@ -453,12 +453,12 @@ if ~isempty(channel_hb_def.Clusters)
             end
         end
     end
+    channel_hb_def.Clusters = new_clusters;
 end
 
 channel_hb_def.Nirs = rmfield(channel_hb_def.Nirs, 'Wavelengths');
 channel_hb_def.Nirs.Hb  = hb_names;
 channel_hb_def.Channel  = Channel;
-channel_hb_def.Clusters = new_clusters;
 channel_hb_def.Comment  = ['NIRS-BRS sensors (' num2str(length(Channel)) ')'];
 end
 
