@@ -191,7 +191,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
-        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM')
+        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM') && OPTIONS.MEMpaneloptions.output.save_factor
             selected_samples = sOptions(iwl).automatic.selected_samples;
 
             % sort the sample by time instead of energy
