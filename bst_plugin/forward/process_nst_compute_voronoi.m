@@ -94,16 +94,16 @@ if exist(voronoi_fn,'file')
     end
 end
 
-seg_label       = sProcess.options.segmentation_name.Value;
-if isempty(seg_label)
-    seg_label = 'segmentation_5tissues';
+segmentation_file       = sProcess.options.segmentation_name.Value;
+if isempty(segmentation_file)
+    segmentation_file = 'segmentation_5tissues';
 end
 
 
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
-if sProcess.options.do_grey_mask.Value && any(strcmp(seg_label, {sSubject.Anatomy.Comment}))  
+if sProcess.options.do_grey_mask.Value && any(strcmp(segmentation_file, {sSubject.Anatomy.Comment}))  
 
-    segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
+    segmentation_id = find(strcmp(segmentation_file, {sSubject.Anatomy.Comment}));
 
     sMri            = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     sSegmentation   = in_mri_bst(sSubject.Anatomy(segmentation_id).FileName);
@@ -111,6 +111,11 @@ if sProcess.options.do_grey_mask.Value && any(strcmp(seg_label, {sSubject.Anatom
     if ~all(round(sMri.Voxsize(1:3) .* 1000) == round(sSegmentation.Voxsize(1:3) .* 1000))
         bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
         return
+    end
+
+    if  ~isfield(sSegmentation,'Labels') ||  isempty(sSegmentation.Labels)
+        bst_error(sprintf('%s is not a valid atlas.', segmentation_file));
+        return;
     end
 
     [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
@@ -121,7 +126,7 @@ else
     
     msg = '';
     if sProcess.options.do_grey_mask.Value
-        msg = sprintf('MRI segmentation (%s) not found. \n', seg_label);
+        msg = sprintf('MRI segmentation (%s) not found. \n', segmentation_file);
     end
     msg = [ msg, 'Interpolator is not constrained to grey matter. Expect partial volume effect.'];
     
