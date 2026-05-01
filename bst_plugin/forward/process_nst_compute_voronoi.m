@@ -46,7 +46,15 @@ function sProcess = GetDescription()
 
     sProcess.options.do_grey_mask.Comment = 'Grey matter masking';
     sProcess.options.do_grey_mask.Type    = 'checkbox';
-    sProcess.options.do_grey_mask.Value   = 1;      
+    sProcess.options.do_grey_mask.Value   = 1;   
+    sProcess.options.do_grey_mask.Controller   = 'grey_mask';   
+
+    % Option: Atlas name
+    sProcess.options.segmentation_name.Comment = 'Atlas used for grey matter masking:';
+    sProcess.options.segmentation_name.Type    = 'text';
+    sProcess.options.segmentation_name.Value   = 'segmentation_5tissues';
+    sProcess.options.segmentation_name.Class   = 'grey_mask';   
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -86,14 +94,16 @@ if exist(voronoi_fn,'file')
     end
 end
 
-seg_label       = 'segmentation_5tissues';
-segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
+seg_label       = sProcess.options.segmentation_name.Value;
+if isempty(seg_label)
+    seg_label = 'segmentation_5tissues';
+end
 
 
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
+if sProcess.options.do_grey_mask.Value && any(strcmp(seg_label, {sSubject.Anatomy.Comment}))  
 
-if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value  
-
+    segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
 
     sMri            = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     sSegmentation   = in_mri_bst(sSubject.Anatomy(segmentation_id).FileName);
@@ -107,7 +117,7 @@ if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
 
-elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value 
+else
     
     msg = '';
     if sProcess.options.do_grey_mask.Value
