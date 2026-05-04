@@ -28,7 +28,7 @@ end
 function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Compute fluences';
-sProcess.Category    = 'Custom';
+sProcess.Category    = 'File';
 sProcess.SubGroup    = {'NIRS', 'Sources'};
 sProcess.Index       = 1402;
 sProcess.Description = '';
