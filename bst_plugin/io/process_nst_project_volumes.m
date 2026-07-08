@@ -93,9 +93,9 @@ sSubject            = bst_get('Subject', subjectName);
 iStudy = db_add_condition(subjectName, sProcess.options.out_name.Value);
 sStudy = bst_get('Study', iStudy);
 
-% Load anat mri
+% Load fMRI volume and convert to double
 fMRI_vol = in_mri(sProcess.options.fMRI.Value{1});
-fMRI_map = fMRI_vol.Cube;
+fMRI_map = double(fMRI_vol.Cube);
 
 %% using Voronoi partitionning
 bst_progress('start', 'Volume projection','projecting...');
@@ -104,8 +104,13 @@ SurfaceFile = sSubject.Surface(sSubject.iCortex).FileName;
 sCortex     = in_tess_bst(file_fullpath(sSubject.Surface(sSubject.iCortex).FileName));
 nb_nodes    = size(sCortex.Vertices, 1);
 
-voronoi         = process_nst_import_head_model('get_voronoi',sProcess, sInputs);
-voronoi_mask    = (voronoi > -1) & ~isnan(voronoi);
+voronoi_fn = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
+if ~exist(voronoi_fn,"file")
+    bst_error(sprintf('Voronoi is missing for subject %s ', subjectName));
+end
+sVoronoi        = in_mri_bst(voronoi_fn);
+voronoi         = sVoronoi.Cube;
+voronoi_mask    = (voronoi > 0) & ~isnan(voronoi);
 
 if ~( size(fMRI_map,1) == size(voronoi,1) &&...
       size(fMRI_map,2) == size(voronoi,2) && ...

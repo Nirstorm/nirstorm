@@ -1,4 +1,4 @@
-                                                function varargout = process_nst_glm_fit( varargin )
+function varargout = process_nst_glm_fit( varargin )
 % process_compute_glm: compute the glm : find B such as Y = XB +e with X
 % 
 % OlS_fit use an ordinary least square algorithm to find B : B= ( X^{T}X)^{-1} X^{T} Y 
@@ -192,8 +192,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
     selected_event_names = cellfun(@strtrim, strsplit(sProcess.options.stim_events.Value, ','),...
                                    'UniformOutput', 0);
     
-    % Load Channels informations
-    ChannelMat = in_bst_channel(sInput.ChannelFile);
 
     % Load recordings
     surface_data = 0;
@@ -203,20 +201,29 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
         sDataRaw = in_bst_data(sInput.FileName, 'F');
         DataMat.Events = sDataRaw.F.events;
 
+        % Load Channels informations
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
+
     elseif strcmp(sInput.FileType, 'data')     % Imported data structure
         DataMat = in_bst_data(sInput.FileName);
+
+        % Load Channels informations
+        ChannelMat = in_bst_channel(sInput.ChannelFile);
 
     elseif strcmp(sInput.FileType, 'results')  % Imported data on the cortex
         surface_data = 1;
         
-        DataMat = in_bst_results(sInput.FileName);
+        DataMat = in_bst_results(sInput.FileName, 1);
         channel_data = in_bst_data(DataMat.DataFile);
 
         % Make sure time axis is consistent
-        assert(all(channel_data.Time == DataMat.Time));
+        assert(all(round(channel_data.Time,6)   == round(DataMat.Time,6)));
         if (~isfield(DataMat,'Events') || isempty(DataMat.Events) )&& isfield(channel_data, 'Events')  
             DataMat.Events = channel_data.Events;
         end
+
+        % Load Channels informations
+        ChannelMat = [];
     end
 
     data_types = {}; % Chromophore present in the data (eg HbO, HbR, or WL860)
@@ -439,8 +446,6 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
     if save_betas
         % Saving B as maps
         for i_reg_name=1:length(model.reg_names)
-            data_out = zeros(size(DataMat.F, 1), 1);
-
             output_tag = sprintf('ir%d_beta%d', sInput.iItem, i_reg_name);
             output_comment = [output_prefix '- beta ' model.reg_names{i_reg_name}];
 
@@ -448,10 +453,9 @@ function OutputFiles = Run(sProcess, sInput, sInput_ext)
                 [sStudy, ResultFile] = nst_bst_add_surf_data(results.B(i_reg_name,:)', [1], [], output_tag, output_comment, ...
                                                              [], sStudy, 'GLM', DataMat.SurfaceFile);
             else
-                data_out(nirs_ichans,:) = results.B(i_reg_name,:);
                 sDataOut = db_template('data');
-                sDataOut.F            = data_out;
-                sDataOut.Comment      = output_tag;
+                sDataOut.F            = results.B(i_reg_name,:)';
+                sDataOut.Comment      = output_comment;
                 sDataOut.ChannelFlag  = DataMat.ChannelFlag;
                 sDataOut.Time         = [1];
                 sDataOut.DataType     = 'recordings';

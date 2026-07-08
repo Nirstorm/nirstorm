@@ -63,23 +63,22 @@ end
 %% ===== RUN =====
 function OutputFile = Run(sProcess, sInput) 
 
-    OutputFile = {};
-    
+    OutputFile  = {};
+    options     = sProcess.options.fluencesCond.Value;
+    if isempty(options)
+        bst_error(['Please check the advanced options of the process "', sProcess.Comment, '" before running the pipeline.'], 'Pipeline editor', 0);
+        return 
+    end
+
     if bst_iscompiled()
         bst_error('Optimum montage is not available in the compiled version of brainstorm');
         return;
     end        
     cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    
     if ~check_cplex(cplex_url)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
     end
 
-    options     = sProcess.options.fluencesCond.Value;
-    if ~isfield(options, 'condition_name') || isempty(options.condition_name)
-        options.condition_name = 'planning_optimal_montage';
-    end
-    
     SubjectName = options.SubjectName;
     sProcess.options.subjectname.Value = SubjectName;
     
@@ -306,7 +305,7 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
     end
     
     GM_mask = process_nst_compute_voronoi('get_grey_matter_mask',sSubject.Anatomy(iseg).FileName);
-    voronoi_mask = (voronoi > -1) &  ~isnan(voronoi) & GM_mask & ismember(voronoi, ROI_cortex.Vertices);
+    voronoi_mask = (voronoi > 0) &  ~isnan(voronoi) & GM_mask & ismember(voronoi, ROI_cortex.Vertices);
     
     voi               = zeros(options.cubeSize(1), options.cubeSize(2), options.cubeSize(3));
     voi(voronoi_mask) = 1;
@@ -1001,7 +1000,7 @@ function options = display_weight_table(options)
         onglet = uitab(hFigTab,'title',['Lambda = ', num2str(options.lambda2)]);
     end
 
-    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    distances = nst_pdist(ROI_head.head_vertices_coords,ROI_head.head_vertices_coords);
     [~, I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);
@@ -1149,7 +1148,7 @@ function [options, voxels_changed, msg] = denoise_weight_table(options)
     sensitivity_mat = options.sensitivity_mat;
     coverage_mat    = options.coverage_mat;
     
-    distances = squareform(pdist(ROI_head.head_vertices_coords));
+    distances =nst_pdist(ROI_head.head_vertices_coords, ROI_head.head_vertices_coords);
     [~,I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
     sensitivity_mat = sensitivity_mat(order,order);

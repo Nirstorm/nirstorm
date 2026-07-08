@@ -67,7 +67,7 @@ function OutputFiles = Run(sProcess, sInputs)
     operation_str = sProcess.options.operation.Value{2}{sProcess.options.operation.Value{1}};
 
     for iInput=1:length(sInputs)
-        ResultsMat = in_bst_results(sInputs(iInput).FileName, 0);
+        ResultsMat = in_bst_results(sInputs(iInput).FileName, 1);
         % TODO: make some checks on input mask (binary values)
 
         if iInput==1

@@ -217,7 +217,7 @@ if ~any(iseg)
 end
 
 sSegmentation   = in_mri_bst(sSubject.Anatomy(iseg).FileName);
-if ~isequal(sMri.Voxsize,sSegmentation.Voxsize)
+if ~all(round(sMri.Voxsize(1:3) .* 1000) == round(sSegmentation.Voxsize(1:3) .* 1000))
     bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
     return
 end

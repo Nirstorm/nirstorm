@@ -19,6 +19,7 @@ function varargout = process_nst_compute_voronoi( varargin )
 % =============================================================================@
 %
 % Authors: Thomas Vincent, ZhengChen Cai (2017)
+%          Edouard Delaire (2025)
 
 eval(macro_method);
 end
@@ -45,7 +46,15 @@ function sProcess = GetDescription()
 
     sProcess.options.do_grey_mask.Comment = 'Grey matter masking';
     sProcess.options.do_grey_mask.Type    = 'checkbox';
-    sProcess.options.do_grey_mask.Value   = 1;      
+    sProcess.options.do_grey_mask.Value   = 1;   
+    sProcess.options.do_grey_mask.Controller   = 'grey_mask';   
+
+    % Option: Atlas name
+    sProcess.options.segmentation_name.Comment = 'Atlas used for grey matter masking:';
+    sProcess.options.segmentation_name.Type    = 'text';
+    sProcess.options.segmentation_name.Value   = 'segmentation_5tissues';
+    sProcess.options.segmentation_name.Class   = 'grey_mask';   
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -85,21 +94,39 @@ if exist(voronoi_fn,'file')
     end
 end
 
-seg_label       = 'segmentation_5tissues';
-segmentation_id = find(strcmp(seg_label, {sSubject.Anatomy.Comment}));
+segmentation_file       = sProcess.options.segmentation_name.Value;
+if isempty(segmentation_file)
+    segmentation_file = 'segmentation_5tissues';
+end
 
 
 bst_progress('start', 'MRI/Surface Voronoi interpolator','Computing Voronoi partitioning ...', 1, 2);
+if sProcess.options.do_grey_mask.Value && any(strcmp(segmentation_file, {sSubject.Anatomy.Comment}))  
 
-if ~isempty(segmentation_id) && sProcess.options.do_grey_mask.Value              
+    segmentation_id = find(strcmp(segmentation_file, {sSubject.Anatomy.Comment}));
+
+    sMri            = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    sSegmentation   = in_mri_bst(sSubject.Anatomy(segmentation_id).FileName);
+
+    if ~all(round(sMri.Voxsize(1:3) .* 1000) == round(sSegmentation.Voxsize(1:3) .* 1000))
+        bst_report('Error', sProcess, [], 'MRI and Segmentation have different voxel size');
+        return
+    end
+
+    if  ~isfield(sSegmentation,'Labels') ||  isempty(sSegmentation.Labels)
+        bst_error(sprintf('%s is not a valid atlas.', segmentation_file));
+        return;
+    end
+
     [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName, ...
                       sSubject.Anatomy(segmentation_id).FileName);
-elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value 
+
+else
     
     msg = '';
     if sProcess.options.do_grey_mask.Value
-        msg = sprintf('MRI segmentation (%s) not found. \n', seg_label);
+        msg = sprintf('MRI segmentation (%s) not found. \n', segmentation_file);
     end
     msg = [ msg, 'Interpolator is not constrained to grey matter. Expect partial volume effect.'];
     
@@ -108,6 +135,7 @@ elseif isempty(segmentation_id) || ~sProcess.options.do_grey_mask.Value
     [voronoi, sMRI] = Compute(sSubject.Surface(sSubject.iCortex).FileName, ...
                       sSubject.Anatomy(sSubject.iAnatomy).FileName);
 end
+
 bst_progress('inc',1);
 bst_progress('text', 'Saving results');
 
@@ -183,15 +211,17 @@ vox_size    = sMri.Voxsize ;
 vol_voro = dg_voronoi(binary_volume_dilated, vox_size, ListRes, distance);
 
 if nargin > 2
-
     GM_mask = get_grey_matter_mask(segmentation_file);
 
-    tmp = -1 * ones(size(vol_voro));
+    tmp = zeros(size(vol_voro));
     tmp(GM_mask) = vol_voro(GM_mask);
 
     vol_voro = tmp; 
 
 end
+
+vol_voro(vol_voro < 0 )  = 0;
+
 end
 
 
@@ -207,7 +237,7 @@ function GM_mask = get_grey_matter_mask(segmentation_file)
 
     idx = [];
     if any(contains({sSegmentation.Labels{:,2}}, 'Cortex'))
-        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Cortex'),1}});
+        idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, {'Cortex', 'Hippocampus', 'Thalamus', 'Caudate', 'Putamen', 'Pallidum', 'Amygdala', 'Cerebellum R', 'Cerebellum L'}),1}});
     elseif any(contains({sSegmentation.Labels{:,2}}, 'Gray'))
         idx = cell2mat({sSegmentation.Labels{contains({sSegmentation.Labels{:,2}}, 'Gray'),1}});
     end
@@ -231,7 +261,7 @@ function voronoi_fn = get_voronoi_fn(sSubject)
     else
         [cortex_root, cortex_bfn, cortex_ext] = fileparts(sSubject.Surface(sSubject.iCortex).FileName);
         [anat_root, anat_bfn, anat_ext] = fileparts(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-        voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi' anat_ext];
+        voronoi_bfn = [anat_bfn '_' cortex_bfn  '_voronoi_volatlas' anat_ext];
         subjectSubDir = bst_fileparts(sSubject.FileName);
         ProtocolInfo = bst_get('ProtocolInfo');
         voronoi_fn =  bst_fullfile(ProtocolInfo.SUBJECTS, subjectSubDir, voronoi_bfn);
@@ -275,6 +305,8 @@ end
 sMri.Cube       = data;
 sMri.Comment    = vol_comment;
 sMri.Histogram  = mri_histogram(sMri.Cube);
+[Labels, AtlasName] = mri_getlabels(vol_fn, sMri, 1);
+sMri.Labels = Labels;
 
 if nargin > 5
     sMri = bst_history('add', sMri, 'import', history_comment);

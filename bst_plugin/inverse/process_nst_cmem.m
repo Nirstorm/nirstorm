@@ -151,7 +151,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
 
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile, 1);
-    if ~isfield(nirs_head_model, 'NIRSMethod') && ndims(nirs_head_model.Gain) == 3
+    if ndims(nirs_head_model.Gain) == 3
         nirs_head_model = process_nst_import_head_model('convert_head_model', ChannelMat, nirs_head_model, 0);
     end
 
@@ -191,7 +191,7 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
-        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM')
+        if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM') && sOptions(iwl).output.save_factor
             selected_samples = sOptions(iwl).automatic.selected_samples;
 
             % sort the sample by time instead of energy

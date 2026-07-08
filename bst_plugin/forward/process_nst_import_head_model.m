@@ -137,11 +137,9 @@ function OutputFiles = Run(sProcess, sInput)
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
     HeadModelMat.GridOrient     = sCortex.VertNormals;
     HeadModelMat.Comment        = 'NIRS head model';
-    HeadModelMat.Param          = struct('FluenceFolder',    OPTIONS.FluenceFolder , ...
-                                         'smoothing_method', OPTIONS.smoothing_method, ...
-                                         'smoothing_fwhm',   OPTIONS.smoothing_fwhm);
-    
-    HeadModelMat                = bst_history('add', HeadModelMat, 'compute', 'Compute NIRS head model from MCX fluence results');
+
+    strHistory =  [sprintf('Fluence: %s, SmoothMethod: %s, SmoothFWHM: %1.3f', OPTIONS.FluenceFolder, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm)];
+    HeadModelMat = bst_history('add', HeadModelMat, 'compute', ['Compute head model: ##', 'Import (NIRS)' , '##' strHistory]);
 
 
     % Save Head Model
@@ -156,7 +154,8 @@ function OutputFiles = Run(sProcess, sInput)
     newHeadModel.FileName = file_short(HeadModelFile);
     newHeadModel.Comment = 'NIRS head model from fluence';
     newHeadModel.HeadModelType  = 'surface';    
-    
+    newHeadModel.NIRSMethod     = 'MCXlab';
+
     iHeadModel = length(sStudy.HeadModel) + 1;
     if ~isempty(sStudy.HeadModel)
         sStudy.HeadModel(end+1) = newHeadModel(1);
@@ -215,7 +214,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     % Get Voronoi
     voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
     voronoi     = voronoi_bst.Cube;
-    voronoi_mask = (voronoi > -1) & ~isnan(voronoi);
+    voronoi_mask = (voronoi > 0) & ~isnan(voronoi);
 
     % Load montage informations
     montage_info    = nst_montage_info_from_bst_channels(sChannelsNIRS);
