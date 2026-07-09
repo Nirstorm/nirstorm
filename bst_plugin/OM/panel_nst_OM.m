@@ -633,7 +633,7 @@ function s = GetPanelContents()
     s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
     s.exist_weight = 1;  
-    s.flag_display = 0;  
+    s.flag_display = 1;  
 
 end
 
