@@ -93,8 +93,6 @@ function OutputFile = Run(sProcess, sInput)
     sGroundTruth(idx_exclude) = 0;
     fprintf('Removing %d vertex from the ground truth (too deep) \n', length(idx_exclude));
 
-    
-
     % Load Head Model
     sStudy = bst_get('Study', sInput.iStudy);
     if isempty(sStudy.iHeadModel)
@@ -105,7 +103,6 @@ function OutputFile = Run(sProcess, sInput)
     head_model = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName, 1);
     G = head_model.Gain;
 
-    
     coverage = compute_coverage(sSubject, G);
     metrics_montage = compute_metrics_montage(G, coverage, sGroundTruth);
     
@@ -163,8 +160,12 @@ function OutputFile = Run(sProcess, sInput)
     db_add_data(sInput.iStudy, OutputFile, ResultsMat);
     
     metric_table = [struct2table(metrics_montage), struct2table(metrics_simul)];
-    metric_table.Properties.RowNames{1} = sInput.Condition;
-    OutputFile = nst_save_table_in_bst(metric_table, sInput.SubjectName, sInput.Condition, 'Metrics results');
+    % name of each column
+    metric_table.Properties.VariableNames = {'Total sensitivity (mm)', 'Coverage (%)',...
+        'nb overlap', 'DLE (mm)', 'SD (mm)', 'AUC mean (%)', 'AUC mean SD (%)', 'AUC close (%)', ...
+        'AUC close SD (%)', 'AUC far (%)', 'AUC far SD (%)'};
+    metric_table.Properties.RowNames = {sInput.Condition};
+    OutputFile = save_table(metric_table, sInput.SubjectName, sInput.Condition, 'Metrics results');
 
 end
 
@@ -185,18 +186,16 @@ function [coverage_channel]  = compute_coverage(sSubject, G)
     median_voronoi_volume = process_nst_compute_voronoi('get_median_voronoi_volume', sVoronoi);  
     delta_mu_a = 0.1;
     threshold = process_nst_extract_sensitivity_from_head_model('compute_threshold', p_thresh, act_vol, median_voronoi_volume, delta_mu_a);
-    
 
     coverage_channel  = G  > threshold;
 end
 
 function metrics = compute_metrics_montage(sensitivity, coverage_channel, ROI)
-    
+
     metrics = struct();
 
     % 1. Total sensitivity
     metrics.total_sensitivity = sum(sum(sensitivity(:, ROI)));
-
 
     %2. Overlap measure - % coverage of the ROI
     overlap = sum(coverage_channel,  1)' ;
@@ -221,15 +220,68 @@ function [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF, metrics
     activation.options  = get_default_options([1], 'oscilation');
     activation.options.SNR = 1;
 
-
     % Run simulation
     [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF] =  simulNirs(sCortex, nirs_head_model, activation, ChannelMat, OPTIONS);
     [metrics] = compute_metric(sCortex, groundTruth, PSF);
 end
 
+function sFile = save_table(t, subject_name, condition, comment, extra, displayUnits)
+    % Save a table as a Brainstorm matrix item using the 2D Description format
+    if nargin < 5 
+        extra = struct();
+    end
+    if nargin < 6
+        displayUnits = '';
+    end
+    
+    MatNew = db_template('matrixmat');
+    MatNew.Value = table2array(t);
+    [nRows, nCols] = size(MatNew.Value);
+    
+    MatNew.Std = [];
+    MatNew.Time = [];
+    MatNew.DisplayUnits = displayUnits;
+    MatNew.Comment = comment;
+    
+    if ~isempty(t.Properties.RowNames)
+        rowNames = t.Properties.RowNames(:);
+    else
+        rowNames = arrayfun(@(n) sprintf('row_%d', n), 1:nRows, 'UniformOutput', 0)';
+    end
+    colNames = t.Properties.VariableNames(:)';
+    
+    MatNew.Description = cell(nRows, nCols);
+    MatNew.Description{1, 1} = {rowNames{1}, colNames{1}};
+    
+    if nCols > 1
+        MatNew.Description(1, 2:nCols) = colNames(2:nCols);
+    end
+    if nRows > 1
+        MatNew.Description(2:nRows, 1) = rowNames(2:nRows);
+    end
+    
+    sSubject = bst_get('Subject', subject_name, 1);
+    if isempty(sSubject)
+        db_add_subject(subject_name, []);
+    end
+    
+    [sStudy, iStudy] = bst_get('StudyWithCondition', [subject_name '/' condition]);
+    if isempty(sStudy) 
+        iStudy = db_add_condition(subject_name, condition);
+        sStudy = bst_get('Study', iStudy);
+    end
+    
+    extra_fields = fieldnames(extra);
+    for ifield = 1:length(extra_fields)
+        MatNew.(extra_fields{ifield}) = extra.(extra_fields{ifield});
+    end
+    
+    sFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'matrix_table');
+    bst_save(sFile, MatNew, 'v6');
+    db_add_data(iStudy, sFile, MatNew);
+end
 
 function [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF] = simulNirs(sCortex, head_model, activation, ChannelMat, OPTIONS)
-    
     % Load head model
     iwl = 1;
     swl = ['WL' num2str(ChannelMat.Nirs.Wavelengths(iwl))];
@@ -241,10 +293,8 @@ function [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF] = simul
 
     Time       = [1];  
 
-    
     [y, event] = simulate_oscilations(Time, activation.options);
 
-    
     nodes = zeros(1, size(sCortex.Vertices, 1));
     nodes(activation.Vertices) = 1; 
 
@@ -276,11 +326,11 @@ function [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF] = simul
     PSF = zeros(size(groundTruth));
     PSF(valid_nodes) = PSF_ROI;
 end
+
 function [results] = compute_metric(sCortex, groundTruth, PSF)
     
     results = struct();
     idx_truth = find(groundTruth);
-
     
     % Estimate distance from all the vertex to the ROI, in milimeter
     distances = 1000 * min(nst_pdist(sCortex.Vertices,sCortex.Vertices(idx_truth,:)),[],2);
@@ -296,23 +346,23 @@ function [results] = compute_metric(sCortex, groundTruth, PSF)
     ROC_Struct = prepare_ROC(sCortex);
 
     % 3. AUC 
-    [Res_summary, Res_close_summary, Res_far_summary  ] =  Compute_ALL_AUC_global(0, ...
-                                                                             groundTruth, PSF, 1, ...
-                                                                             ROC_Struct.VoisinsOA, ...
-                                                                             ROC_Struct.mycluster, ...
-                                                                             ROC_Struct.nb_resampling,...
-                                                                             ROC_Struct.ordreVoisinage,...
-                                                                             ROC_Struct.thresholds, ...
-                                                                             []);
-    results.auc_mean        = Res_summary.AUC_mean;
-    results.auc_mean_sd     = Res_summary.AUC_std;
-
-    results.auc_close       = Res_close_summary.AUC_mean;
-    results.auc_close_sd    = Res_close_summary.AUC_std;
-
-    results.auc_far         = Res_far_summary.AUC_mean;
-    results.auc_far_sd      = Res_far_summary.AUC_std;
+    [Res_summary, Res_close_summary, Res_far_summary] =  Compute_ALL_AUC_global(0, ...
+                                                         groundTruth, PSF, 1, ...
+                                                         ROC_Struct.VoisinsOA, ...
+                                                         ROC_Struct.mycluster, ...
+                                                         ROC_Struct.nb_resampling,...
+                                                         ROC_Struct.ordreVoisinage,...
+                                                         ROC_Struct.thresholds, ...
+                                                         []);
     
+    results.auc_mean        = 100*Res_summary.AUC_mean;
+    results.auc_mean_sd     = 100*Res_summary.AUC_std;
+
+    results.auc_close       = 100*Res_close_summary.AUC_mean;
+    results.auc_close_sd    = 100*Res_close_summary.AUC_std;
+
+    results.auc_far         = 100*Res_far_summary.AUC_mean;
+    results.auc_far_sd      = 100*Res_far_summary.AUC_std;
 
 end
 
@@ -341,17 +391,16 @@ function VoisinsOA = adj2Voisins(adj)
 len = length(adj);
 
 VoisinsOA = cell(12,len);
-
-h = waitbar(0,'Please wait...');
+bst_progress('start', 'AUC computation', 'Please wait...', 1, 12);
 for iScale = 1:12
     adj_i = logical(adj^iScale);
     adj_i(logical(eye(size(adj_i)))) = 0;
     for iSource = 1:len
        VoisinsOA{iScale,iSource} = find(adj_i(iSource,:));
     end
-    waitbar(iScale / 12)
+    bst_progress('set', iScale);
 end
-close(h) 
+bst_progress('stop');
 
 end
 
