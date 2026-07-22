@@ -506,6 +506,9 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity);
                     n_sensitivity_val = n_sensitivity_val + 1;
                     
+                    % todo: fix me
+                    target_overlap = 3;
+                    k = 1;
                     w = exp(-k*(overlap - target_overlap))';
                     coverage = sum(w.*(sensitivity > threshold));
                     listVertexSeen{isrc, idet} = find(sensitivity > threshold);
