@@ -95,13 +95,16 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    [ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);   
+    [options.ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);   
 
     % Obtain the anatomical MRI
     sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     options.cubeSize        = size(sMri.Cube);
     
-    options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex);
+    [options, warn] = get_weight_tables(sSubject, options);
+    if ~isempty(warn)
+        bst_report('Warning', sProcess, sInput, warn);
+    end
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
@@ -119,7 +122,7 @@ function OutputFile = Run(sProcess, sInput)
     end
     
     % Compute Optimal Montage
-    [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
+    [ChannelMats, montageSufix, infos] = compute_optimal_montage(sSubject, options);
     OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
@@ -278,13 +281,19 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex)
+function [options, warn] = get_weight_tables(sSubject, options, montage_simple)
+    
+    if nargin < 3
+        montage_simple = [];
+    end
 
+    warn            = [];
     sensitivity_mat = [];
     coverage_mat    = [];
     listVertexSeen  = [];
     maxVertexSeen   = 0;
-    ROI_head = options.ROI_head;
+    ROI_head    = options.ROI_head;
+    ROI_cortex  = options.ROI_cortex;
 
     sMri        = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
     voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
@@ -340,9 +349,11 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
             
         elseif options.exist_weight && ~isfield(weight_cache, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
-            bst_report('Warning', sProcess, sInput, 'Weight table format updated. Old file has been deleted and WT has been recomputed.');
+            warn = 'Weight table format updated. Old file has been deleted and WT has been recomputed.';
         end    
     end
+
+
     
     if isempty(sensitivity_mat) || isempty(coverage_mat)
         
@@ -375,12 +386,21 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
                                                                      fluence_fns, ...
                                                                      options.cubeSize, ...
                                                                      vois);
+        % Compute overlap for each vertex for the simple montage
+        overlap = zeros(size(fluence_volumes{1}{1}))';
+        if ~isempty(montage_simple)
+            
+            for iChannel = 1:size(montage_simple, 1)
+                seenVertex = options.listVertexSeen{montage_simple(iChannel, 1), montage_simple(iChannel, 2)};
+                overlap(seenVertex) = overlap(seenVertex) + 1;
+            end
+        end
 
         % Compute weight table
         [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, ...
                                                                                          ROI_head.head_vertices_coords, ...
                                                                                          reference, ...
-                                                                                         options);
+                                                                                         options, overlap);
         
         % Save the weight table in cache
         if ~isempty(options.outputdir)
@@ -413,7 +433,11 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
     options.maxVertexSeen   = maxVertexSeen;
 end
 
-function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
+function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options, overlap)
+    
+    if nargin < 5 || isempty(overlap)
+        overlap = zeros(size(fluence_volumes{1}{1}))';
+    end
 
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
@@ -482,7 +506,8 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity);
                     n_sensitivity_val = n_sensitivity_val + 1;
                     
-                    coverage = sum(sensitivity > threshold);
+                    w = exp(-k*(overlap - target_overlap))';
+                    coverage = sum(w.*(sensitivity > threshold));
                     listVertexSeen{isrc, idet} = find(sensitivity > threshold);
 
                     mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
@@ -504,7 +529,7 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
     bst_progress('stop');  
 end
 
-function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
+function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, options)
     infos = {};
     head_vertices_coords = options.ROI_head.head_vertices_coords;
     %======================================================================
@@ -541,6 +566,9 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
         return;
     end
     
+    options = get_weight_tables(sSubject, options, montage_pairs_simple);
+
+
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
