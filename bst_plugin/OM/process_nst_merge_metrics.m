@@ -33,8 +33,8 @@ function sProcess = GetDescription()
     sProcess.FileTag     = '';
     
     sProcess.Category    = 'Custom'; 
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
-    sProcess.Index       = 1409;
+    sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+    sProcess.Index       = 1106;
     
     sProcess.InputTypes  = {'matrix'};
     sProcess.OutputTypes = {'matrix'}; 

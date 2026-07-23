@@ -29,7 +29,7 @@ function sProcess = GetDescription()
     % Description the process
     sProcess.Comment     = 'Compute distance from cortical surface to head surface';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', 'Forward model'};
     sProcess.Index       = 1406;
     sProcess.Description = '';
     % Definition of the input accepted by this process
@@ -38,7 +38,7 @@ function sProcess = GetDescription()
     sProcess.OutputTypes = {'results'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 0;
-    sProcess.isSeparator = 1;
+    sProcess.isSeparator = 0;
     
     % Option: Subject name
     sProcess.options.subjectname.Comment = 'Subject name:';

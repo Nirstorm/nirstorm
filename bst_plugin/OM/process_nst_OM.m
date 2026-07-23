@@ -30,8 +30,8 @@ function sProcess = GetDescription()
 % Description of the process
 sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = {'NIRS', 'Sources'};
-sProcess.Index       = 1406;
+sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+sProcess.Index       = 1101;
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRS_Optimal_montage';
 sProcess.InputTypes  = {'import'};
 sProcess.OutputTypes = {'import'};

@@ -29,8 +29,8 @@ function sProcess = GetDescription()
     sProcess.Comment     = 'Compare montages';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
-    sProcess.Index       = 1408;
+    sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+    sProcess.Index       = 1105;
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
     % Definition of the outputs of this process
