@@ -508,7 +508,7 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
                     
                     % todo: fix me
                     target_overlap = 3;
-                    k = 1;
+                    k = 0.25;
                     w = exp(-k*(overlap - target_overlap))';
                     coverage = sum(w.*(sensitivity > threshold));
                     listVertexSeen{isrc, idet} = find(sensitivity > threshold);
@@ -554,7 +554,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
     bst_progress('stop');
 
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
-    [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple] = montage_pairs_and_weight(results,options);
+    [montage_pairs_simple, montage_sensitivity_simple] = montage_pairs_and_weight(results,options);
 
 
     ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
@@ -563,14 +563,13 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
     % Premature ending in case coverage constraint is not asked
     if ~options.include_coverage
         str = [sprintf('Only sensitivity : \n'), ...
-              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
+              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, head_vertices_coords)];
         
         infos{end+1} = str;
         return;
     end
     
     options = get_weight_tables(sSubject, options, montage_pairs_simple);
-
 
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
@@ -583,13 +582,13 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
         
     % Display
     str = [sprintf('Only sensitivity : \n'), ...
-          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
+          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, head_vertices_coords)];
 
     infos{end+1} = str;
 
     % Define the cplex problem
     for iLambda = 1:length(lambda2)
-        options.lambda1 = 1/sum(montage_sensitivity_simple);
+        options.lambda1 = 1/max(montage_sensitivity_simple);
         options.lambda2 = lambda2(iLambda);
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
@@ -612,10 +611,10 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
         bst_progress('stop');
                                                         
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
-        [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results, options);
+        [montage_pairs, montage_sensitivity] = montage_pairs_and_weight(results, options);
 
         str = [sprintf('Sensitivity and Coverage (lambda = %d):\n', lambda2(iLambda)), ...
-              display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords)];
+              display_channel_info(montage_pairs, montage_sensitivity, head_vertices_coords)];
 
         infos{end+1} = str;
 
@@ -887,22 +886,21 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
     end
 end
 
-function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results,options)
+function [montage_pairs, montage_sensitivity] = montage_pairs_and_weight(results, options)
 % @========================================================================
 % montage_pairs_and_weight Calculation of montage pairs matrix and montage
 % weight vector
 % ========================================================================@
     
-    x=results.x;
-    x=round(x);
-    isources = find(x(1:options.nH)==1);
-    idetectors = find(x(options.nH+1:2*options.nH)==1);
+    x           = results.x;
+    x           = round(x);
+    isources    = find(x(1:options.nH)==1);
+    idetectors  = find(x(options.nH+1:2*options.nH)==1);
     
     % Memory management
     max_pairs = length(isources) * length(idetectors);
     montage_pairs = zeros(max_pairs, 2);
     montage_sensitivity = zeros(max_pairs, 1);
-    channels_coverage = zeros(max_pairs, 1);
     
     ipair = 0;
 
@@ -916,7 +914,6 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
 
                 montage_pairs(ipair,:)          = [isources(isrc) idetectors(idet)];
                 montage_sensitivity(ipair,:)    = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
-                channels_coverage(ipair,:)      = full(options.coverage_mat(isources(isrc), idetectors(idet)));
             end
         end
     end
@@ -924,25 +921,10 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
      % Make sure the matrix is the right size
     montage_pairs       = montage_pairs(1:ipair, :);
     montage_sensitivity = montage_sensitivity(1:ipair, :);
-    coverage_mat        = options.listVertexSeen;
     
-    % Compute montage coverage
-    list_vertex_seen = {};
-    for iPair = 1:size(montage_pairs, 1)
-        pair = montage_pairs(iPair, :);
-
-        if isempty(list_vertex_seen)
-            list_vertex_seen = coverage_mat{pair(1), pair(2)}';
-        else
-            list_vertex_seen = union(list_vertex_seen, coverage_mat{pair(1), pair(2)}' );
-        end
-    end
-
-    montage_coverage    = length(list_vertex_seen) / options.maxVertexSeen;
-    channels_coverage   = channels_coverage(1:ipair, :);
 end
 
-function info = display_channel_info(montage_pairs, montage_sensitivity,  montage_coverage, channels_coverage, head_vertices_coords)
+function info = display_channel_info(montage_pairs, montage_sensitivity, head_vertices_coords)
 % @========================================================================
 % display_channel_info Used to create the string containing the channels
 % informations
@@ -978,18 +960,16 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
         distance_mm = nst_pdist(head_vertices_coords(ihead_vertex_src, :), head_vertices_coords(ihead_vertex_det, :)) * 1000;
         tab_dist_mm(ipair) = distance_mm;
         sensitivity = montage_sensitivity(ipair, :);
-        coverage = channels_coverage(ipair, :);
 
-        info = [info, sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100)];
+        info = [info, sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Score: %6.3f \n', idx_src, idx_det, distance_mm, sensitivity)];
     end
     
     mean_distance = mean(tab_dist_mm);
     distance_range = [min(tab_dist_mm), max(tab_dist_mm)];
     total_sensitivity = sum(montage_sensitivity);
     
-    percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
     if ~isempty(distance_range)
-        info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap)];
+        info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total score: %.3f \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity)];
         info = strrep(info, '  ', '&nbsp;&nbsp;');
     end
 end
@@ -1053,27 +1033,13 @@ function options = display_weight_table(options)
     colorbar(ax2);
     
     ax3 = subplot(1, 3, 3, 'parent', hpc);
-    if isDefinedLambda == 0
-        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
-        xlabel(ax3, 'Sensitivity');
-        ylabel(ax3, 'Coverage');
-        title(ax3, 'Sensitivity VS. Coverage');
-        set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
-    elseif isDefinedLambda == 1
-        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
-        xlabel(ax3, 'Sensitivity');
-        ylabel(ax3, 'Coverage');
-        title(ax3, 'Sensitivity VS. Coverage');
-        set(hpc,'Title',' Lambda = 0 ','FontSize',8);
-    else
-        ratio = zeros(size(coverage_mat));
-        idx_ratio = sensitivity_mat > 0;
-        ratio(idx_ratio) =  log10( 1 +  coverage_mat(idx_ratio) ./ sensitivity_mat(idx_ratio));
-        
-        imagesc(ax3, ratio);
-        title(ax3, 'Ratio matrix');
-        colorbar(ax3);
-    end
+
+    plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
+    xlabel(ax3, 'Sensitivity');
+    ylabel(ax3, 'Coverage');
+    title(ax3, 'Sensitivity VS. Coverage');
+    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+    
     
     %......................................................................
     % Save figures in the wt folder
