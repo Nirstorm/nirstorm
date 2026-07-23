@@ -161,9 +161,7 @@ function OutputFile = Run(sProcess, sInput)
     
     metric_table = [struct2table(metrics_montage), struct2table(metrics_simul)];
     % name of each column
-    metric_table.Properties.VariableNames = {'Total sensitivity (mm)', 'Coverage (%)',...
-        'nb overlap', 'DLE (mm)', 'SD (mm)', 'AUC mean (%)', 'AUC mean SD (%)', 'AUC close (%)', ...
-        'AUC close SD (%)', 'AUC far (%)', 'AUC far SD (%)'};
+    metric_table.Properties.VariableNames = {'Total sensitivity (mm)', 'Coverage (%)', 'Overlap (# channels)', 'DLE (mm)', 'SD (mm)', 'AUC (%)'};
     metric_table.Properties.RowNames = {sInput.Condition};
     OutputFile = save_table(metric_table, sInput.SubjectName, sInput.Condition, 'Metrics results');
 
@@ -346,7 +344,7 @@ function [results] = compute_metric(sCortex, groundTruth, PSF)
     ROC_Struct = prepare_ROC(sCortex);
 
     % 3. AUC 
-    [Res_summary, Res_close_summary, Res_far_summary] =  Compute_ALL_AUC_global(0, ...
+    [~, Res_close_summary, ~] =  Compute_ALL_AUC_global(0, ...
                                                          groundTruth, PSF, 1, ...
                                                          ROC_Struct.VoisinsOA, ...
                                                          ROC_Struct.mycluster, ...
@@ -355,15 +353,8 @@ function [results] = compute_metric(sCortex, groundTruth, PSF)
                                                          ROC_Struct.thresholds, ...
                                                          []);
     
-    results.auc_mean        = 100*Res_summary.AUC_mean;
-    results.auc_mean_sd     = 100*Res_summary.AUC_std;
 
     results.auc_close       = 100*Res_close_summary.AUC_mean;
-    results.auc_close_sd    = 100*Res_close_summary.AUC_std;
-
-    results.auc_far         = 100*Res_far_summary.AUC_mean;
-    results.auc_far_sd      = 100*Res_far_summary.AUC_std;
-
 end
 
 function [output] = prepare_ROC(sCortex)
