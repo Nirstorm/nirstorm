@@ -56,3 +56,5 @@ nosetests.xml
 
 # configuration files
 .ackrc
+
+.DS_Store

@@ -172,13 +172,13 @@ sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
 dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertices,:));
 head_vertices = find(min(dis2head,[],2) < extent_m); 
 
-% TODO: properly select atlas
-exclude_scout = sHead.Atlas.Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+iHeadAtlas    = find(strcmp({sHead.Atlas.Name}, 'User scouts'));
+exclude_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
 if ~isempty(exclude_scout)
     head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
 end
 
-limiting_scout = sHead.Atlas.Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+limiting_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
 if ~isempty(limiting_scout)
     head_vertices = intersect(head_vertices, limiting_scout.Vertices);
 end
