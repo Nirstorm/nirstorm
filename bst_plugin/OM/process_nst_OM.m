@@ -200,12 +200,10 @@ end
 function [status, error, options] = check_user_inputs(options)
     status = 1;
     error = {};
-    if isfield(options, 'ROI_head')
-        if ~isempty(options.ROI_head)
-            mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
-        else
-            mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
-        end
+    if isfield(options, 'ROI_head') && ~isempty(options.ROI_head)
+        mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
+    else
+        mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex',  'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
     end
     
 
@@ -1280,7 +1278,7 @@ function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
     i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, options.ROI_cortex);
     ROI_cortex     = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
     
-    if isempty(options.Atlas_head) && isempty(options.ROI_head)
+    if ~isfield(options, 'ROI_head') || isempty(options.Atlas_head) || isempty(options.ROI_head)
         
         cortex_to_scalp_extent = options.Extent;
         cortex_scout.sSubject = sSubject;
