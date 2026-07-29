@@ -110,9 +110,7 @@ function OutputFile = Run(sProcess, sInput)
         return
     end
 
-    if options.flag_display
-        options = display_weight_table(options);
-    end
+
     
     % Denoise of the weight table
     [options, voxels_changed, msg] = denoise_weight_table(options);
@@ -554,6 +552,9 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
     [montage_pairs_simple, montage_sensitivity_simple] = montage_pairs_and_weight(results,options);
 
+    if options.flag_display
+        options = display_weight_table(options, montage_pairs_simple);
+    end
 
     ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
     montageSufix{1} = 'simple';
@@ -590,10 +591,7 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
         options.lambda2 = lambda2(iLambda);
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
-        
-        if options.flag_display
-            options = display_weight_table(options);
-        end
+
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
@@ -610,6 +608,11 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
                                                         
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
         [montage_pairs, montage_sensitivity] = montage_pairs_and_weight(results, options);
+
+
+        if options.flag_display
+            options = display_weight_table(options, montage_pairs);
+        end
 
         str = [sprintf('Sensitivity and Coverage (lambda = %d):\n', lambda2(iLambda)), ...
               display_channel_info(montage_pairs, montage_sensitivity, head_vertices_coords)];
@@ -976,12 +979,18 @@ end
 % DEBUG FUNCTIONS
 %==========================================================================
 
-function options = display_weight_table(options)
+function options = display_weight_table(options, montage_pairs)
 % @========================================================================
 % display_weight_table Displays multiple graphs useful to see a
 % representation of the sensitivity & coverage matrices
 % ========================================================================@
-    if ~isfield(options, 'hFig')
+
+    if nargin < 2
+        montage_pairs  = [];
+    end
+
+
+    if ~isfield(options, 'hFig') || ~isvalid(options.hFig)
         options.hFig = figure;
         options.hFigTab = uitabgroup; drawnow;
     end
@@ -1012,27 +1021,35 @@ function options = display_weight_table(options)
     distances = nst_pdist(ROI_head.head_vertices_coords,ROI_head.head_vertices_coords);
     [~, I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
-    sensitivity_mat = sensitivity_mat(order,order);
-    coverage_mat  = coverage_mat(order,order);
+    sensitivity_mat_ordered = sensitivity_mat(order,order);
+    coverage_mat_ordered    = coverage_mat(order,order);
     
+    if ~isempty(montage_pairs)
+        montage_sensitivity = full(sensitivity_mat(montage_pairs(:, 1), montage_pairs(:, 2)));
+        montage_coverage    = full(coverage_mat(montage_pairs(:, 1), montage_pairs(:, 2)));
+    end
+
     hpc = uipanel('Parent', onglet, ...
               'Units', 'Normalized', ...
               'Position', [0.01 0.01 0.98 0.98], ...
               'FontWeight','demi');
 
     ax1 = subplot(1, 3, 1, 'parent', hpc);
-    imagesc(ax1, sensitivity_mat);
+    imagesc(ax1, sensitivity_mat_ordered);
     title(ax1, 'Sensitivity matrix');
     colorbar(ax1);
     
     ax2 = subplot(1, 3, 2, 'parent', hpc);
-    imagesc(ax2, coverage_mat);
+    imagesc(ax2, coverage_mat_ordered);
     title(ax2, 'Coverage matrix');
     colorbar(ax2);
     
     ax3 = subplot(1, 3, 3, 'parent', hpc);
+    hold(ax3, 'on');
+    plot(ax3, full(sensitivity_mat_ordered(sensitivity_mat_ordered > 0)), full(coverage_mat_ordered(sensitivity_mat_ordered > 0)), '+')
+    plot(ax3, montage_sensitivity(:), montage_coverage(:), 'r+')
 
-    plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
+
     xlabel(ax3, 'Sensitivity');
     ylabel(ax3, 'Coverage');
     title(ax3, 'Sensitivity VS. Coverage');
