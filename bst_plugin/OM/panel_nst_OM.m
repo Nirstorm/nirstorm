@@ -578,6 +578,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     end
 
     function UpdateOutputName()
+
+        if isempty(ctrl.jListCortex.getSelectedValue)
+            return
+        end
+        
         ROI_cortex     = strtrim(char(ctrl.jListCortex.getSelectedValue.getName()));
         if jUseDefaultSpace.isSelected
             Extent  = sprintf('%dcm', str2double(ctrl.jExtent.getText));
