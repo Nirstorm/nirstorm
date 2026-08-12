@@ -260,7 +260,7 @@ cfg.respin      = 1;
 % set seed to make the simulation repeatible
 cfg.seed        = hex2dec('623F9A9E'); 
 cfg.nphoton     = options.mcxlab_nphoton*1e6;
-cfg.vol         = sSegmentation.Cube; % segmentation
+cfg.vol         = uint8(sSegmentation.Cube); % segmentation
 cfg.unitinmm    = sSegmentation.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect   = 1; % reflection at exterior boundary
 cfg.isrefint    = 1; % 1-index mismatch at inner boundaries, [0]-matched index
