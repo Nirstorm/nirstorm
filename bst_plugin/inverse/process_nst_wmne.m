@@ -99,7 +99,7 @@ HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    sDataIn = in_bst(sInputs(1).FileName, [], 1, 0, 'no');
 end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
