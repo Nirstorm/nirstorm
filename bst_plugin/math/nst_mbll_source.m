@@ -57,8 +57,8 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
     % Compute MBLLL
     hb_extinctions = nst_get_hb_extinctions(wavelentghts);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
-
-    Y = pinv(hb_extinctions) * dOD_sources; 
+    
+    Y = pagemtimes(pinv(hb_extinctions), dOD_sources);
     Hb_sources = [Y; sum(Y, 1)]; 
 
     % Save output
