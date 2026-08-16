@@ -26,11 +26,39 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
                 dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
             end
         else
-            % If not consistent, go back to full time-course
-            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
-            for iResult = 1:length(sResults)
-                sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
-                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
+
+            if length(sResults) == 2 && length(sResults(1).ImageGridAmp) == 2  && length(sResults(2).ImageGridAmp) == 2
+
+                nVertex = size(sResults(1).ImageGridAmp{1}, 1);
+                nChannelA = size(sResults(1).ImageGridAmp{1}, 2);
+                nChannelB = size(sResults(2).ImageGridAmp{1}, 2);
+
+                sResults(1).ImageGridAmp{1} = [sResults(1).ImageGridAmp{1},  zeros(nVertex, nChannelB)];
+                sResults(2).ImageGridAmp{1} = [zeros(nVertex, nChannelA), sResults(2).ImageGridAmp{1}];
+
+                dataA = sResults(1).ImageGridAmp{2};
+                dataB = sResults(2).ImageGridAmp{2};
+            
+                assert( size(dataA, 2) == size(dataB, 2), 'Uncompatible time definition');
+
+
+                sResults(1).ImageGridAmp{2} = [dataA ;  dataB];
+                sResults(2).ImageGridAmp{2} = [dataA ;  dataB];
+
+                dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
+                for iResult = 1:length(sResults)
+                    dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+                end
+
+            else
+                sResults(iResult).ImageGridAmp
+    
+                % If not consistent, go back to full time-course
+                dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
+                for iResult = 1:length(sResults)
+                    sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
+                    dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
+                end
             end
         end
     end

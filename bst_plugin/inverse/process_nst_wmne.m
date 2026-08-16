@@ -212,16 +212,14 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
 
         % MNE results
-        Results = nst_mne_lcurve(HM, OPTIONS);
+        Kernel = nst_mne_lcurve(HM, OPTIONS);
 
-        grid_amp    = zeros(length(valid_nodes), nb_samples);
         sample      = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
-        grid_amp(:,sample(1):sample(2)) = Results;
+        M = zeros(size(OPTIONS.Data));
+        M(:,sample(1):sample(2)) = OPTIONS.Data(:,sample(1):sample(2));
         
-
-
         sResults(iwl).Comment       = sprintf('MNE sources | %s nm', swl);
-        sResults(iwl).ImageGridAmp  = grid_amp;
+        sResults(iwl).ImageGridAmp  = {Kernel, M};
         sResults(iwl).Time          = OPTIONS.DataTime;
         sResults(iwl).Function      = 'MNE';
         sResults(iwl).DisplayUnits  = 'OD';

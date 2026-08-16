@@ -1,4 +1,4 @@
-function J = nst_mne_lcurve(HM,OPTIONS)
+function [Kernel, J] = nst_mne_lcurve(HM,OPTIONS)
 % nst_mne_lcurve - this function solve the inverse probleme using a l-curve
 % approach
 % Input: HM - struct
@@ -111,9 +111,11 @@ function J = nst_mne_lcurve(HM,OPTIONS)
     % Fid alpha optimal based on l-curve
     [~,Index] = min(Fit/max(Fit)+Prior/max(Prior)); 
     
-    Kermel = SG * inv( GSG  + alpha(Index) * Sigma_d );
-    J = Kermel*M; 
+    Kernel = SG * inv( GSG  + alpha(Index) * Sigma_d );
 
+    if nargin >= 2
+        J = Kernel*M; 
+    end
 
     bst_progress('text', 'wMNE, solving MNE by L-curve ... done');
 end
