@@ -8,7 +8,7 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
 
     % Prepare data
     if ~iscell(sResults(1).ImageGridAmp)
-        dOD_sources = cat(1, sResults.ImageGridAmp);
+        dOD_sources = permute(cat(3, sResults.ImageGridAmp), [3,1,2]);
     else
         isConsistent = 1;
         for iResult = 2:length(sResults)
@@ -45,8 +45,6 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
             end
 
         else  % Otherwise, go back to full time-course
-
-            sResults(iResult).ImageGridAmp
 
             dOD_sources = zeros(length(sResults), size(sResults(1).ImageGridAmp{1}, 1), size(sResults(1).ImageGridAmp{2}, 2));
             for iResult = 1:length(sResults)
