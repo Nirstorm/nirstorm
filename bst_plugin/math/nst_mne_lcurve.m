@@ -1,4 +1,4 @@
-function [Kernel, J] = nst_mne_lcurve(HM,OPTIONS)
+function [Kernel, M, J] = nst_mne_lcurve(HM,OPTIONS)
 % nst_mne_lcurve - this function solve the inverse probleme using a l-curve
 % approach
 % Input: HM - struct
@@ -113,7 +113,7 @@ function [Kernel, J] = nst_mne_lcurve(HM,OPTIONS)
     
     Kernel = SG * inv( GSG  + alpha(Index) * Sigma_d );
 
-    if nargin >= 2
+    if nargin >= 3
         J = Kernel*M; 
     end
 
