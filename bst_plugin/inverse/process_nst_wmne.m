@@ -26,7 +26,7 @@ end
 
 function sProcess = GetDescription() 
     % Description the process
-    sProcess.Comment     = 'Source reconstruction - wMNE';
+    sProcess.Comment     = '3D reconstruction - wMNE';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', '3D reconstruction'};
