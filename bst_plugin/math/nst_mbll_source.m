@@ -4,16 +4,11 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
     assert(length(sResults) == length(wavelentghts), 'Provide the wavelength associated with each map')
     assert(length(sResults) > 1, 'Unable to compute the MNLL with only one wavelentght ')
 
-
-    
     bst_progress('text', 'Calculating HbO/HbR/HbT in source space...');
 
-    % Compute dHb
-    hb_extinctions = nst_get_hb_extinctions(wavelentghts);
-    hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
-
+    % Prepare data
     if ~iscell(sResults(1).ImageGridAmp)
-        dOD_sources =  permute( cat(3, sResults.ImageGridAmp), [1 3 2]);
+        dOD_sources = permute(cat(3, sResults.ImageGridAmp), [3,1,2]);
     else
         isConsistent = 1;
         for iResult = 2:length(sResults)
@@ -21,28 +16,52 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
         end
 
         if isConsistent
-            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{1}, 2));
+            dOD_sources = zeros(length(sResults), size(sResults(1).ImageGridAmp{1}, 1), size(sResults(1).ImageGridAmp{1}, 2));
             for iResult = 1:length(sResults)
-                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp{1};
+                dOD_sources(iResult, :, :)  = sResults(iResult).ImageGridAmp{1};
             end
-        else
-            % If not consistent, go back to full time-course
-            dOD_sources = zeros(size(sResults(1).ImageGridAmp{1}, 1) ,length(sResults),size(sResults(1).ImageGridAmp{2}, 2));
+        % If not consistant, but only 2 maps, we can safely concatenate them.
+        elseif length(sResults) == 2 && length(sResults(1).ImageGridAmp) == 2  && length(sResults(2).ImageGridAmp) == 2
+
+            nVertex = size(sResults(1).ImageGridAmp{1}, 1);
+            nChannelA = size(sResults(1).ImageGridAmp{1}, 2);
+            nChannelB = size(sResults(2).ImageGridAmp{1}, 2);
+
+            sResults(1).ImageGridAmp{1} = [sResults(1).ImageGridAmp{1},  zeros(nVertex, nChannelB)];
+            sResults(2).ImageGridAmp{1} = [zeros(nVertex, nChannelA), sResults(2).ImageGridAmp{1}];
+
+            dataA = sResults(1).ImageGridAmp{2};
+            dataB = sResults(2).ImageGridAmp{2};
+        
+            assert( size(dataA, 2) == size(dataB, 2), 'Uncompatible time definition');
+
+
+            sResults(1).ImageGridAmp{2} = [dataA ;  dataB];
+            sResults(2).ImageGridAmp{2} = [dataA ;  dataB];
+
+            dOD_sources = zeros(length(sResults), size(sResults(1).ImageGridAmp{1}, 1), size(sResults(1).ImageGridAmp{1}, 2));
+            for iResult = 1:length(sResults)
+                dOD_sources(iResult, :, :)  = sResults(iResult).ImageGridAmp{1};
+            end
+
+        else  % Otherwise, go back to full time-course
+
+            dOD_sources = zeros(length(sResults), size(sResults(1).ImageGridAmp{1}, 1), size(sResults(1).ImageGridAmp{2}, 2));
             for iResult = 1:length(sResults)
                 sResults(iResult).ImageGridAmp = sResults(iResult).ImageGridAmp{1} * sResults(iResult).ImageGridAmp{2};
-                dOD_sources(:, iResult, :)  = sResults(iResult).ImageGridAmp;
+                dOD_sources(iResult, :, :)  = sResults(iResult).ImageGridAmp;
             end
         end
     end
-
-    Hb_sources = zeros(size(dOD_sources,1), 3, size(dOD_sources,3));
-    for inode=1:size(dOD_sources,1)
-        Hb_sources(inode, 1:2, :) = pinv(hb_extinctions) * ...
-                                    squeeze(dOD_sources(inode, :, :));
     
-    end
-    Hb_sources(:,3,:) = squeeze(sum(Hb_sources, 2));
+    % Compute MBLLL
+    hb_extinctions = nst_get_hb_extinctions(wavelentghts);
+    hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
+    
+    Y = my_pagemtimes(pinv(hb_extinctions), dOD_sources);
+    Hb_sources = [Y; sum(Y, 1)]; 
 
+    % Save output
     hb_unit_factor = 1e6;
     hb_unit = '\mumol.l-1';
     hb_types = {'HbO', 'HbR','HbT'};
@@ -58,11 +77,26 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
         sResults_hb(iHb) = bst_history('add', sResults_hb(iHb), 'compute', 'Estimate concentration change');
 
         if iscell(sResults_hb(iHb).ImageGridAmp )
-            sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+            sResults_hb(iHb).ImageGridAmp{1} = squeeze(Hb_sources(iHb, :, :)) .* hb_unit_factor;
         else
-            sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(:,iHb,:)) .* hb_unit_factor;
+            sResults_hb(iHb).ImageGridAmp = squeeze(Hb_sources(iHb, :, :)) .* hb_unit_factor;
         end
     end
 
+end
+
+function  Y = my_pagemtimes(A, B)
+% Return pagemtimes(A, B).
+% A is nWavelength x Wavelength, B is Wavelength x nVertex x nTime
+% Output is Wavelength x nVertex x nTime
+
+    try
+        Y = pagemtimes(A, B);
+    catch
+        Y = zeros(size(B));
+        for iPage = 1:size(B,3)
+            Y(:, : , iPage) = A * B(:, :, iPage);
+        end
+    end
 end
 
