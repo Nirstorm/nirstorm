@@ -368,8 +368,8 @@ function [Time, CV] = compute_CV(Time, signals, wlen)
 
     for i = 1:n_sample
 
-       windows_start =  max( 1,i - wlen/2);
-       windows_end   =  min( n_sample, i + wlen/2);
+       windows_start =  max( 1, round(i - wlen/2));
+       windows_end   =  min( n_sample, round(i + wlen/2));
 
        nirs_windows  = signals(:, windows_start:windows_end);
        mov_mean(:,i) = mean(nirs_windows, 2 );

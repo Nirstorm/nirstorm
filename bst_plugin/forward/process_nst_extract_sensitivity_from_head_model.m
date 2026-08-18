@@ -29,7 +29,7 @@ function sProcess = GetDescription()
     sProcess.Comment     = 'Extract sensitivity surfaces from head model';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', 'Forward model'};
     sProcess.Index       = 1405;
     sProcess.Description = '';
     % Definition of the input accepted by this process
@@ -38,7 +38,7 @@ function sProcess = GetDescription()
     sProcess.OutputTypes = {'results', 'results'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
-    sProcess.isSeparator = 0;
+    sProcess.isSeparator = 1;
 
 
     % === Process description
