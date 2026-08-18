@@ -43,7 +43,7 @@ function sProcess = GetDescription()
     sProcess.isSeparator = 0;
     
     sProcess.options.output_name.Comment = 'Output table name:';
-    sProcess.options.output_name.Type    = 'string';
+    sProcess.options.output_name.Type    = 'text';
     sProcess.options.output_name.Value   = 'Merged_Metrics_Table';
 end
 
