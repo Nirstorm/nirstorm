@@ -22,7 +22,8 @@ function varargout = panel_nst_OM(varargin)
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Francois Tadel, 2020, Edouard Delaire, 2025
+% Authors: Francois Tadel, 2020, 
+% Jean-Eudes Bornert, Edouard Delaire, 2025-2026
 
 eval(macro_method);
 end
@@ -264,6 +265,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     
     % === PANEL: Output  ====
     jPanelOutput = gui_river([2,2], [3,5,3,5], 'Output');
+    
+    jGroupRadio = ButtonGroup();
+    jRadioLayerDefaultName = gui_component('radio', jPanelOutput, [], 'Default Name', jGroupRadio, [], @(h, ev)switchNameMode() , []);
+    jRadioLayerCustomName = gui_component('radio', jPanelOutput, [], 'Custom Name', jGroupRadio, [], @(h, ev)switchNameMode(), []);
+
+    jRadioLayerDefaultName.setSelected(OPTIONS.isDefaultName);
+    jRadioLayerCustomName.setSelected(~OPTIONS.isDefaultName);
+
+    ctrl.jRadioLayerDefaultName = jRadioLayerDefaultName;
+
     gui_component('label', jPanelOutput, 'br', 'Output condition name:', [], [], [], []);
     jOutputCondition = gui_component('text', jPanelOutput, 'hfill', OPTIONS.condition_name, [], [], @(h, ev)condition_name(), []);
     ctrl.jOutputCondition   = jOutputCondition;
@@ -348,7 +359,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         else
             jPanelOptionCoverage.setVisible(0);
         end
-        
+
+        switchNameMode();
         validateButtonOk();
     end
 
@@ -484,6 +496,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     end
 
     function validateButtonOk()
+        UpdateOutputName()
+
         if isempty(errorList)
             jSearchBtn.setEnabled(1);
             jPanelError.setVisible(0);
@@ -550,6 +564,40 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         % Set callbacks
         java_setcb(jCombo, 'ItemStateChangedCallback', @(h,ev)AtlasSelection_Callback(AtlasList, jCombo, jList, ev));
     end
+    
+    function switchNameMode()
+        if jRadioLayerDefaultName.isSelected()
+            jOutputCondition.setEditable(0);
+        else
+            jOutputCondition.setEditable(1);
+        end
+
+        if jUseDefaultSpace.isSelected()
+            UpdateOutputName();
+        end
+    end
+
+    function UpdateOutputName()
+
+        if isempty(ctrl.jListCortex.getSelectedValue)
+            return
+        end
+        
+        ROI_cortex     = strtrim(char(ctrl.jListCortex.getSelectedValue.getName()));
+        if jUseDefaultSpace.isSelected
+            Extent  = sprintf('%dcm', str2double(ctrl.jExtent.getText));
+        else
+            Extent  = strtrim(char(ctrl.jListHead.getSelectedValue.getName()));
+        end
+        nb_sources = str2double(ctrl.jSources.getText);
+        nb_detectors = str2double(ctrl.jDetectors.getText);
+        nAdjacentDet = str2double(ctrl.jAdjacent.getText);
+        output_name = sprintf('OM_%s_%dS_%dD_%dA_%s', ROI_cortex, nb_sources, nb_detectors, nAdjacentDet, Extent);
+        
+        if jRadioLayerDefaultName.isSelected()
+            jOutputCondition.setText(output_name)
+        end
+    end
 end
 
 
@@ -588,6 +636,7 @@ function options = getDefaultOptions()
     options.exist_weight    = 1;  
     
     %Output
+    options.isDefaultName   = 1;
     options.condition_name  = 'planning_optimal_montage';
 
 end
@@ -630,7 +679,8 @@ function s = GetPanelContents()
 
     s.wavelengths = strtrim(char(ctrl.jWavelengths.getText));
     
-    s.condition_name = strtrim(char(ctrl.jOutputCondition.getText));
+    s.isDefaultName     = ctrl.jRadioLayerDefaultName.isSelected();
+    s.condition_name    = strtrim(char(ctrl.jOutputCondition.getText));
     s.data_source = strtrim(char(ctrl.jFluenceSource.getText));
     s.exist_weight = 1;  
     s.flag_display = 1;  

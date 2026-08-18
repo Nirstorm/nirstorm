@@ -30,8 +30,8 @@ function sProcess = GetDescription()
 % Description of the process
 sProcess.Comment     = 'Compute optimal montage';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = {'NIRS', 'Sources'};
-sProcess.Index       = 1406;
+sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+sProcess.Index       = 1101;
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRS_Optimal_montage';
 sProcess.InputTypes  = {'import'};
 sProcess.OutputTypes = {'import'};
@@ -95,21 +95,22 @@ function OutputFile = Run(sProcess, sInput)
         return;
     end
     
-    [ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);   
+    [options.ROI_cortex, options.ROI_head] = get_regions_of_interest(sSubject, options);   
 
     % Obtain the anatomical MRI
     sMri     = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
     options.cubeSize        = size(sMri.Cube);
     
-    options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex);
+    [options, warn] = get_weight_tables(sSubject, options);
+    if ~isempty(warn)
+        bst_report('Warning', sProcess, sInput, warn);
+    end
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
 
-    if options.flag_display
-        options = display_weight_table(options);
-    end
+
     
     % Denoise of the weight table
     [options, voxels_changed, msg] = denoise_weight_table(options);
@@ -119,7 +120,7 @@ function OutputFile = Run(sProcess, sInput)
     end
     
     % Compute Optimal Montage
-    [ChannelMats, montageSufix, infos] = compute_optimal_montage(options);
+    [ChannelMats, montageSufix, infos] = compute_optimal_montage(sSubject, options);
     OutputFile = cell(1, length(ChannelMats));
     for iChannel = 1 :length(ChannelMats)
         ChannelMat = ChannelMats(iChannel);
@@ -197,12 +198,10 @@ end
 function [status, error, options] = check_user_inputs(options)
     status = 1;
     error = {};
-    if isfield(options, 'ROI_head')
-        if ~isempty(options.ROI_head)
-            mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
-        else
-            mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
-        end
+    if isfield(options, 'ROI_head') && ~isempty(options.ROI_head)
+        mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex', 'ROI_head', 'Atlas_head', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
+    else
+        mandatory_fields = {'surface', 'ROI_cortex', 'Atlas_cortex',  'Extent', 'SubjectName',  'outputdir', 'nb_sources', 'nb_detectors', 'nAdjacentDet', 'sep_optode', 'sepmin_SD', 'wavelengths', 'condition_name', 'data_source', 'exist_weight'};
     end
     
 
@@ -278,13 +277,19 @@ function [status, error, options] = check_user_inputs(options)
     end
 end
 
-function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_cortex)
+function [options, warn] = get_weight_tables(sSubject, options, montage_simple)
+    
+    if nargin < 3
+        montage_simple = [];
+    end
 
+    warn            = [];
     sensitivity_mat = [];
     coverage_mat    = [];
     listVertexSeen  = [];
     maxVertexSeen   = 0;
-    ROI_head = options.ROI_head;
+    ROI_head    = options.ROI_head;
+    ROI_cortex  = options.ROI_cortex;
 
     sMri        = in_mri_bst (sSubject.Anatomy(sSubject.iAnatomy).FileName);
     voronoi_fn  = process_nst_compute_voronoi('get_voronoi_fn', sSubject);
@@ -340,9 +345,11 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
             
         elseif options.exist_weight && ~isfield(weight_cache, 'sensitivity_mat')
             file_delete(fullfile(options.outputdir, 'weight_tables.mat'), 1, 1);
-            bst_report('Warning', sProcess, sInput, 'Weight table format updated. Old file has been deleted and WT has been recomputed.');
+            warn = 'Weight table format updated. Old file has been deleted and WT has been recomputed.';
         end    
     end
+
+
     
     if isempty(sensitivity_mat) || isempty(coverage_mat)
         
@@ -375,12 +382,21 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
                                                                      fluence_fns, ...
                                                                      options.cubeSize, ...
                                                                      vois);
+        % Compute overlap for each vertex for the simple montage
+        overlap = zeros(size(fluence_volumes{1}{1}))';
+        if ~isempty(montage_simple)
+            
+            for iChannel = 1:size(montage_simple, 1)
+                seenVertex = options.listVertexSeen{montage_simple(iChannel, 1), montage_simple(iChannel, 2)};
+                overlap(seenVertex) = overlap(seenVertex) + 1;
+            end
+        end
 
         % Compute weight table
         [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, ...
                                                                                          ROI_head.head_vertices_coords, ...
                                                                                          reference, ...
-                                                                                         options);
+                                                                                         options, overlap);
         
         % Save the weight table in cache
         if ~isempty(options.outputdir)
@@ -413,7 +429,11 @@ function options = get_weight_tables(sSubject, sProcess, sInput, options, ROI_co
     options.maxVertexSeen   = maxVertexSeen;
 end
 
-function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options)
+function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options, overlap)
+    
+    if nargin < 5 || isempty(overlap)
+        overlap = zeros(size(fluence_volumes{1}{1}))';
+    end
 
     holder_distances = nst_pdist(head_vertices_coords, head_vertices_coords).*1000; % mm
     nHolders = size(head_vertices_coords, 1);
@@ -482,7 +502,11 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
                     mat_sensitivity_idx(1,n_sensitivity_val) = isrc; mat_sensitivity_idx(2,n_sensitivity_val) = idet; mat_sensitivity_val(n_sensitivity_val) = sum(sensitivity);
                     n_sensitivity_val = n_sensitivity_val + 1;
                     
-                    coverage = sum(sensitivity > threshold);
+                    % todo: fix me
+                    target_overlap = 3;
+                    k = 0.25;
+                    w = exp(-k*(overlap - target_overlap))';
+                    coverage = sum(w.*(sensitivity > threshold));
                     listVertexSeen{isrc, idet} = find(sensitivity > threshold);
 
                     mat_coverage_idx(1, n_coverage_val) = isrc; mat_coverage_idx(2, n_coverage_val) = idet; mat_coverage_val(n_coverage_val) = coverage;
@@ -504,7 +528,7 @@ function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = comput
     bst_progress('stop');  
 end
 
-function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
+function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, options)
     infos = {};
     head_vertices_coords = options.ROI_head.head_vertices_coords;
     %======================================================================
@@ -526,8 +550,11 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     bst_progress('stop');
 
     % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
-    [montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple] = montage_pairs_and_weight(results,options);
+    [montage_pairs_simple, montage_sensitivity_simple] = montage_pairs_and_weight(results,options);
 
+    if options.flag_display
+        options = display_weight_table(options, montage_pairs_simple);
+    end
 
     ChannelMat      = create_channelMat_from_montage(montage_pairs_simple, head_vertices_coords, options.wavelengths);
     montageSufix{1} = 'simple';
@@ -535,12 +562,14 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
     % Premature ending in case coverage constraint is not asked
     if ~options.include_coverage
         str = [sprintf('Only sensitivity : \n'), ...
-              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
+              display_channel_info(montage_pairs_simple, montage_sensitivity_simple, head_vertices_coords)];
         
         infos{end+1} = str;
         return;
     end
     
+    options = get_weight_tables(sSubject, options, montage_pairs_simple);
+
     %======================================================================
     % 2) Compute OM by maximizing sensitivity and coverage
     %======================================================================
@@ -552,20 +581,17 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
         
     % Display
     str = [sprintf('Only sensitivity : \n'), ...
-          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, montage_coverage_simple, channels_coverage_simple, head_vertices_coords)];
+          display_channel_info(montage_pairs_simple, montage_sensitivity_simple, head_vertices_coords)];
 
     infos{end+1} = str;
 
     % Define the cplex problem
     for iLambda = 1:length(lambda2)
-        options.lambda1 = 1/sum(montage_sensitivity_simple);
+        options.lambda1 = 1/max(montage_sensitivity_simple);
         options.lambda2 = lambda2(iLambda);
 
         wt =  options.lambda1  * options.sensitivity_mat  + options.lambda2 * options.coverage_mat;
-        
-        if options.flag_display
-            options = display_weight_table(options);
-        end
+
         
         [cplex, options] = define_prob(wt, head_vertices_coords, options);
     
@@ -581,10 +607,15 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(options)
         bst_progress('stop');
                                                         
         % Calculation of montage_pairs matrix, montage_sensitivity and montage_coverage vector
-        [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results, options);
+        [montage_pairs, montage_sensitivity] = montage_pairs_and_weight(results, options);
+
+
+        if options.flag_display
+            options = display_weight_table(options, montage_pairs);
+        end
 
         str = [sprintf('Sensitivity and Coverage (lambda = %d):\n', lambda2(iLambda)), ...
-              display_channel_info(montage_pairs, montage_sensitivity, montage_coverage, channels_coverage, head_vertices_coords)];
+              display_channel_info(montage_pairs, montage_sensitivity, head_vertices_coords)];
 
         infos{end+1} = str;
 
@@ -856,22 +887,21 @@ function [A, I] = adj_constr(flag_adjacency, holder_distances, nH, thresh_sep_op
     end
 end
 
-function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverage] = montage_pairs_and_weight(results,options)
+function [montage_pairs, montage_sensitivity] = montage_pairs_and_weight(results, options)
 % @========================================================================
 % montage_pairs_and_weight Calculation of montage pairs matrix and montage
 % weight vector
 % ========================================================================@
     
-    x=results.x;
-    x=round(x);
-    isources = find(x(1:options.nH)==1);
-    idetectors = find(x(options.nH+1:2*options.nH)==1);
+    x           = results.x;
+    x           = round(x);
+    isources    = find(x(1:options.nH)==1);
+    idetectors  = find(x(options.nH+1:2*options.nH)==1);
     
     % Memory management
     max_pairs = length(isources) * length(idetectors);
     montage_pairs = zeros(max_pairs, 2);
     montage_sensitivity = zeros(max_pairs, 1);
-    channels_coverage = zeros(max_pairs, 1);
     
     ipair = 0;
 
@@ -885,7 +915,6 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
 
                 montage_pairs(ipair,:)          = [isources(isrc) idetectors(idet)];
                 montage_sensitivity(ipair,:)    = full(options.sensitivity_mat(isources(isrc), idetectors(idet)));
-                channels_coverage(ipair,:)      = full(options.coverage_mat(isources(isrc), idetectors(idet)));
             end
         end
     end
@@ -893,25 +922,10 @@ function [montage_pairs, montage_sensitivity, montage_coverage, channels_coverag
      % Make sure the matrix is the right size
     montage_pairs       = montage_pairs(1:ipair, :);
     montage_sensitivity = montage_sensitivity(1:ipair, :);
-    coverage_mat        = options.listVertexSeen;
     
-    % Compute montage coverage
-    list_vertex_seen = {};
-    for iPair = 1:size(montage_pairs, 1)
-        pair = montage_pairs(iPair, :);
-
-        if isempty(list_vertex_seen)
-            list_vertex_seen = coverage_mat{pair(1), pair(2)}';
-        else
-            list_vertex_seen = union(list_vertex_seen, coverage_mat{pair(1), pair(2)}' );
-        end
-    end
-
-    montage_coverage    = length(list_vertex_seen) / options.maxVertexSeen;
-    channels_coverage   = channels_coverage(1:ipair, :);
 end
 
-function info = display_channel_info(montage_pairs, montage_sensitivity,  montage_coverage, channels_coverage, head_vertices_coords)
+function info = display_channel_info(montage_pairs, montage_sensitivity, head_vertices_coords)
 % @========================================================================
 % display_channel_info Used to create the string containing the channels
 % informations
@@ -947,18 +961,16 @@ function info = display_channel_info(montage_pairs, montage_sensitivity,  montag
         distance_mm = nst_pdist(head_vertices_coords(ihead_vertex_src, :), head_vertices_coords(ihead_vertex_det, :)) * 1000;
         tab_dist_mm(ipair) = distance_mm;
         sensitivity = montage_sensitivity(ipair, :);
-        coverage = channels_coverage(ipair, :);
 
-        info = [info, sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Sensitivity: %6.3f    Coverage: %5.2f%%  \n', idx_src, idx_det, distance_mm, sensitivity, coverage * 100)];
+        info = [info, sprintf('Channel S%02dD%02d >>> Distance: %4.1f mm    Score: %6.3f \n', idx_src, idx_det, distance_mm, sensitivity)];
     end
     
     mean_distance = mean(tab_dist_mm);
     distance_range = [min(tab_dist_mm), max(tab_dist_mm)];
     total_sensitivity = sum(montage_sensitivity);
     
-    percentage_overlap = 1 - montage_coverage / sum(channels_coverage);
     if ~isempty(distance_range)
-        info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total sensitivity: %.3f Total coverage: %.3f%%  Overlap measure: %.3f%% \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity, 100*montage_coverage, 100*percentage_overlap)];
+        info = [info, sprintf('TOTAL          >>> Distance (mean/range): %.1f mm [%.1f-%.1f]    Total score: %.3f \n', mean_distance, distance_range(1), distance_range(2), total_sensitivity)];
         info = strrep(info, '  ', '&nbsp;&nbsp;');
     end
 end
@@ -967,12 +979,18 @@ end
 % DEBUG FUNCTIONS
 %==========================================================================
 
-function options = display_weight_table(options)
+function options = display_weight_table(options, montage_pairs)
 % @========================================================================
 % display_weight_table Displays multiple graphs useful to see a
 % representation of the sensitivity & coverage matrices
 % ========================================================================@
-    if ~isfield(options, 'hFig')
+
+    if nargin < 2
+        montage_pairs  = [];
+    end
+
+
+    if ~isfield(options, 'hFig') || ~isvalid(options.hFig)
         options.hFig = figure;
         options.hFigTab = uitabgroup; drawnow;
     end
@@ -1003,46 +1021,40 @@ function options = display_weight_table(options)
     distances = nst_pdist(ROI_head.head_vertices_coords,ROI_head.head_vertices_coords);
     [~, I] = min(median(distances));
     [~, order] = sort( abs(distances(I, :) - median(distances(I, :))));
-    sensitivity_mat = sensitivity_mat(order,order);
-    coverage_mat  = coverage_mat(order,order);
+    sensitivity_mat_ordered = sensitivity_mat(order,order);
+    coverage_mat_ordered    = coverage_mat(order,order);
     
+    if ~isempty(montage_pairs)
+        montage_sensitivity = full(sensitivity_mat(montage_pairs(:, 1), montage_pairs(:, 2)));
+        montage_coverage    = full(coverage_mat(montage_pairs(:, 1), montage_pairs(:, 2)));
+    end
+
     hpc = uipanel('Parent', onglet, ...
               'Units', 'Normalized', ...
               'Position', [0.01 0.01 0.98 0.98], ...
               'FontWeight','demi');
 
     ax1 = subplot(1, 3, 1, 'parent', hpc);
-    imagesc(ax1, sensitivity_mat);
+    imagesc(ax1, sensitivity_mat_ordered);
     title(ax1, 'Sensitivity matrix');
     colorbar(ax1);
     
     ax2 = subplot(1, 3, 2, 'parent', hpc);
-    imagesc(ax2, coverage_mat);
+    imagesc(ax2, coverage_mat_ordered);
     title(ax2, 'Coverage matrix');
     colorbar(ax2);
     
     ax3 = subplot(1, 3, 3, 'parent', hpc);
-    if isDefinedLambda == 0
-        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
-        xlabel(ax3, 'Sensitivity');
-        ylabel(ax3, 'Coverage');
-        title(ax3, 'Sensitivity VS. Coverage');
-        set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
-    elseif isDefinedLambda == 1
-        plot(ax3, sensitivity_mat(:), coverage_mat(:), '+')
-        xlabel(ax3, 'Sensitivity');
-        ylabel(ax3, 'Coverage');
-        title(ax3, 'Sensitivity VS. Coverage');
-        set(hpc,'Title',' Lambda = 0 ','FontSize',8);
-    else
-        ratio = zeros(size(coverage_mat));
-        idx_ratio = sensitivity_mat > 0;
-        ratio(idx_ratio) =  log10( 1 +  coverage_mat(idx_ratio) ./ sensitivity_mat(idx_ratio));
-        
-        imagesc(ax3, ratio);
-        title(ax3, 'Ratio matrix');
-        colorbar(ax3);
-    end
+    hold(ax3, 'on');
+    plot(ax3, full(sensitivity_mat_ordered(sensitivity_mat_ordered > 0)), full(coverage_mat_ordered(sensitivity_mat_ordered > 0)), '+')
+    plot(ax3, montage_sensitivity(:), montage_coverage(:), 'r+')
+
+
+    xlabel(ax3, 'Sensitivity');
+    ylabel(ax3, 'Coverage');
+    title(ax3, 'Sensitivity VS. Coverage');
+    set(hpc,'Title',' Sensitivity & Coverage Matrices ','FontSize',8);
+    
     
     %......................................................................
     % Save figures in the wt folder
@@ -1283,7 +1295,7 @@ function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
     i_scout_cortex = strcmp({sCortex.Atlas(i_atlas_cortex).Scouts.Label}, options.ROI_cortex);
     ROI_cortex     = sCortex.Atlas(i_atlas_cortex).Scouts(i_scout_cortex);   
     
-    if isempty(options.Atlas_head) && isempty(options.ROI_head)
+    if ~isfield(options, 'ROI_head') || isempty(options.Atlas_head) || isempty(options.ROI_head)
         
         cortex_to_scalp_extent = options.Extent;
         cortex_scout.sSubject = sSubject;

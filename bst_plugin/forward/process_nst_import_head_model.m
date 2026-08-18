@@ -29,7 +29,7 @@ function sProcess = GetDescription()
     sProcess.Comment     = 'Compute head model from fluence';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', 'Forward model'};
     sProcess.Index       = 1404;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Computation_of_the_fNIRS_forward_model';
     % Definition of the input accepted by this process

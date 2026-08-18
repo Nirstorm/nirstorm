@@ -27,8 +27,8 @@ function sProcess = GetDescription()
 % Description the process
 sProcess.Comment     = 'Cortical mask from atlas scouts';
 sProcess.Category    = 'Custom';
-sProcess.SubGroup    = 'NIRS';
-sProcess.Index       = 1901;
+sProcess.SubGroup    = {'NIRS', 'Forward model'};
+sProcess.Index       = 1407;
 sProcess.Description = '';
 % Definition of the input accepted by this process
 sProcess.InputTypes  = {'data', 'raw', 'results'};
