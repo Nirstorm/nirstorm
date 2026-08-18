@@ -58,7 +58,7 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
     hb_extinctions = nst_get_hb_extinctions(wavelentghts);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
     
-    Y = pagemtimes(pinv(hb_extinctions), dOD_sources);
+    Y = my_pagemtimes(pinv(hb_extinctions), dOD_sources);
     Hb_sources = [Y; sum(Y, 1)]; 
 
     % Save output
@@ -83,5 +83,20 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
         end
     end
 
+end
+
+function  Y = my_pagemtimes(A, B)
+% Return pagemtimes(A, B).
+% A is nWavelength x Wavelength, B is Wavelength x nVertex x nTime
+% Output is Wavelength x nVertex x nTime
+
+    try
+        Y = pagemtimes(A, B);
+    catch
+        Y = zeros(size(B));
+        for iPage = 1:size(B,3)
+            Y(:, : , iPage) = A * B(:, :, iPage);
+        end
+    end
 end
 
