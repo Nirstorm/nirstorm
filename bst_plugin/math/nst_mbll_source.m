@@ -58,8 +58,16 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
     hb_extinctions = nst_get_hb_extinctions(wavelentghts);
     hb_extinctions = hb_extinctions ./10;% mm-1.mole-1.L
     
-    Y = pagemtimes(pinv(hb_extinctions), dOD_sources);
-    Hb_sources = [Y; sum(Y, 1)]; 
+    Hb_sources = zeros(3, size(dOD_sources,2),  size(dOD_sources,3));
+    for inode=1:size(dOD_sources,2)
+        Hb_sources(1:2, inode, :) = pinv(hb_extinctions) * ...
+                                    squeeze(dOD_sources(1:2, inode, :));
+    
+    end
+    Hb_sources(3, :,:) = squeeze(sum(Hb_sources, 1));
+
+    % Y = pagemtimes(pinv(hb_extinctions), dOD_sources);
+    % Hb_sources = [Y; sum(Y, 1)]; 
 
     % Save output
     hb_unit_factor = 1e6;
