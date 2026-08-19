@@ -30,8 +30,8 @@ function sProcess = GetDescription()
     sProcess.Comment     = 'Merge Montage';
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
-    sProcess.Index       = 1407;
+    sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+    sProcess.Index       = 1102;
     sProcess.Description = '';
     sProcess.isSeparator = 1; 
     

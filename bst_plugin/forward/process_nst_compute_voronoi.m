@@ -28,7 +28,7 @@ function sProcess = GetDescription()
     % Description the process
     sProcess.Comment     = 'Compute Voronoi volume-to-cortex interpolator';
     sProcess.Category    = 'Custom';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', 'Forward model'};
     sProcess.Index       = 1401;
     sProcess.Description = '';
     % Definition of the input accepted by this process

@@ -26,10 +26,10 @@ end
 
 function sProcess = GetDescription() 
     % Description the process
-    sProcess.Comment     = 'Source reconstruction - wMNE';
+    sProcess.Comment     = '3D reconstruction - wMNE';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', '3D reconstruction'};
     sProcess.Index       = 1501; %0: not shown, >0: defines place in the list of processes
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Inverse_problem_using_MNE';
@@ -99,7 +99,7 @@ HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    sDataIn = in_bst(sInputs(1).FileName, [], 1, 0, 'no');
 end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
@@ -212,16 +212,14 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
 
         % MNE results
-        Results = nst_mne_lcurve(HM, OPTIONS);
+        [Kernel, tmp] = nst_mne_lcurve(HM, OPTIONS);
 
-        grid_amp    = zeros(length(valid_nodes), nb_samples);
         sample      = be_closest(OPTIONS.TimeSegment([1 end]), OPTIONS.DataTime);
-        grid_amp(:,sample(1):sample(2)) = Results;
+        M = zeros(size(OPTIONS.Data));
+        M(:,sample(1):sample(2)) = tmp;
         
-
-
         sResults(iwl).Comment       = sprintf('MNE sources | %s nm', swl);
-        sResults(iwl).ImageGridAmp  = grid_amp;
+        sResults(iwl).ImageGridAmp  = {Kernel, M};
         sResults(iwl).Time          = OPTIONS.DataTime;
         sResults(iwl).Function      = 'MNE';
         sResults(iwl).DisplayUnits  = 'OD';

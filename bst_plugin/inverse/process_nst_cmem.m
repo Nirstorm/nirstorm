@@ -30,7 +30,7 @@ function sProcess = GetDescription()
     sProcess.Comment     = 'Compute sources: BEst';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
-    sProcess.SubGroup    = {'NIRS', 'Sources'};
+    sProcess.SubGroup    = {'NIRS', '3D reconstruction'};
     sProcess.isSeparator = 0;
     sProcess.Index       = 1502;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Inverse_problem_using_cMEM';
@@ -106,7 +106,7 @@ HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 if strcmp(sInputs.FileType, 'data')     % Imported data structure
     sDataIn = in_bst_data(sInputs(1).FileName);
 elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file
-    sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+    sDataIn = in_bst(sInputs(1).FileName, [], 1, 0, 'no');
 end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);

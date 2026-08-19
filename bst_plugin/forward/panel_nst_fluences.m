@@ -84,9 +84,14 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         end
 
         % Detect if FluenceRegion and FluenceExclude are present
-        have_fluence_region     = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceRegion'));
-        have_fluence_exclude    = any(strcmp({AtlasHead.Atlas( strcmp({AtlasHead.Atlas.Name},'User scouts' )).Scouts.Label},'FluenceExclude'));
-
+        sUserScout = AtlasHead.Atlas(find(strcmp({AtlasHead.Atlas.Name},'User scouts' )));
+        if ~isempty(sUserScout.Scouts)
+            have_fluence_region     = any(strcmp({sUserScout.Scouts.Label},'FluenceRegion'));
+            have_fluence_exclude    = any(strcmp({sUserScout.Scouts.Label},'FluenceExclude'));
+        else
+            have_fluence_region = 0;
+            have_fluence_exclude    = 0;
+        end
         % Load cortex atlases
         AtlasCortex             = load(OPTIONS.CortexFile, 'Atlas', 'iAtlas');
         ctrl.CortexAtlasName    = {AtlasCortex.Atlas.Name};

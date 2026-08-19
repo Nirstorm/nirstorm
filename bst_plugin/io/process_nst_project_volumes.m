@@ -28,7 +28,7 @@ function sProcess = GetDescription()
 sProcess.Comment     = 'Project Volume to Surface';
 sProcess.FileTag     = '';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = {'NIRS', 'Sources'};
+sProcess.SubGroup    = {'NIRS', 'Forward model'};
 sProcess.Index       = 1401;
 sProcess.Description = '';
 % Definition of the input accepted by this process

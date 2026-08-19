@@ -28,8 +28,8 @@ end
 function sProcess = GetDescription() 
 % Description the process
 sProcess.Comment     = 'Compute fluences';
-sProcess.Category    = 'File';
-sProcess.SubGroup    = {'NIRS', 'Sources'};
+sProcess.Category    = 'Custom';
+sProcess.SubGroup    = {'NIRS', 'Forward model'};
 sProcess.Index       = 1402;
 sProcess.Description = '';
 % Definition of the input accepted by this process
@@ -173,25 +173,25 @@ dis2head = nst_pdist(sHead.Vertices, sCortex.Vertices(cortex_scout.sScout.Vertic
 head_vertices = find(min(dis2head,[],2) < extent_m); 
 
 iHeadAtlas    = find(strcmp({sHead.Atlas.Name}, 'User scouts'));
-exclude_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceExclude', {sHead.Atlas.Scouts.Label}));
+exclude_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceExclude', {sHead.Atlas(iHeadAtlas).Scouts.Label}));
 if ~isempty(exclude_scout)
     head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
 end
 
-limiting_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceRegion', {sHead.Atlas.Scouts.Label}));
+limiting_scout = sHead.Atlas(iHeadAtlas).Scouts(strcmp('FluenceRegion', {sHead.Atlas(iHeadAtlas).Scouts.Label}));
 if ~isempty(limiting_scout)
     head_vertices = intersect(head_vertices, limiting_scout.Vertices);
 end
 
 if save_in_db && ...,
    ~any(strcmp(['From cortical ' cortex_scout.sScout.Label '(' num2str(extent_m*100) ' cm)']...,
-    ,{sHead.Atlas.Scouts.Label}))
-    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
-    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
-    sHead.Atlas.Scouts(scout_idx).Vertices = head_vertices';
-    sHead.Atlas.Scouts(scout_idx).Seed = head_vertices(1);
-    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
-    sHead.Atlas.Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
+    ,{sHead.Atlas(iHeadAtlas).Scouts.Label}))
+    scout_idx = size(sHead.Atlas(iHeadAtlas).Scouts,2) + 1;
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Vertices = head_vertices';
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Seed = head_vertices(1);
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Label = ['From cortical ' cortex_scout.sScout.Label ...
                                            '(' num2str(extent_m*100) ' cm)'];
     bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
     db_save();
@@ -269,7 +269,7 @@ cfg.respin      = 1;
 % set seed to make the simulation repeatible
 cfg.seed        = hex2dec('623F9A9E'); 
 cfg.nphoton     = options.mcxlab_nphoton*1e6;
-cfg.vol         = sSegmentation.Cube; % segmentation
+cfg.vol         = uint8(sSegmentation.Cube); % segmentation
 cfg.unitinmm    = sSegmentation.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect   = 1; % reflection at exterior boundary
 cfg.isrefint    = 1; % 1-index mismatch at inner boundaries, [0]-matched index
@@ -292,12 +292,12 @@ if ~isempty(invalid_id)
     
     bst_report('Warning', sProcess, [], 'Some vertices could not be project into the volume and were discarded (check scout Wrong vertex)');
 
-    scout_idx = size(sHead.Atlas.Scouts,2) + 1;
-    sHead.Atlas.Scouts(scout_idx) = db_template('Scout');
-    sHead.Atlas.Scouts(scout_idx).Vertices = valid_vertices(invalid_id)';
-    sHead.Atlas.Scouts(scout_idx).Seed = sHead.Atlas.Scouts(scout_idx).Vertices(1);
-    sHead.Atlas.Scouts(scout_idx).Color = [0,0,0];
-    sHead.Atlas.Scouts(scout_idx).Label = sprintf('Wrong vertex for ROI %s', options.ROI);
+    scout_idx = size(sHead.Atlas(iHeadAtlas).Scouts,2) + 1;
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx) = db_template('Scout');
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Vertices = valid_vertices(invalid_id)';
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Seed = sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Vertices(1);
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Color = [0,0,0];
+    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Label = sprintf('Wrong vertex for ROI %s', options.ROI);
 
     bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
     db_save();

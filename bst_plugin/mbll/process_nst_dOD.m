@@ -117,7 +117,7 @@ function OutputFile = Run(sProcess, sInputs)
         events = sDataIn.Events;
         isRaw  = 0;
     elseif strcmp(sInputs.FileType, 'raw')  % Continuous data file       
-        sDataIn = in_bst(sInputs(1).FileName, [], 1, 1, 'no');
+        sDataIn = in_bst(sInputs(1).FileName, [], 1, 0, 'no');
         sDataRaw = in_bst_data(sInputs(1).FileName, 'F');
         events = sDataRaw.F.events;
         isRaw  = 1;
