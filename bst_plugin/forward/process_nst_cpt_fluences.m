@@ -228,6 +228,14 @@ if ~isfield(sSegmentation,'Labels') || isempty(sSegmentation.Labels)
 end
 tissues         = sSegmentation.Labels;
 
+% Load tissue property
+if isfield(options, 'FilesTissuesProperty')
+    FilesTissuesProperty = options.FilesTissuesProperty;
+else
+    FilesTissuesProperty = '';
+end
+
+
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
 head_vertices_mri   = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
@@ -254,6 +262,7 @@ nb_vertex       = length(valid_vertices);
 
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
 
+
 cfg.gpuid       = options.mcxlab_gpuid;
 cfg.autopilot   = 1;
 cfg.respin      = 1;
@@ -269,18 +278,16 @@ cfg.tstart      = 0;
 cfg.tend        = 5e-9;
 cfg.tstep       = 5e-9;
 % nornalisation
-cfg.isnormalized= 1; % [1]-normalize the output flux to unitary source
+cfg.isnormalized = 1; % [1]-normalize the output flux to unitary source
+cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 
-cfg.issrcfrom0  = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
-% project optodes position on cfg.vol
+% Project optodes position on cfg.vol
 options.proj.stepAlongNorm      = 1;
 options.meshes.skin.vertices    = head_vertices_mri;
 options.meshes.skin.faces       = sHead.Faces;
-
-[vertex_pos,invalid_id]=mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
+[vertex_pos,invalid_id]         = mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
 
 if ~isempty(invalid_id)
-    
     bst_report('Warning', sProcess, [], 'Some vertices could not be project into the volume and were discarded (check scout Wrong vertex)');
 
     scout_idx = size(sHead.Atlas(iHeadAtlas).Scouts,2) + 1;
@@ -292,17 +299,18 @@ if ~isempty(invalid_id)
 
     bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
     db_save();
-    % remove vertices from fluence
 
-    valid_vertices = setdiff(valid_vertices,valid_vertices(invalid_id));
+    % remove vertices from fluence
+    valid_vertices = setdiff(valid_vertices, valid_vertices(invalid_id));
 end
     
 tic
-bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), ...
-             1, nb_vertex * nb_wavelengths);
+bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 1, nb_vertex * nb_wavelengths);
 for ivertx = 1:nb_vertex
-    cfg.srcpos=vertex_pos(ivertx,:);    
-    cfg.srcdir=head_normals(valid_vertices(ivertx),:);
+
+    cfg.srcpos = vertex_pos(ivertx,:);    
+    cfg.srcdir = head_normals(valid_vertices(ivertx),:);
+
     for iwl=1:nb_wavelengths
         wl = wavelengths(iwl);
         fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
@@ -312,7 +320,12 @@ for ivertx = 1:nb_vertex
             bst_progress('inc', 1);
         else
 
-            cfg.prop = nst_get_tissues_optical_properties(tissues,wl);
+            [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl, FilesTissuesProperty);
+            if ~isempty(errors)
+                bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  error_list], newline))
+                return;
+            end
+    
             fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
             
             if strcmp(options.software, 'mcxlab-cuda')
@@ -343,33 +356,9 @@ for ivertx = 1:nb_vertex
         end
     end
 end
-bst_progress('stop', 1);
-disp('');
-disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2str(toc) ' seconds']);
 
-end
+fprintf('\n%d fluence volumes computed in %.2f seconds\n', nb_vertex * nb_wavelengths, toc);
 
-function [normalV] = computeVertNorm(Vertices,Faces)
-normalF = surfacenorm(Vertices,Faces);
-nvert = size(Vertices,1);
-nface = size(Faces,1);
-normalV = zeros(nvert,3);
-for i=1:nface
-    F = Faces(i,:);
-    for j=1:3
-        normalV(F(j),:) = normalV(F(j),:) + normalF(i,:);
-    end
-end
-% normalize
-d = sqrt( sum(normalV.^2,2) ); d(d<eps)=1;
-normalV = normalV ./ repmat( d, 1,3 );
-% put normals inward
-v = Vertices - repmat(mean(Vertices,2), 1,3);
-s = sum( v.*normalV, 2 );
-if sum(s>0)>sum(s<0)
-    % flip
-    normalV = -normalV;
-end
 end
 
 function [pos, invalid_id] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
