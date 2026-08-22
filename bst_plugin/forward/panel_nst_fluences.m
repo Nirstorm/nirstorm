@@ -208,11 +208,11 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         jWavelengths.setEnabled(0);
     end    
 
-    jCustomTissue = gui_component('checkbox', jPanelForward, 'br', 'Use custom tissue property', [], [], [], []);
+    jCustomTissue = gui_component('checkbox', jPanelForward, 'br', 'Use custom tissue property', [], [], @(h,ev)SwitchCustomTissue(), []); 
     jCustomTissue.setSelected(OPTIONS.UseCustomTissuesProperty);
     ctrl.jCustomTissue = jCustomTissue;
 
-    gui_component('label', jPanelForward, 'br', 'Tissue property filer:', [], [], [], []);
+    jTissuePropertyFileLabel = gui_component('label', jPanelForward, 'br', 'Tissue property filer:', [], [], [], []);
     jTissuePropertyFile = gui_component('text', jPanelForward, 'hfill', OPTIONS.FilesTissuesProperty, [], [], [], []);
     ctrl.jTissuePropertyFile = jTissuePropertyFile;
 
@@ -319,6 +319,15 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
             jExtent.setVisible(0);
             jPanelScouts.setVisible(0);
         end
+
+        SwitchCustomTissue();
+    end
+
+    function SwitchCustomTissue()
+
+        jTissuePropertyFileLabel.setEnabled(jCustomTissue.isSelected());
+        jTissuePropertyFile.setEnabled(jCustomTissue.isSelected());
+        
     end
 
     %% ===== UPDATE SCOUT LIST =====
@@ -495,6 +504,7 @@ function s = GetPanelContents()
     end   
     
     if ctrl.jCustomTissue.isSelected()
+        s.UseCustomTissuesProperty = 1;
         s.FilesTissuesProperty = strtrim(char(ctrl.jTissuePropertyFile.getText));
     end
 
