@@ -278,18 +278,16 @@ cfg.tstart      = 0;
 cfg.tend        = 5e-9;
 cfg.tstep       = 5e-9;
 % nornalisation
-cfg.isnormalized= 1; % [1]-normalize the output flux to unitary source
+cfg.isnormalized = 1; % [1]-normalize the output flux to unitary source
+cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 
-cfg.issrcfrom0  = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
-% project optodes position on cfg.vol
+% Project optodes position on cfg.vol
 options.proj.stepAlongNorm      = 1;
 options.meshes.skin.vertices    = head_vertices_mri;
 options.meshes.skin.faces       = sHead.Faces;
-
-[vertex_pos,invalid_id] = mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
+[vertex_pos,invalid_id]         = mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
 
 if ~isempty(invalid_id)
-    
     bst_report('Warning', sProcess, [], 'Some vertices could not be project into the volume and were discarded (check scout Wrong vertex)');
 
     scout_idx = size(sHead.Atlas(iHeadAtlas).Scouts,2) + 1;
@@ -303,14 +301,16 @@ if ~isempty(invalid_id)
     db_save();
 
     % remove vertices from fluence
-    valid_vertices = setdiff(valid_vertices,valid_vertices(invalid_id));
+    valid_vertices = setdiff(valid_vertices, valid_vertices(invalid_id));
 end
     
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 1, nb_vertex * nb_wavelengths);
 for ivertx = 1:nb_vertex
-    cfg.srcpos=vertex_pos(ivertx,:);    
-    cfg.srcdir=head_normals(valid_vertices(ivertx),:);
+
+    cfg.srcpos = vertex_pos(ivertx,:);    
+    cfg.srcdir = head_normals(valid_vertices(ivertx),:);
+
     for iwl=1:nb_wavelengths
         wl = wavelengths(iwl);
         fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
@@ -356,9 +356,8 @@ for ivertx = 1:nb_vertex
         end
     end
 end
-bst_progress('stop', 1);
-disp('');
-disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2str(toc) ' seconds']);
+
+fprintf('\n%d fluence volumes computed in %.2f seconds\n', nb_vertex * nb_wavelengths, toc);
 
 end
 
