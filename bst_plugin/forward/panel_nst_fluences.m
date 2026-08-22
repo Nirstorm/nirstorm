@@ -343,7 +343,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         selfile = strtrim(char(jTissuePropertyFile.getText));
         selpath = '';
 
-        if ~isempty(selpath)
+        if ~isempty(selfile)
             selpath = fileparts(selfile);
         end
 
