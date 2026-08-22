@@ -362,29 +362,6 @@ disp([num2str(nb_vertex * nb_wavelengths) ' fluence volumes computed in ' num2st
 
 end
 
-function [normalV] = computeVertNorm(Vertices,Faces)
-normalF = surfacenorm(Vertices,Faces);
-nvert = size(Vertices,1);
-nface = size(Faces,1);
-normalV = zeros(nvert,3);
-for i=1:nface
-    F = Faces(i,:);
-    for j=1:3
-        normalV(F(j),:) = normalV(F(j),:) + normalF(i,:);
-    end
-end
-% normalize
-d = sqrt( sum(normalV.^2,2) ); d(d<eps)=1;
-normalV = normalV ./ repmat( d, 1,3 );
-% put normals inward
-v = Vertices - repmat(mean(Vertices,2), 1,3);
-s = sum( v.*normalV, 2 );
-if sum(s>0)>sum(s<0)
-    % flip
-    normalV = -normalV;
-end
-end
-
 function [pos, invalid_id] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
 
 %==========================================================================

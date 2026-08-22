@@ -215,6 +215,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jTissuePropertyFileLabel = gui_component('label', jPanelForward, 'br', 'Tissue property filer:', [], [], [], []);
     jTissuePropertyFile = gui_component('text', jPanelForward, 'hfill', OPTIONS.FilesTissuesProperty, [], [], [], []);
     ctrl.jTissuePropertyFile = jTissuePropertyFile;
+    jTissuePropertyCTrl =  gui_component('button', jPanelForward, [], 'Select File', [], [], @(~,~) SelectTissueFile(), []);
 
     jPanelRight.add('br hfill', jPanelForward);  
 
@@ -248,6 +249,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
+    gui_component('button', jPanelOutput, [], 'Select Folder', [], [], @(~,~) SelectOutputFolder(), []);
+
     jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwrite existing fluences', [], [], [], []);
     jOverwrite.setSelected(OPTIONS.mcxlab_overwrite_fluences);
 
@@ -327,7 +330,40 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
 
         jTissuePropertyFileLabel.setEnabled(jCustomTissue.isSelected());
         jTissuePropertyFile.setEnabled(jCustomTissue.isSelected());
+        jTissuePropertyCTrl.setEnabled(jCustomTissue.isSelected());
+
+    end
+
+    function SelectTissueFile()
         
+        if ~jCustomTissue.isSelected()
+            return;
+        end
+
+        selfile = strtrim(char(jTissuePropertyFile.getText));
+        selpath = '';
+
+        if ~isempty(selpath)
+            selpath = fileparts(selfile);
+        end
+
+        [file, location] = uigetfile(fullfile(selpath,'*.json'));
+
+        if ischar(file)
+            jTissuePropertyFile.setText(fullfile(location, file));
+        end
+
+    end
+
+    function SelectOutputFolder()
+        
+        selpath = strtrim(char(jOutputFolder.getText));
+        selpath = uigetdir(selpath, 'Select output folder');
+
+        if ischar(selpath)
+            jOutputFolder.setText(selpath);
+        end
+
     end
 
     %% ===== UPDATE SCOUT LIST =====
