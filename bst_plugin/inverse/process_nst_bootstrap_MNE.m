@@ -41,10 +41,10 @@ function sProcess = GetDescription()
     sProcess.options.label0.Type = 'label';
 
     
-    sProcess.options.SNR.Comment = str_pad('SNR range', 35);
-    sProcess.options.SNR.Type    = 'baseline';
-    sProcess.options.SNR.Value   =  [];
-    sProcess.options.SNR.Group   = 'MNE';
+    sProcess.options.timewindow_snr.Comment = str_pad('Time window for SNR:', 35);
+    sProcess.options.timewindow_snr.Type    = 'timewindow';
+    sProcess.options.timewindow_snr.Value   =  [];
+    sProcess.options.timewindow_snr.Group   = 'MNE';
 
 
     sProcess.options.replacement.Comment = 'Do bootstrap with replacement ?';
@@ -54,7 +54,11 @@ function sProcess = GetDescription()
     sProcess.options.combination.Comment = 'Combination value #:';
     sProcess.options.combination.Type    = 'value';
     sProcess.options.combination.Value   = {16, '', 0};
-    
+
+    sProcess.options.n_average.Comment = 'Number of average:';
+    sProcess.options.n_average.Type    = 'value';
+    sProcess.options.n_average.Value   = {50, '', 0};
+
     sProcess.options.data_save.Comment = 'Data save comment';
     sProcess.options.data_save.Type    = 'text';
     sProcess.options.data_save.Value = '';
@@ -111,65 +115,38 @@ function OutputFiles = Run(sProcess, sInputs)
 % Get options values
 OutputFiles = {};
 
+
+% Load data
 sStudy = bst_get('Study', sInputs.iStudy);
 HeadModelFileName = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
 HeadModelFileName.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 
-
-for iFile = 1:(length(sInputs))
+nTrials = length(sInputs);
+for iFile = 1:nTrials
     DataMat_dOD{iFile} = in_bst_data(sInputs(iFile).FileName, 'F', 'ChannelFlag', 'History', 'Time');
 end
-
 ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
 
-%baselinedur = [sProcess.options.TimeSegmentNoise.Value{1}, sProcess.options.TimeSegmentNoise.Value{2}];
-%SNRdur = [sProcess.options.SNR.Value{1}, sProcess.options.SNR.Value{2}];
-Time = round(DataMat_dOD{1,1}.Time,1);
 
-ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, baselinedur);
-iSNR = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, SNRdur);
 
-if length(sInputs) <= 20  &&  ~sProcess.options.replacement.Value
-    avg_list = nchoosek([1:(length(sInputs))],sProcess.options.combination.Value{1});%Cnk
-    n_perm = size(avg_list,1);
-else
-    n_perm = 5000;
-    avg_list = zeros(n_perm,sProcess.options.combination.Value{1});
-end
+timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
+timewindow_snr = sProcess.options.timewindow_snr.Value{1};
 
-bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
+isReplacement = sProcess.options.replacement.Value;
+nCombination  = sProcess.options.combination.Value{1};
+nAverage      = sProcess.options.n_average.Value{1};
 
-for iAvg = 1:n_perm
-    if length(sInputs) > 20 || sProcess.options.replacement.Value
-        avg_list(iAvg,:) =  randsample(length(sInputs),sProcess.options.combination.Value{1}, sProcess.options.replacement.Value ); 
-        % avg_list(iavg,:) = randperm(length(sInputs),sProcess.options.combination.Value{1}); 
-    end
-    trial = cellfun(@(c) c.F,DataMat_dOD(avg_list(iAvg,:)),'UniformOutput',false);
 
-    trials = mean(cat(3,trial{:}),3);
-    trials = trials(ChannelFlag==1,:);
+ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_baseline);
+iSNR      = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_snr);
+isExact   = nTrials <= 20  &&  ~isReplacement;
 
-    ave_trials_690 = mean(trials(1:2:end,:),1);
-    ave_trials_830 = mean(trials(2:2:end,:),1);
-    trials_690 = trials(1:2:end,:);
-    trials_830 = trials(2:2:end,:);
-
-    trials_std_690 = std(trials_690(:,ibaseline),[],2);
-    trials_std_830 = std(trials_830(:,ibaseline),[],2);
-    
-    SNR_690(iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
-    SNR_830(iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
-    avg_SNR_690(iAvg) = abs(min(ave_trials_690(iSNR)))./std(ave_trials_690(iSNR));
-    avg_SNR_830(iAvg) = abs(max(ave_trials_830(iSNR)))./std(ave_trials_830(iSNR));
-    
-    bst_progress('inc', 1);
-
-end
+[avg_list, SNR_690, SNR_830] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
 
 %% generate the avg list of each wavelength around the median amp (e.g.101 resamples)
 
-nAverage = min(50,floor(length(avg_list)/2-1));
+nAverage = min(50, floor(length(avg_list)/2-1));
 
 
 % SNR_all = (SNR_690+SNR_830)./2;
@@ -178,9 +155,9 @@ quantiles690 = quantile(SNR_690',[0.5 0.6 0.7 0.8 0.9]);
 quantiles830 = quantile(SNR_830',[0.5 0.6 0.7 0.8 0.9]);
 
 %this is targeting median SNR for both wavelength
-SNR_all  = sqrt((SNR_690-  quantiles690(1)).^2 + (SNR_830 - quantiles830(1)).^2); 
+SNR_all  = sqrt((SNR_690 -  quantiles690(1)).^2 + (SNR_830 - quantiles830(1)).^2); 
 
-[SNR_sorted,SNR_all_list] = sort(SNR_all);
+[SNR_sorted, SNR_all_list] = sort(SNR_all);
 
 %target_SNR = median(SNR_sorted);
 target_SNR = min(SNR_sorted);
@@ -324,42 +301,89 @@ function sfn = protect_fn_str(s)
 sfn = strrep(s, ' ', '_');
 end
 
-function figures_process_MNE(avg_list,avg_all_list,sProcess,sInputs,SNR_690,SNR_690_s,SNR_830,SNR_830_s,SNR_all,SNR_s,quantiles830,quantiles690)
-% TODO: replace hist with histogram
-figure
-subplot(2,2,1);
-histogram(avg_list(avg_all_list,:),'BinMethod','integers')
-line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
-xlabel('Trials');
-title('Occurance of each trial in the final result')
+function figures_process_MNE(avg_list, avg_all_list, sProcess, sInputs, SNR_690, SNR_690_s, SNR_830, SNR_830_s, SNR_all, SNR_s, quantiles830, quantiles690)
+    % TODO: replace hist with histogram
+    figure
+    subplot(2,2,1);
+    histogram(avg_list(avg_all_list,:),'BinMethod','integers')
+    line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
+    xlabel('Trials');
+    title('Occurance of each trial in the final result')
+    
+    subplot(2,2,2);
+    hist(SNR_690,size(SNR_690,2)./10);
+    line(median(SNR_690_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    xlim([0 43])
+    title('SNR for \lambda = 690');
+    
+    subplot(2,2,3);
+    hist(SNR_830,size(SNR_830,2)./10);
+    line(median(SNR_830_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    xlim([0 40])
+    title('SNR for \lambda = 830');
+    
+    subplot(2,2,4);
+    hist((SNR_690+SNR_830)./2,size(SNR_all,2)./10);
+    line(median(SNR_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    xlim([0 40])
+    title('Average SNR for \lambda = {690, 830}');
+    
+    figure;
+    scatterhist(SNR_690,SNR_830,'Location','NorthEast', 'Direction','out'); hold on;
+    scatter(SNR_690_s, SNR_830_s,'filled','r')
+    yline(quantiles830 ); xline(quantiles690)
+    sgtitle('SNR for \lambda = {690, 830}')
+end
 
-subplot(2,2,2);
-hist(SNR_690,size(SNR_690,2)./10);
-line(median(SNR_690_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 43])
-title('SNR for \lambda = 690');
+function [avg_list,SNR_690,SNR_830] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR)
 
-subplot(2,2,3);
-hist(SNR_830,size(SNR_830,2)./10);
-line(median(SNR_830_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 40])
-title('SNR for \lambda = 830');
-
-subplot(2,2,4);
-hist((SNR_690+SNR_830)./2,size(SNR_all,2)./10);
-line(median(SNR_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 40])
-title('Average SNR for \lambda = {690, 830}');
-
-figure;
-scatterhist(SNR_690,SNR_830,'Location','NorthEast', 'Direction','out'); hold on;
-scatter(SNR_690_s, SNR_830_s,'filled','r')
-yline(quantiles830 ); xline(quantiles690)
-sgtitle('SNR for \lambda = {690, 830}')
+    if isExact
+        avg_list = nchoosek(1:nTrials, nCombination); 
+        n_perm = size(avg_list,1);
+    else
+        n_perm = 5000;
+        avg_list = zeros(n_perm, nCombination);
+    end
+    
+    bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
+    
+    SNR_690 = zeros(1, n_perm);
+    SNR_830 = zeros(1, n_perm);
+    
+    avg_SNR_690 = zeros(1, n_perm);
+    avg_SNR_830  = zeros(1, n_perm);
+    
+    for iAvg = 1:n_perm
+    
+        if ~isExact
+            avg_list(iAvg,:) =  randsample(nTrials, nCombination, isReplacement); 
+        end
+    
+        trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
+    
+        trials = mean(cat(3,trial{:}),3);
+        trials = trials(ChannelFlag == 1,:);
+    
+        ave_trials_690 = mean(trials(1:2:end,:),1);
+        ave_trials_830 = mean(trials(2:2:end,:),1);
+        trials_690 = trials(1:2:end,:);
+        trials_830 = trials(2:2:end,:);
+    
+        trials_std_690 = std(trials_690(:,ibaseline),[],2);
+        trials_std_830 = std(trials_830(:,ibaseline),[],2);
+    
+        SNR_690(iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
+        SNR_830(iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
+        avg_SNR_690(iAvg) = abs(min(ave_trials_690(iSNR)))./std(ave_trials_690(iSNR));
+        avg_SNR_830(iAvg) = abs(max(ave_trials_830(iSNR)))./std(ave_trials_830(iSNR));
+    
+        bst_progress('inc', 1);
+    
+    end
 end
