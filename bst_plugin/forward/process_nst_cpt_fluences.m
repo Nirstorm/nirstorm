@@ -322,7 +322,7 @@ for ivertx = 1:nb_vertex
 
             [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl, FilesTissuesProperty);
             if ~isempty(errors)
-                bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  error_list], newline))
+                bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  errors], [newline, '---- ']))
                 return;
             end
     
