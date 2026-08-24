@@ -106,115 +106,110 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs)
-% ===== GET OPTIONS =====
-% Get options values
-OutputFiles = {};
-
-
-% Load data
-sStudy = bst_get('Study', sInputs.iStudy);
-HeadModelFileName = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-HeadModelFileName.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-
-nTrials = length(sInputs);
-for iFile = 1:nTrials
-    DataMat_dOD{iFile} = in_bst_data(sInputs(iFile).FileName, 'F', 'ChannelFlag', 'History', 'Time');
-end
-ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
-
-timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
-timewindow_snr      = sProcess.options.timewindow_snr.Value{1};
-isReplacement = sProcess.options.replacement.Value;
-nCombination  = sProcess.options.combination.Value{1};
-nAverage      = sProcess.options.n_average.Value{1};
-
-
-ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_baseline);
-iSNR      = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_snr);
-isExact   = nTrials <= 20  &&  ~isReplacement;
-
-[avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
-
-%% generate the avg list of each wavelength around the median amp (e.g.101 resamples)
-[avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, nAverage);
-
-plot_trials(avg_list, SNR, SNR_selected, quantiles);
-
-% Genrate median average
-sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
-    'avgtype',       5, ...  % By trial group (folder average)
-    'avg_func',      7, ...  % Arithmetic average + Standard error
-    'weighted',      0, ...
-    'keepevents',    1);
-
-% Process: Add tag:  
-AvgFile = bst_process('CallProcess', 'process_add_tag', sFiles, [], ...
-    'tag',           sprintf( '| median SNR = %.2f', median(SNR_selected(1))) , ...
-    'output',        1);  % Add to file name
-
-
-sStudy = bst_get('Study', sInputs.iStudy);
-if isempty(sStudy.iHeadModel)
-    bst_error('No head model found. Consider running "NIRS -> Compute head model"');
-    return;
-end
-HeadModelFileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-sHead = in_bst_headmodel(HeadModelFileName, 1);
-
-sDataIn = in_bst_data(AvgFile.FileName);
-ChannelMat = in_bst_channel(AvgFile.ChannelFile);
-OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
-
-
-bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
-Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
-
-bst_progress('start', 'Bootstraping', 'Computing all combinations', 1, size(avg_list, 1)); 
-for iAvg = 1:size(avg_list, 1)
+    % Get options values
+    OutputFiles = {};
     
-    trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
-
-    trials = mean(cat(3, trial{:}),3);
-    trials = trials(ChannelFlag==1,:);
-
-    sDataIn.F = trials;
-
-    [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn );
-    sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
-
-    Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
-    Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
+    % Load data
+    sStudy = bst_get('Study', sInputs.iStudy);
+    HeadModelFileName = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
+    HeadModelFileName.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+    ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
     
-    bst_progress('inc', 1);
-end 
-
-ResultsAvg = squeeze(mean(Results, 1));
-ResultsSD  = squeeze(std(Results, [], 1));
-
-% Save results
-bst_progress('text', 'Saving Results...');
-for iMap = 1:length(sResults)
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
-
-    ResultsMat          = sResults(iMap);
-    ResultsMat.DataFile = AvgFile.FileName;
-    ResultsMat.Options  = OPTIONS;
+    nTrials = length(sInputs);
+    for iFile = 1:nTrials
+        DataMat_dOD{iFile} = in_bst_data(sInputs(iFile).FileName, 'F', 'ChannelFlag', 'History', 'Time');
+    end
+    ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
     
-    ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
-    ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
-
-    ResultsMat.nAvg = nAverage;
-    ResultsMat.Leff = nAverage;
-
-    bst_save(ResultFile, ResultsMat, 'v6');
-    db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
-
-    OutputFiles{end+1} = ResultFile;
+    timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
+    timewindow_snr      = sProcess.options.timewindow_snr.Value{1};
+    isReplacement = sProcess.options.replacement.Value;
+    nCombination  = sProcess.options.combination.Value{1};
+    nAverage      = sProcess.options.n_average.Value{1};
+    
+    
+    ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_baseline);
+    iSNR      = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_snr);
+    isExact   = nTrials <= 20  &&  ~isReplacement;
+    
+    [avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
+    
+    %% generate the avg list of each wavelength around the median amp (e.g.101 resamples)
+    [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, nAverage);
+    plot_trials(avg_list, SNR, SNR_selected, quantiles);
+    
+    % Genrate median average
+    sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
+        'avgtype',       5, ...  % By trial group (folder average)
+        'avg_func',      7, ...  % Arithmetic average + Standard error
+        'weighted',      0, ...
+        'keepevents',    1);
+    
+    % Process: Add tag:  
+    AvgFile = bst_process('CallProcess', 'process_add_tag', sFiles, [], ...
+        'tag',           sprintf( '| median SNR = %.2f', median(SNR_selected(1))) , ...
+        'output',        1);  % Add to file name
+    
+    
+    sStudy = bst_get('Study', sInputs.iStudy);
+    if isempty(sStudy.iHeadModel)
+        bst_error('No head model found. Consider running "NIRS -> Compute head model"');
+        return;
+    end
+    HeadModelFileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+    sHead = in_bst_headmodel(HeadModelFileName, 1);
+    
+    sDataIn = in_bst_data(AvgFile.FileName);
+    ChannelMat = in_bst_channel(AvgFile.ChannelFile);
+    OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
+    
+    
+    bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
+    Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
+    
+    bst_progress('start', 'Bootstraping', 'Computing all combinations', 1, size(avg_list, 1)); 
+    for iAvg = 1:size(avg_list, 1)
+        
+        trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
+    
+        trials = mean(cat(3, trial{:}),3);
+        trials = trials(ChannelFlag==1,:);
+    
+        sDataIn.F = trials;
+    
+        [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn );
+        sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
+    
+        Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
+        Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
+        
+        bst_progress('inc', 1);
+    end 
+    
+    ResultsAvg = squeeze(mean(Results, 1));
+    ResultsSD  = squeeze(std(Results, [], 1));
+    
+    % Save results
+    bst_progress('text', 'Saving Results...');
+    for iMap = 1:length(sResults)
+        ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+    
+        ResultsMat          = sResults(iMap);
+        ResultsMat.DataFile = AvgFile.FileName;
+        ResultsMat.Options  = OPTIONS;
+        
+        ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
+        ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
+    
+        ResultsMat.nAvg = nAverage;
+        ResultsMat.Leff = nAverage;
+    
+        bst_save(ResultFile, ResultsMat, 'v6');
+        db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
+    
+        OutputFiles{end+1} = ResultFile;
+    end
 end
-
-end
-
 
 function plot_trials(avg_list, SNR, SNR_selected, quantiles)
 
