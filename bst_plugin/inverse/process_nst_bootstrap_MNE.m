@@ -37,15 +37,14 @@ function sProcess = GetDescription()
     sProcess.nMinFiles   = 1;
     
     
-    sProcess.options.label0.Comment = 'Bootstraps options:';
+    sProcess.options.label0.Comment = '<b>Bootstraps options:</b>';
     sProcess.options.label0.Type = 'label';
 
     
-    sProcess.options.timewindow_snr.Comment = str_pad('Time window for SNR:', 35);
+    sProcess.options.timewindow_snr.Comment = 'Time window for SNR:';
     sProcess.options.timewindow_snr.Type    = 'timewindow';
     sProcess.options.timewindow_snr.Value   =  [];
     sProcess.options.timewindow_snr.Group   = 'MNE';
-
 
     sProcess.options.replacement.Comment = 'Do bootstrap with replacement ?';
     sProcess.options.replacement.Type    = 'checkbox';
@@ -59,11 +58,7 @@ function sProcess = GetDescription()
     sProcess.options.n_average.Type    = 'value';
     sProcess.options.n_average.Value   = {50, '', 0};
 
-    sProcess.options.data_save.Comment = 'Data save comment';
-    sProcess.options.data_save.Type    = 'text';
-    sProcess.options.data_save.Value = '';
-
-    sProcess.options.label1.Comment = 'MNE options:';
+    sProcess.options.label1.Comment = '<b>MNE options:</b>';
     sProcess.options.label1.Type = 'label';
 
     sProcess.options.thresh_dis2cortex.Comment = 'Reconstruction Field of view (distance to montage border)';
@@ -128,11 +123,8 @@ for iFile = 1:nTrials
 end
 ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
 
-
-
 timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
-timewindow_snr = sProcess.options.timewindow_snr.Value{1};
-
+timewindow_snr      = sProcess.options.timewindow_snr.Value{1};
 isReplacement = sProcess.options.replacement.Value;
 nCombination  = sProcess.options.combination.Value{1};
 nAverage      = sProcess.options.n_average.Value{1};
@@ -142,42 +134,15 @@ ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_basel
 iSNR      = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_snr);
 isExact   = nTrials <= 20  &&  ~isReplacement;
 
-[avg_list, SNR_690, SNR_830] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
+[avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
 
 %% generate the avg list of each wavelength around the median amp (e.g.101 resamples)
+[avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, nAverage);
 
-nAverage = min(50, floor(length(avg_list)/2-1));
-
-
-% SNR_all = (SNR_690+SNR_830)./2;
-% SNR_all = min(SNR_690,SNR_830);
-quantiles690 = quantile(SNR_690',[0.5 0.6 0.7 0.8 0.9]);
-quantiles830 = quantile(SNR_830',[0.5 0.6 0.7 0.8 0.9]);
-
-%this is targeting median SNR for both wavelength
-SNR_all  = sqrt((SNR_690 -  quantiles690(1)).^2 + (SNR_830 - quantiles830(1)).^2); 
-
-[SNR_sorted, SNR_all_list] = sort(SNR_all);
-
-%target_SNR = median(SNR_sorted);
-target_SNR = min(SNR_sorted);
-
-%target_SNR = max( median(SNR_690),median(SNR_830));
-
-[~,idx_list] =  min( abs(SNR_sorted - target_SNR) );
-
-%avg_all_list = SNR_all_list(idx_list-nAverage:min(length(avg_list), min(length(SNR_all), idx_list+nAverage)));
-avg_all_list = SNR_all_list(idx_list:min(length(avg_list), min(length(SNR_all), idx_list+2*nAverage)));
-
-
-SNR_690_s   = SNR_690(avg_all_list);
-SNR_830_s   = SNR_830(avg_all_list);
-SNR_s       = (SNR_690_s+SNR_830_s)/2;
-
-figures_process_MNE(avg_list,avg_all_list,sProcess,sInputs,SNR_690,SNR_690_s,SNR_830,SNR_830_s,SNR_all,SNR_s,quantiles830,quantiles690);
+plot_trials(avg_list, SNR, SNR_selected, quantiles);
 
 % Genrate median average
-sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(SNR_all_list(idx_list),:)), [], ...
+sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
     'avgtype',       5, ...  % By trial group (folder average)
     'avg_func',      7, ...  % Arithmetic average + Standard error
     'weighted',      0, ...
@@ -185,7 +150,7 @@ sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(SNR_all_
 
 % Process: Add tag:  
 AvgFile = bst_process('CallProcess', 'process_add_tag', sFiles, [], ...
-    'tag',           sprintf( '| median SNR = %.2f',median(SNR_690_s)) , ...
+    'tag',           sprintf( '| median SNR = %.2f', median(SNR_selected(1))) , ...
     'output',        1);  % Add to file name
 
 
@@ -201,15 +166,14 @@ sDataIn = in_bst_data(AvgFile.FileName);
 ChannelMat = in_bst_channel(AvgFile.ChannelFile);
 OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
 
-bst_progress('start', 'Reconstruction by cMEM', 'Launching cMEM...');
 
+bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
+Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
 
-Results = zeros(length(avg_all_list) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
-
-bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_all_list)); 
-for iAvg = 1:max(length(avg_all_list), 10)
+bst_progress('start', 'Bootstraping', 'Computing all combinations', 1, size(avg_list, 1)); 
+for iAvg = 1:size(avg_list, 1)
     
-    trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(avg_all_list(iAvg),:)),'UniformOutput',false);
+    trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
 
     trials = mean(cat(3, trial{:}),3);
     trials = trials(ChannelFlag==1,:);
@@ -225,123 +189,76 @@ for iAvg = 1:max(length(avg_all_list), 10)
     bst_progress('inc', 1);
 end 
 
-ResultsAvg = squeeze(mean(Results));
-ResultsSD  = squeeze(std(Results));
+ResultsAvg = squeeze(mean(Results, 1));
+ResultsSD  = squeeze(std(Results, [], 1));
 
-hb_unit_factor = 1e6;
-hb_unit = '\mumol.l-1';
-hb_types = {'HbO', 'HbR'};
-for ihb = 1:size(ResultsAvg, 2)
-    [sStudy, ResultFile] = add_surf_data(squeeze(ResultsAvg(:,ihb,:)) .* hb_unit_factor,...
-                                         squeeze(ResultsSD(:,ihb,:)) .* hb_unit_factor,...
-                                         sDataIn.Time, HeadModelFileName, ...
-                                         sprintf('MNE sources (bootstrap) | %s', hb_types{ihb}), ...
-                                         AvgFile, sStudy, '', ...
-                                         length(avg_all_list),...
-                                         hb_unit, 0);    
+% Save results
+bst_progress('text', 'Saving Results...');
+for iMap = 1:length(sResults)
+    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+
+    ResultsMat          = sResults(iMap);
+    ResultsMat.DataFile = AvgFile.FileName;
+    ResultsMat.Options  = OPTIONS;
+    
+    ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
+    ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
+
+    ResultsMat.nAvg = nAverage;
+    ResultsMat.Leff = nAverage;
+
+    bst_save(ResultFile, ResultsMat, 'v6');
+    db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
+
     OutputFiles{end+1} = ResultFile;
 end
 
 end
 
-function [sStudy, ResultFile] = add_surf_data(data,Std, time, head_model, name, ...
-                                              sInputs, sStudy, history_comment, ...
-                                              nAvg, data_unit, store_sparse)
-                                          
-    if nargin < 8
-        data_unit = '';
-    end
-    
-    ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), ...
-                            ['results_NIRS_' protect_fn_str(name)]);
-                        
-    % ===== CREATE FILE STRUCTURE =====
-    ResultsMat = db_template('resultsmat');
-    ResultsMat.Comment       = name;
-    ResultsMat.Function      = '';
-    if store_sparse
-        ResultsMat.ImageGridAmp = sparse(data); %TODO TOCHECK with FT: sparse data seem not well handled. Eg while viewing (could not reproduce)
-    else
-        ResultsMat.ImageGridAmp = data;
-    end
-    ResultsMat.Std = Std;
-    ResultsMat.DisplayUnits = data_unit;
-    ResultsMat.Time          = time;
-    ResultsMat.DataFile      = sInputs.FileName;
-    ResultsMat.HeadModelFile = head_model.FileName;
-    ResultsMat.HeadModelType = head_model.HeadModelType;
-    ResultsMat.ChannelFlag   = [];
-    ResultsMat.GoodChannel   = [];
-    ResultsMat.SurfaceFile   = file_short(head_model.SurfaceFile);
-    ResultsMat.GridLoc    = [];
-    ResultsMat.GridOrient = [];
-    ResultsMat.nAvg      = nAvg;
-    % History
-    ResultsMat = bst_history('add', ResultsMat, 'compute', history_comment);
-    % Save new file structure
-    bst_save(ResultFile, ResultsMat, 'v6');
-    % ===== REGISTER NEW FILE =====
-    % Create new results structure
-    newResult = db_template('results');
-    newResult.Comment       = name;
-    newResult.FileName      = file_short(ResultFile);
-    newResult.DataFile      = sInputs.FileName;
-    newResult.isLink        = 0;
-    newResult.HeadModelType = ResultsMat.HeadModelType;
-    % Add new entry to the database
-    iResult = length(sStudy.Result) + 1;
-    sStudy.Result(iResult) = newResult;
-    % Update Brainstorm database
-    bst_set('Study', sInputs.iStudy, sStudy);
-end
 
+function plot_trials(avg_list, SNR, SNR_selected, quantiles)
 
-
-function sfn = protect_fn_str(s)
-sfn = strrep(s, ' ', '_');
-end
-
-function figures_process_MNE(avg_list, avg_all_list, sProcess, sInputs, SNR_690, SNR_690_s, SNR_830, SNR_830_s, SNR_all, SNR_s, quantiles830, quantiles690)
     % TODO: replace hist with histogram
+
     figure
     subplot(2,2,1);
-    histogram(avg_list(avg_all_list,:),'BinMethod','integers')
-    line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
+    histogram(avg_list,'BinMethod','integers')
+    % line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
     xlabel('Trials');
     title('Occurance of each trial in the final result')
     
-    subplot(2,2,2);
-    hist(SNR_690,size(SNR_690,2)./10);
-    line(median(SNR_690_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    subplot(2, 2, 2);
+    hist(SNR(1, :), size(SNR, 2)./10);
+    line(median(SNR_selected(1,:))*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min(SNR_selected(1,:))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max(SNR_selected(1,:))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
     xlim([0 43])
     title('SNR for \lambda = 690');
     
     subplot(2,2,3);
-    hist(SNR_830,size(SNR_830,2)./10);
-    line(median(SNR_830_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    hist(SNR(2, :), size(SNR,2)./10);
+    line(median(SNR_selected(2,:))*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min((SNR_selected(2,:)))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max((SNR_selected(2,:)))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
     xlim([0 40])
     title('SNR for \lambda = 830');
     
     subplot(2,2,4);
-    hist((SNR_690+SNR_830)./2,size(SNR_all,2)./10);
-    line(median(SNR_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    hist(mean(SNR, 1), size(SNR,2)./10);
+    line(median(mean(SNR_selected))*[1,1],ylim(gca),'Color','red','LineStyle','--')
+    line(min(mean(SNR_selected))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+    line(max(mean(SNR_selected))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
     xlim([0 40])
     title('Average SNR for \lambda = {690, 830}');
     
     figure;
-    scatterhist(SNR_690,SNR_830,'Location','NorthEast', 'Direction','out'); hold on;
-    scatter(SNR_690_s, SNR_830_s,'filled','r')
-    yline(quantiles830 ); xline(quantiles690)
+    scatterhist(SNR(1, :), SNR(2, :),'Location','NorthEast', 'Direction','out'); hold on;
+    scatter(SNR_selected(1, :), SNR_selected(2, :),'filled','r')
+    yline(quantiles(2, :) ); xline(quantiles(1, :))
     sgtitle('SNR for \lambda = {690, 830}')
 end
 
-function [avg_list,SNR_690,SNR_830] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR)
+function [avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR)
 
     if isExact
         avg_list = nchoosek(1:nTrials, nCombination); 
@@ -353,11 +270,7 @@ function [avg_list,SNR_690,SNR_830] = generate_permutations(isExact, nTrials, nC
     
     bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
     
-    SNR_690 = zeros(1, n_perm);
-    SNR_830 = zeros(1, n_perm);
-    
-    avg_SNR_690 = zeros(1, n_perm);
-    avg_SNR_830  = zeros(1, n_perm);
+    SNR = zeros(2, n_perm);
     
     for iAvg = 1:n_perm
     
@@ -367,23 +280,43 @@ function [avg_list,SNR_690,SNR_830] = generate_permutations(isExact, nTrials, nC
     
         trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
     
-        trials = mean(cat(3,trial{:}),3);
+        trials = mean(cat(3,trial{:}), 3);
         trials = trials(ChannelFlag == 1,:);
     
-        ave_trials_690 = mean(trials(1:2:end,:),1);
-        ave_trials_830 = mean(trials(2:2:end,:),1);
         trials_690 = trials(1:2:end,:);
         trials_830 = trials(2:2:end,:);
     
         trials_std_690 = std(trials_690(:,ibaseline),[],2);
         trials_std_830 = std(trials_830(:,ibaseline),[],2);
     
-        SNR_690(iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
-        SNR_830(iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
-        avg_SNR_690(iAvg) = abs(min(ave_trials_690(iSNR)))./std(ave_trials_690(iSNR));
-        avg_SNR_830(iAvg) = abs(max(ave_trials_830(iSNR)))./std(ave_trials_830(iSNR));
-    
+        SNR(1, iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
+        SNR(2, iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
+
         bst_progress('inc', 1);
-    
     end
+end
+
+function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
+
+    nAverage = min(nAverage, floor(length(avg_list)/2-1));
+    
+    quantiles_list = [0.5 0.6 0.7 0.8 0.9];
+    quantiles = zeros(size(SNR, 1), length(quantiles_list));
+
+    for iWavelenght = 1:size(SNR, 1)
+        quantiles(iWavelenght, :) = quantile(SNR(iWavelenght,:)', quantiles_list);
+    end
+
+    %this is targeting median SNR for both wavelength
+    SNR_all = sqrt(sum( (SNR - repmat(quantiles(:, 1), 1, size(SNR, 2))).^2 , 1));
+
+    
+    [SNR_sorted, SNR_all_list] = sort(SNR_all);
+    [~, idx_list] =  min( abs(SNR_sorted - min(SNR_sorted)) );
+    
+    idx_selected = SNR_all_list(idx_list:min(length(SNR_all), idx_list+2*nAverage));
+
+    avg_list = avg_list(idx_selected, :);
+    SNR  = SNR(:, idx_selected);
+    
 end
