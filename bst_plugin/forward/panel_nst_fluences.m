@@ -208,8 +208,18 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         jWavelengths.setEnabled(0);
     end    
 
-    jPanelRight.add('br hfill', jPanelForward);    
-     
+    jCustomTissue = gui_component('checkbox', jPanelForward, 'br', 'Use custom tissue property', [], [], @(h,ev)SwitchCustomTissue(), []); 
+    jCustomTissue.setSelected(OPTIONS.UseCustomTissuesProperty);
+    ctrl.jCustomTissue = jCustomTissue;
+
+    jTissuePropertyFileLabel = gui_component('label', jPanelForward, 'br', 'Tissue property file:', [], [], [], []);
+    jTissuePropertyFile = gui_component('text', jPanelForward, 'hfill', OPTIONS.FilesTissuesProperty, [], [], [], []);
+    ctrl.jTissuePropertyFile = jTissuePropertyFile;
+    jTissuePropertyCTrl =  gui_component('button', jPanelForward, [], 'Select File', [], [], @(~,~) SelectTissueFile(), []);
+
+    jPanelRight.add('br hfill', jPanelForward);  
+
+
     % === PANEL: Simulations options  ====
     jPanelSimulaion = gui_river([2,2], [3,5,3,5], 'Simulation information');    
     gui_component('label', jPanelSimulaion, 'br', 'GPU:', [], [], [], []);
@@ -239,6 +249,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jOutputFolder = gui_component('text', jPanelOutput, 'hfill', OPTIONS.outputdir, [], [], [], []);
     ctrl.jOutputFolder   = jOutputFolder;
     
+    gui_component('button', jPanelOutput, [], 'Select Folder', [], [], @(~,~) SelectOutputFolder(), []);
+
     jOverwrite = gui_component('checkbox', jPanelOutput, 'br', 'Overwrite existing fluences', [], [], [], []);
     jOverwrite.setSelected(OPTIONS.mcxlab_overwrite_fluences);
 
@@ -310,6 +322,48 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
             jExtent.setVisible(0);
             jPanelScouts.setVisible(0);
         end
+
+        SwitchCustomTissue();
+    end
+
+    function SwitchCustomTissue()
+
+        jTissuePropertyFileLabel.setEnabled(jCustomTissue.isSelected());
+        jTissuePropertyFile.setEnabled(jCustomTissue.isSelected());
+        jTissuePropertyCTrl.setEnabled(jCustomTissue.isSelected());
+
+    end
+
+    function SelectTissueFile()
+        
+        if ~jCustomTissue.isSelected()
+            return;
+        end
+
+        selfile = strtrim(char(jTissuePropertyFile.getText));
+        selpath = '';
+
+        if ~isempty(selfile)
+            selpath = fileparts(selfile);
+        end
+
+        [file, location] = uigetfile(fullfile(selpath,'*.json'));
+
+        if ischar(file)
+            jTissuePropertyFile.setText(fullfile(location, file));
+        end
+
+    end
+
+    function SelectOutputFolder()
+        
+        selpath = strtrim(char(jOutputFolder.getText));
+        selpath = uigetdir(selpath, 'Select output folder');
+
+        if ischar(selpath)
+            jOutputFolder.setText(selpath);
+        end
+
     end
 
     %% ===== UPDATE SCOUT LIST =====
@@ -377,13 +431,15 @@ function options = getDefaultOptions()
     options.software    = 'mcxlab-cuda';
     options.wavelengths = 685;
     options.mxclab_gpu = [1];
+    
+    options.UseCustomTissuesProperty    = 0;
+    options.FilesTissuesProperty        = '';
 
-
-     options.mcxlab_nphoton   =  10;
-     options.outputdir        = '';
-     options.mcxlab_overwrite_fluences = 0;
+    options.mcxlab_nphoton   =  10;
+    options.outputdir        = '';
+    options.mcxlab_overwrite_fluences = 0;
      
-     options.mcxlab_flag_autoOP = 1; 
+    options.mcxlab_flag_autoOP = 1; 
 end
 
 function [software, info] = loadSoftware()
@@ -418,9 +474,9 @@ function [software, info] = loadSoftware()
                     return
             end
         elseif isCudaInstalled
-            isCudaLoaded = bst_plugin('Load',   'mcxlab-cuda');
+            isCudaLoaded = bst_plugin('Load', 'mcxlab-cuda');
         elseif isClInstalled
-            isClLoaded = bst_plugin('Load',   'mcxlab-cl');
+            isClLoaded = bst_plugin('Load', 'mcxlab-cl');
         end
     end
 
@@ -483,11 +539,16 @@ function s = GetPanelContents()
        s.mcxlab_gpuid = find(GPU);% If one GPU, use the id of the used GPU
     end   
     
-     s.mcxlab_nphoton   =  str2double(ctrl.jNphoton.getText);
-     s.outputdir        = strtrim(char(ctrl.jOutputFolder.getText));
-     s.mcxlab_overwrite_fluences = ctrl.jOverwrite.isSelected;
+    if ctrl.jCustomTissue.isSelected()
+        s.UseCustomTissuesProperty = 1;
+        s.FilesTissuesProperty = strtrim(char(ctrl.jTissuePropertyFile.getText));
+    end
+
+    s.mcxlab_nphoton   =  str2double(ctrl.jNphoton.getText);
+    s.outputdir        = strtrim(char(ctrl.jOutputFolder.getText));
+    s.mcxlab_overwrite_fluences = ctrl.jOverwrite.isSelected;
      
-     s.mcxlab_flag_autoOP = 1; 
+    s.mcxlab_flag_autoOP = 1; 
 end
 
 
