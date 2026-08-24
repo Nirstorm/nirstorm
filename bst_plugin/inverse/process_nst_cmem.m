@@ -31,7 +31,7 @@ function sProcess = GetDescription()
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', '3D reconstruction'};
-    sProcess.isSeparator = 0;
+    sProcess.isSeparator = 1;
     sProcess.Index       = 1502;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Inverse_problem_using_cMEM';
     % Definition of the input accepted by this process
