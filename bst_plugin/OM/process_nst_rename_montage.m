@@ -18,7 +18,7 @@ function varargout = process_nst_rename_montage( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2020; Thomas Vincent, 2015-2019
+% Authors: Edouard Delaire, 2026 ; Jean-Eudes Bornert, 2026
 
 
 eval(macro_method);
@@ -35,29 +35,14 @@ function sProcess = GetDescription()
     sProcess.Description = '';
     sProcess.isSeparator = 1; 
     
-    % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
-    % Definition of the outputs of this process
     sProcess.OutputTypes = {'data', 'raw'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
-    % Description of the process
-    sProcess.options.inputs.Comment = ['Rename channels in the file: ', ...
-                                       '<ul>'...
-                                            '<li> Write each transformation, separated by a comma</li>', ...
-                                            '<li> To rename S1 as S2, and S2 as S1, write S1 -> S2, S2 -> S1</li>',...
-                                       '</ul><BR>'];
-    sProcess.options.inputs.Type    = 'label';
-
-    % Definition of the options
-    % Description of the process
-    sProcess.options.user_input.Comment = 'Transformation';
-    sProcess.options.user_input.Type    = 'textarea';
-    sProcess.options.user_input.Value    = '';
-
-    
-
+    sProcess.options.montage_panel.Comment = {'panel_nst_rename_montage', 'Edit optodes name:'};
+    sProcess.options.montage_panel.Type    = 'editpref';
+    sProcess.options.montage_panel.Value   = []; 
 end
 
 %% ===== FORMAT COMMENT =====
@@ -67,51 +52,38 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) 
-
     OutputFiles = {sInputs.FileName};
-    user_imput = sProcess.options.user_input.Value;
-
-    user_transfomation = containers.Map();
-
-    clean_str = @(x) strrep(strrep(strrep(strrep(x, ' ', ''), '\n', ''), '\r', ''), newline, '');
-    transformation_list =   strsplit(clean_str(user_imput), ',');
-
-    for iTransformation = 1:length(transformation_list)
-        sTransformation = strsplit(transformation_list{iTransformation}, '->');
-
-        
-        if isKey(user_transfomation, sTransformation{1})
-            error('A transformation for %s was already provided',  sTransformation{1})
-        end
-
-        user_transfomation(sTransformation{1}) = strtrim(sTransformation{2});
+    
+    panelData = sProcess.options.montage_panel.Value;
+    
+    if isempty(panelData) || ~isfield(panelData, 'transformations')
+        disp('BST> No transformation defined or operation canceled. ');
+        return;
     end
     
-
+    user_transformation = panelData.transformations;
     sChannel = in_bst_channel(sInputs.ChannelFile);
+    
     for iChannel = 1:length(sChannel.Channel)
         old_channel_name = sChannel.Channel(iChannel).Name;
         
-        [isrc, idet, measure, channel_type] = nst_unformat_channel(old_channel_name);
-
+        [isrc, idet, measure, ~] = nst_unformat_channel(old_channel_name);
         source_name = sprintf('S%d', isrc);
         detector_name = sprintf('D%d', idet);
-
-        if isKey(user_transfomation, source_name)
-            source_name = user_transfomation(source_name);
+        
+        if isfield(user_transformation, source_name)
+            source_name = user_transformation.(source_name);
         end
-
-        if isKey(user_transfomation, detector_name)
-            detector_name = user_transfomation(detector_name);
+        if isfield(user_transformation, detector_name)
+            detector_name = user_transformation.(detector_name);
         end
-
+        
         sChannel.Channel(iChannel).Name = sprintf('%s%sWL%d', source_name, detector_name, measure);
     end
-
+    
     if ~isempty(sChannel.Clusters)
-        warning('Removing clusters')
+        warning('Removing clusters');
         sChannel.Clusters = [];
     end
-
     bst_save(file_fullpath(sInputs.ChannelFile), sChannel);
 end
