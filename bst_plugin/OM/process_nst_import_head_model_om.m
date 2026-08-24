@@ -27,7 +27,9 @@ end
 function sProcess = GetDescription() 
     sProcess = process_nst_import_head_model('GetDescription');
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1103;
+    sProcess.Index       = 1106;
+    sProcess.Description = '';
+    sProcess.isSeparator = 0; 
 end
 
 %% ===== FORMAT COMMENT =====

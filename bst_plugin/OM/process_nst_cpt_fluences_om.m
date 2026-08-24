@@ -29,7 +29,7 @@ function sProcess = GetDescription()
     sProcess = process_nst_cpt_fluences('GetDescription');
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1100;
+    sProcess.Index       = 1101;
     sProcess.isSeparator = 1;
 end
 

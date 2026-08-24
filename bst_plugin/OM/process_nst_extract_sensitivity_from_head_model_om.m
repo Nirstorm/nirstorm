@@ -27,7 +27,7 @@ end
 function sProcess = GetDescription() 
     sProcess = process_nst_extract_sensitivity_from_head_model('GetDescription');
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1104;
+    sProcess.Index       = 1107;
     sProcess.isSeparator = 1; 
 end
 
