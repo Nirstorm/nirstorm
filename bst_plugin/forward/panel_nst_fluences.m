@@ -212,7 +212,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jCustomTissue.setSelected(OPTIONS.UseCustomTissuesProperty);
     ctrl.jCustomTissue = jCustomTissue;
 
-    jTissuePropertyFileLabel = gui_component('label', jPanelForward, 'br', 'Tissue property filer:', [], [], [], []);
+    jTissuePropertyFileLabel = gui_component('label', jPanelForward, 'br', 'Tissue property file:', [], [], [], []);
     jTissuePropertyFile = gui_component('text', jPanelForward, 'hfill', OPTIONS.FilesTissuesProperty, [], [], [], []);
     ctrl.jTissuePropertyFile = jTissuePropertyFile;
     jTissuePropertyCTrl =  gui_component('button', jPanelForward, [], 'Select File', [], [], @(~,~) SelectTissueFile(), []);
