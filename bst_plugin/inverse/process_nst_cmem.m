@@ -50,7 +50,31 @@ function sProcess = GetDescription()
     sProcess.options.mem.Comment = {'panel_brainentropy', 'Source estimation options: '};
     sProcess.options.mem.Type    = 'editpref';
     sProcess.options.mem.Value   = be_main;
-    
+
+
+    sProcess.options.label1.Comment = 'Select output:';
+    sProcess.options.label1.Type = 'label';
+    sProcess.options.label1.Group   = 'output';
+
+    sProcess.options.output_dOD.Comment = 'dOD';
+    sProcess.options.output_dOD.Type    = 'checkbox';
+    sProcess.options.output_dOD.Value   = 1;
+    sProcess.options.output_dOD.Group   = 'output';
+
+    sProcess.options.output_HbO.Comment = 'HbO';
+    sProcess.options.output_HbO.Type    = 'checkbox';
+    sProcess.options.output_HbO.Value   = 1;
+    sProcess.options.output_HbO.Group   = 'output';
+
+    sProcess.options.output_HbR.Comment = 'HbR';
+    sProcess.options.output_HbR.Type    = 'checkbox';
+    sProcess.options.output_HbR.Value   = 1;
+    sProcess.options.output_HbR.Group   = 'output';
+
+    sProcess.options.output_HbT.Comment = 'HbT';
+    sProcess.options.output_HbT.Type    = 'checkbox';
+    sProcess.options.output_HbT.Value   = 1;
+    sProcess.options.output_HbT.Group   = 'output';
 
 end
 
@@ -111,8 +135,7 @@ end
 
 ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    bst_error(['cMEM source reconstruction works only for dOD data ' ... 
-               ' (eg do not use MBLL prior to this process)']);
+    bst_error('MEM 3D reconstruction works only for dOD data (eg do not use MBLL prior to this process)');
     return;
 end
 
@@ -126,6 +149,7 @@ end
 %% Run MEM
 bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...', pipeline));
 sResults = Compute(OPTIONS,ChannelMat, sDataIn );
+sResults = filterResults(sResults, OPTIONS.selected_outputs);
 
 %% Save results
 bst_progress('text', 'Saving Results...');
@@ -187,8 +211,8 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         
         HM.Gain = nirs_head_model.Gain(selected_chans, valid_nodes); 
         
-        %% launch MEM (cMEM only in current version)
-        bst_progress('text', ['Running cMEM for wavelength #' num2str(iwl) '...']);
+        %% launch MEM (cMEM or wMEM)
+        bst_progress('text', ['Running MEM for wavelength #' num2str(iwl) '...']);
         [result, sOptions(iwl)] = be_main_call(HM, OPTIONS);
 
         if strcmp(OPTIONS.MEMpaneloptions.mandatory.pipeline ,'wMEM') && sOptions(iwl).output.save_factor
@@ -256,4 +280,47 @@ function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
     sDataIn = in_bst_data(DataFile, 'History');
     OPTIONS.History       = sDataIn.History;
 
+
+    selected_outputs = ones(1, 4);
+    if isfield(sProcess.options, 'output_dOD')
+        selected_outputs(1) = sProcess.options.output_dOD.Value;
+        selected_outputs(2) = sProcess.options.output_HbO.Value;
+        selected_outputs(3) = sProcess.options.output_HbR.Value;
+        selected_outputs(4) = sProcess.options.output_HbT.Value;
+    end
+    OPTIONS.selected_outputs = selected_outputs;
+end
+
+function sResults = filterResults(sResults, selected_outputs)
+    
+    % If there is no selection, we return
+    if all(selected_outputs)
+        return
+    end
+
+    isSelected = true(1, length(sResults));
+
+
+    %  dOD
+    if ~selected_outputs(1)
+        isSelected(strcmp({sResults.DisplayUnits}, 'OD')) = 0;
+    end
+    
+    %  HbO
+    if ~selected_outputs(2)
+        isSelected(contains({sResults.Comment}, 'HbO')) = 0;
+    end
+    
+    %  HbR
+    if ~selected_outputs(3)
+        isSelected(contains({sResults.Comment}, 'HbR')) = 0;
+    end
+    
+    %  HbT
+    if ~selected_outputs(4)
+        isSelected(contains({sResults.Comment}, 'HbT')) = 0;
+    end
+    
+    % Filter results
+    sResults = sResults(isSelected);
 end
