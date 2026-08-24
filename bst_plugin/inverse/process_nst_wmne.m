@@ -65,6 +65,33 @@ function sProcess = GetDescription()
     sProcess.options.TimeSegmentNoise.Value   = [];
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
 
+
+
+    sProcess.options.label1.Comment = 'Select output:';
+    sProcess.options.label1.Type = 'label';
+    sProcess.options.label1.Group   = 'output';
+
+
+    sProcess.options.output_dOD.Comment = 'dOD';
+    sProcess.options.output_dOD.Type    = 'checkbox';
+    sProcess.options.output_dOD.Value   = 1;
+    sProcess.options.output_dOD.Group   = 'output';
+
+    sProcess.options.output_HbO.Comment = 'HbO';
+    sProcess.options.output_HbO.Type    = 'checkbox';
+    sProcess.options.output_HbO.Value   = 1;
+    sProcess.options.output_HbO.Group   = 'output';
+
+    sProcess.options.output_HbR.Comment = 'HbR';
+    sProcess.options.output_HbR.Type    = 'checkbox';
+    sProcess.options.output_HbR.Value   = 1;
+    sProcess.options.output_HbR.Group   = 'output';
+
+    sProcess.options.output_HbT.Comment = 'HbT';
+    sProcess.options.output_HbT.Type    = 'checkbox';
+    sProcess.options.output_HbT.Value   = 1;
+    sProcess.options.output_HbT.Group   = 'output';
+
 end
 
 function s = str_pad(s,padsize)
@@ -101,15 +128,18 @@ if ~isfield(ChannelMat.Nirs, 'Wavelengths')
     return;
 end
 
-%% Load recordings 
+% Load recordings 
 sDataIn = in_bst_data(sInput.FileName);
 
-%% Run dMNE
-bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
-
+% Load options 
 OPTIONS  = getOptions(sProcess, HeadModelFile, sInput.FileName);
-sResults = Compute(OPTIONS, ChannelMat, sDataIn );
 
+% Run MNE
+bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
+sResults = Compute(OPTIONS, ChannelMat, sDataIn );
+sResults = filterResults(sResults, OPTIONS.selected_outputs);
+
+% Save results
 bst_progress('text', 'Saving Results...');
 for iMap = 1:length(sResults)
     ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
@@ -151,6 +181,14 @@ function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
     end  
 
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
+
+    selected_outputs = ones(1, 4);
+    selected_outputs(1) = sProcess.options.output_dOD.Value;
+    selected_outputs(2) = sProcess.options.output_HbO.Value;
+    selected_outputs(3) = sProcess.options.output_HbR.Value;
+    selected_outputs(4) = sProcess.options.output_HbT.Value;
+    
+    OPTIONS.selected_outputs = selected_outputs;
 end
 
 function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
@@ -233,4 +271,38 @@ function [idX] = be_closest(vecGuess, vecRef)
         [dum, idX(ii)]  =   min( abs(vecGuess(ii)-vecRef) );     
     end
 
+end
+
+function sResults = filterResults(sResults, selected_outputs)
+    
+    % If there is no selection, we return
+    if all(selected_outputs)
+        return
+    end
+
+    isSelected = true(1, length(sResults));
+
+
+    %  dOD
+    if ~selected_outputs(1)
+        isSelected(strcmp({sResults.DisplayUnits}, 'OD')) = 0;
+    end
+    
+    %  HbO
+    if ~selected_outputs(2)
+        isSelected(contains({sResults.Comment}, 'HbO')) = 0;
+    end
+    
+    %  HbR
+    if ~selected_outputs(3)
+        isSelected(contains({sResults.Comment}, 'HbR')) = 0;
+    end
+    
+    %  HbT
+    if ~selected_outputs(4)
+        isSelected(contains({sResults.Comment}, 'HbT')) = 0;
+    end
+    
+    % Filter results
+    sResults = sResults(isSelected);
 end
