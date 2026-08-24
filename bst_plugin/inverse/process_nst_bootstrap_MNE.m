@@ -133,12 +133,12 @@ end
 
 bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
 
-for iavg = 1:n_perm
+for iAvg = 1:n_perm
     if length(sInputs) > 20 || sProcess.options.replacement.Value
-        avg_list(iavg,:) =  randsample(length(sInputs),sProcess.options.combination.Value{1}, sProcess.options.replacement.Value ); 
+        avg_list(iAvg,:) =  randsample(length(sInputs),sProcess.options.combination.Value{1}, sProcess.options.replacement.Value ); 
         % avg_list(iavg,:) = randperm(length(sInputs),sProcess.options.combination.Value{1}); 
     end
-    trial = cellfun(@(c) c.F,DataMat_dOD(avg_list(iavg,:)),'UniformOutput',false);
+    trial = cellfun(@(c) c.F,DataMat_dOD(avg_list(iAvg,:)),'UniformOutput',false);
 
     trials = mean(cat(3,trial{:}),3);
     trials = trials(ChannelFlag==1,:);
@@ -151,10 +151,10 @@ for iavg = 1:n_perm
     trials_std_690 = std(trials_690(:,ibaseline),[],2);
     trials_std_830 = std(trials_830(:,ibaseline),[],2);
     
-    SNR_690(iavg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
-    SNR_830(iavg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
-    avg_SNR_690(iavg) = abs(min(ave_trials_690(iSNR)))./std(ave_trials_690(iSNR));
-    avg_SNR_830(iavg) = abs(max(ave_trials_830(iSNR)))./std(ave_trials_830(iSNR));
+    SNR_690(iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
+    SNR_830(iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
+    avg_SNR_690(iAvg) = abs(min(ave_trials_690(iSNR)))./std(ave_trials_690(iSNR));
+    avg_SNR_830(iAvg) = abs(max(ave_trials_830(iSNR)))./std(ave_trials_830(iSNR));
     
     bst_progress('inc', 1);
 
@@ -257,24 +257,22 @@ bst_progress('start', 'Reconstruction by cMEM', 'Launching cMEM...');
 
 
 Results = zeros(length(avg_all_list) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
-k = 1;
 
 bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_all_list)); 
-for iavg = avg_all_list
-    trial = cellfun(@(c) c.F,DataMat_dOD(avg_list(iavg,:)),'UniformOutput',false);
+for iAvg = 1:max(length(avg_all_list), 10)
+    
+    trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(avg_all_list(iAvg),:)),'UniformOutput',false);
 
-    trials = mean(cat(3,trial{:}),3);
+    trials = mean(cat(3, trial{:}),3);
     trials = trials(ChannelFlag==1,:);
 
     sDataIn.F = trials;
 
-    [sResults] = process_nst_wmne('Compute',OPTIONS, ChannelMat, sDataIn );
+    [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn );
     sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
 
-    Results(k,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
-    Results(k,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
-
-    k = k+1;
+    Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
+    Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
     
     bst_progress('inc', 1);
 end 
@@ -289,7 +287,7 @@ for ihb = 1:size(ResultsAvg, 2)
     [sStudy, ResultFile] = add_surf_data(squeeze(ResultsAvg(:,ihb,:)) .* hb_unit_factor,...
                                          squeeze(ResultsSD(:,ihb,:)) .* hb_unit_factor,...
                                          sDataIn.Time, HeadModelFileName, ...
-                                         [OPTIONS.Comment  ' sources - ' hb_types{ihb}], ...
+                                         sprintf('MNE sources (bootstrap) | %s', hb_types{ihb}), ...
                                          AvgFile, sStudy, '', ...
                                          length(avg_all_list),...
                                          hb_unit, 0);    
