@@ -18,13 +18,13 @@ function varargout = process_nst_bootstrap_MNE( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire 2026
+% Authors: Edouard Delaire 2026, Jean-Eudes Bornert 2026
 eval(macro_method);
 end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription()
     % Description the process
     sProcess.Comment     = 'Boostrap MNE';
     sProcess.Category    = 'Custom';
@@ -39,6 +39,13 @@ function sProcess = GetDescription() %#ok<DEFNU>
     
     sProcess.options.label0.Comment = 'Bootstraps options:';
     sProcess.options.label0.Type = 'label';
+
+    
+    sProcess.options.SNR.Comment = str_pad('SNR range', 35);
+    sProcess.options.SNR.Type    = 'baseline';
+    sProcess.options.SNR.Value   =  [];
+    sProcess.options.SNR.Group   = 'MNE';
+
 
     sProcess.options.replacement.Comment = 'Do bootstrap with replacement ?';
     sProcess.options.replacement.Type    = 'checkbox';
@@ -82,10 +89,12 @@ function sProcess = GetDescription() %#ok<DEFNU>
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
     sProcess.options.TimeSegmentNoise.Group   = 'MNE';
 
+
+
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess)
     Comment = sProcess.Comment;
 end
 
@@ -97,7 +106,7 @@ function s = str_pad(s,padsize)
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs)
 % ===== GET OPTIONS =====
 % Get options values
 OutputFiles = {};
@@ -113,11 +122,9 @@ for iFile = 1:(length(sInputs))
 end
 
 ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
-%ChannelFlag_Hb = DataMat_Hb{1,1}.ChannelFlag;
-% baselinedur = sProcess.options.timewindow_baseline.Value{1,1};
-% SNRdur = sProcess.options.timewindow.Value{1,1};
-baselinedur = [-10 0];
-SNRdur = [5 20];
+
+%baselinedur = [sProcess.options.TimeSegmentNoise.Value{1}, sProcess.options.TimeSegmentNoise.Value{2}];
+%SNRdur = [sProcess.options.SNR.Value{1}, sProcess.options.SNR.Value{2}];
 Time = round(DataMat_dOD{1,1}.Time,1);
 
 ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, baselinedur);
@@ -128,7 +135,7 @@ if length(sInputs) <= 20  &&  ~sProcess.options.replacement.Value
     n_perm = size(avg_list,1);
 else
     n_perm = 5000;
-    avg_list = zeros(n_perm,sProcess.options.combination.Value{1} );
+    avg_list = zeros(n_perm,sProcess.options.combination.Value{1});
 end
 
 bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
@@ -181,9 +188,6 @@ target_SNR = min(SNR_sorted);
 %target_SNR = max( median(SNR_690),median(SNR_830));
 
 [~,idx_list] =  min( abs(SNR_sorted - target_SNR) );
- 
-
-
 
 %avg_all_list = SNR_all_list(idx_list-nAverage:min(length(avg_list), min(length(SNR_all), idx_list+nAverage)));
 avg_all_list = SNR_all_list(idx_list:min(length(avg_list), min(length(SNR_all), idx_list+2*nAverage)));
@@ -193,40 +197,7 @@ SNR_690_s   = SNR_690(avg_all_list);
 SNR_830_s   = SNR_830(avg_all_list);
 SNR_s       = (SNR_690_s+SNR_830_s)/2;
 
-figure
-subplot(2,2,1);
-histogram(avg_list(avg_all_list,:),'BinMethod','integers')
-line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
-xlabel('Trials');
-title('Occurance of each trial in the final result')
-subplot(2,2,2);
-hist(SNR_690,size(SNR_690,2)./10);
-line(median(SNR_690_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 43])
-title('SNR for \lambda = 690');
-subplot(2,2,3);
-hist(SNR_830,size(SNR_830,2)./10);
-line(median(SNR_830_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 40])
-title('SNR for \lambda = 830');
-subplot(2,2,4);
-hist((SNR_690+SNR_830)./2,size(SNR_all,2)./10);
-line(median(SNR_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
-line(min(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-line(max(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-xlim([0 40])
-title('Average SNR for \lambda = {690, 830}');
-
-
-figure;
-scatterhist(SNR_690,SNR_830,'Location','NorthEast', 'Direction','out'); hold on;
-scatter(SNR_690_s, SNR_830_s,'filled','r')
-yline(quantiles830 ); xline(quantiles690)
-sgtitle('SNR for \lambda = {690, 830}')
+figures_process_MNE(avg_list,avg_all_list,sProcess,sInputs,SNR_690,SNR_690_s,SNR_830,SNR_830_s,SNR_all,SNR_s,quantiles830,quantiles690);
 
 % Genrate median average
 sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(SNR_all_list(idx_list),:)), [], ...
@@ -353,3 +324,42 @@ function sfn = protect_fn_str(s)
 sfn = strrep(s, ' ', '_');
 end
 
+function figures_process_MNE(avg_list,avg_all_list,sProcess,sInputs,SNR_690,SNR_690_s,SNR_830,SNR_830_s,SNR_all,SNR_s,quantiles830,quantiles690)
+% TODO: replace hist with histogram
+figure
+subplot(2,2,1);
+histogram(avg_list(avg_all_list,:),'BinMethod','integers')
+line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
+xlabel('Trials');
+title('Occurance of each trial in the final result')
+
+subplot(2,2,2);
+hist(SNR_690,size(SNR_690,2)./10);
+line(median(SNR_690_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+line(min(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+line(max(SNR_690_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+xlim([0 43])
+title('SNR for \lambda = 690');
+
+subplot(2,2,3);
+hist(SNR_830,size(SNR_830,2)./10);
+line(median(SNR_830_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+line(min(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+line(max(SNR_830_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+xlim([0 40])
+title('SNR for \lambda = 830');
+
+subplot(2,2,4);
+hist((SNR_690+SNR_830)./2,size(SNR_all,2)./10);
+line(median(SNR_s)*[1,1],ylim(gca),'Color','red','LineStyle','--')
+line(min(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+line(max(SNR_s)*[1,1],ylim(gca),'Color','blue','LineStyle','--')
+xlim([0 40])
+title('Average SNR for \lambda = {690, 830}');
+
+figure;
+scatterhist(SNR_690,SNR_830,'Location','NorthEast', 'Direction','out'); hold on;
+scatter(SNR_690_s, SNR_830_s,'filled','r')
+yline(quantiles830 ); xline(quantiles690)
+sgtitle('SNR for \lambda = {690, 830}')
+end
