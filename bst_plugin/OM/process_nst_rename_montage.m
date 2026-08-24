@@ -31,7 +31,7 @@ function sProcess = GetDescription()
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1103;
+    sProcess.Index       = 1105;
     sProcess.Description = '';
     sProcess.isSeparator = 1; 
     

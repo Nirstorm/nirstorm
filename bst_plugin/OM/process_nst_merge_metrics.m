@@ -34,7 +34,7 @@ function sProcess = GetDescription()
     
     sProcess.Category    = 'Custom'; 
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1106;
+    sProcess.Index       = 1109;
     
     sProcess.InputTypes  = {'matrix'};
     sProcess.OutputTypes = {'matrix'}; 

@@ -31,9 +31,9 @@ function sProcess = GetDescription()
     sProcess.FileTag     = '';
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
-    sProcess.Index       = 1104;
+    sProcess.Index       = 1103;
     sProcess.Description = '';
-    sProcess.isSeparator = 1; 
+    sProcess.isSeparator = 0; 
     
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
