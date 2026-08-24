@@ -71,7 +71,6 @@ function sProcess = GetDescription()
     sProcess.options.label1.Type = 'label';
     sProcess.options.label1.Group   = 'output';
 
-
     sProcess.options.output_dOD.Comment = 'dOD';
     sProcess.options.output_dOD.Type    = 'checkbox';
     sProcess.options.output_dOD.Value   = 1;
@@ -124,7 +123,7 @@ HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 % Load channels
 ChannelMat = in_bst_channel(sInput.ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-    bst_error('MNE source reconstruction works only for dOD data (eg do not use MBLL prior to this process)');
+    bst_error('MNE 3D reconstruction works only for dOD data (eg do not use MBLL prior to this process)');
     return;
 end
 
@@ -183,11 +182,12 @@ function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
     OPTIONS.thresh_dis2cortex = sProcess.options.thresh_dis2cortex.Value{1}.*0.01;
 
     selected_outputs = ones(1, 4);
-    selected_outputs(1) = sProcess.options.output_dOD.Value;
-    selected_outputs(2) = sProcess.options.output_HbO.Value;
-    selected_outputs(3) = sProcess.options.output_HbR.Value;
-    selected_outputs(4) = sProcess.options.output_HbT.Value;
-    
+    if isfield(sProcess.options, 'output_dOD')
+        selected_outputs(1) = sProcess.options.output_dOD.Value;
+        selected_outputs(2) = sProcess.options.output_HbO.Value;
+        selected_outputs(3) = sProcess.options.output_HbR.Value;
+        selected_outputs(4) = sProcess.options.output_HbT.Value;
+    end
     OPTIONS.selected_outputs = selected_outputs;
 end
 
