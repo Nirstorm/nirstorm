@@ -146,8 +146,9 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
 
         % Compute MNE
-        [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn);
-        sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
+        sResults = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn);
+        % Select HbO and HbR
+        sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]); 
         
         % Store MNE resuls
         Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
@@ -248,17 +249,19 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
         quantiles(iWavelenght, :) = quantile(SNR(iWavelenght,:)', quantiles_list);
     end
 
-    %this is targeting median SNR for both wavelength
+    % This is targeting median SNR for both wavelength
+    % Todo: Add option to select which quartile to target 
+    
     SNR_all = sqrt(sum( (SNR - repmat(quantiles(:, 1), 1, size(SNR, 2))).^2 , 1));
 
     
     [SNR_sorted, SNR_all_list] = sort(SNR_all);
-    [~, idx_list] =  min( abs(SNR_sorted - min(SNR_sorted)) );
-    
-    idx_selected = SNR_all_list(idx_list:min(length(SNR_all), idx_list+2*nAverage));
+    [~, idx_start]  = min(abs(SNR_sorted - min(SNR_sorted)));
+    idx_end         = min(length(SNR_all), idx_start + nAverage);
+    idx_selected    = SNR_all_list(idx_start:idx_end);
 
     avg_list = avg_list(idx_selected, :);
-    SNR  = SNR(:, idx_selected);
+    SNR      = SNR(:, idx_selected);
     
 end
 
@@ -306,6 +309,8 @@ function options = getOptions(sProcess, Time, nTrials)
 end
 
 function AvgFile = computeAverage(sInputs, Tag)
+% computeAverage; Compute the average of the sInputs file, and add Tag to
+% the file comment. 
 
     % Process: Compute average
     sProcess =  process_average('GetDescription');
@@ -326,6 +331,5 @@ function AvgFile = computeAverage(sInputs, Tag)
     
     % Prepare output
     AvgFile = sInputs;
-    sInputs.FileName = file_short(tmp);
-
+    AvgFile.FileName = file_short(tmp{1});
 end
