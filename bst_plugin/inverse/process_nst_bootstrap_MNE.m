@@ -118,7 +118,7 @@ function OutputFiles = Run(sProcess, sInputs)
     sHead = in_bst_headmodel(HeadModelFileName, 1);
 
     % Load Data
-    [sChannel, dataMat, Time] = LoadData(sInputs);
+    [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs);
 
     % Prepare options
     nTrials = length(sInputs);
@@ -132,36 +132,24 @@ function OutputFiles = Run(sProcess, sInputs)
     plot_trials(avg_list, SNR, SNR_selected, quantiles);
     
     % Genrate median average
-    sProcess.options.avg_func.Value = 7; % Arithmetic average + Standard error
-    sFiles = process_average('AverageFiles', sProcess, sInputs(avg_list(1, :)), 1);
+    AvgFile = computeAverage(sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f', median(SNR_selected(1))));
 
-    % sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
-    %     'avgtype',       5, ...  % By trial group (folder average)
-    %     'avg_func',      7, ...  
-    %     'weighted',      0, ...
-    %     'keepevents',    1);
-    
-    % Process: Add tag:  
-    AvgFile = bst_process('CallProcess', 'process_add_tag', sFiles, [], ...
-        'tag',           sprintf( '| median SNR = %.2f', median(SNR_selected(1))) , ...
-        'output',        1);  % Add to file name
-    
-    
     sDataIn = in_bst_data(AvgFile.FileName);
-    ChannelMat = in_bst_channel(AvgFile.ChannelFile);
     OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
     
-        
     bst_progress('start', 'Bootstraping', 'Reconstruction by MNE', 1, size(avg_list, 1)); 
     Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
     for iAvg = 1:size(avg_list, 1)
-        
-        avg_trial = mean(dataMat(avg_list(iAvg,:), : , :), 1);
-        sDataIn.F = squeeze(avg_trial);
-    
+        % Put the data in place
+        sDataIn.F   = squeeze(mean(dataMat(avg_list(iAvg,:), : , :), 1));
+        sDataIn.Std = []; 
+        sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
+
+        % Compute MNE
         [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn);
         sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
-    
+        
+        % Store MNE resuls
         Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
         Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
         
@@ -247,6 +235,9 @@ function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, option
         avg_list    = zeros(n_perm, options.nCombination);
     end
     
+    ibaseline = options.ibaseline;
+    iSNR      = options.iSNR;
+
     bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
     
     SNR = zeros(2, n_perm);
@@ -299,7 +290,7 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
     
 end
 
-function [sChannel, dataMat, Time] = LoadData(sInputs)
+function [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs)
 
     ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
     
@@ -314,7 +305,8 @@ function [sChannel, dataMat, Time] = LoadData(sInputs)
     
     dataMat = zeros(nTrials, length(iChannel), length(Time));
     sChannel = ChannelMat.Channel(iChannel);
-    
+    ChannelMat.Channel = sChannel;
+
     for iFile = 1:nTrials
         
         if ~all(sData{iFile}.ChannelFlag == sData{1}.ChannelFlag)
@@ -339,4 +331,29 @@ function options = getOptions(sProcess, Time, nTrials)
     iSNR      = panel_time('GetTimeIndices', Time, timewindow_snr);
     isExact   = nTrials <= 20  &&  ~isReplacement;
     options = struct('nCombination', nCombination, 'nAverage', nAverage, 'isReplacement', isReplacement, 'isExact', isExact, 'ibaseline', ibaseline, 'iSNR', iSNR);
+end
+
+function AvgFile = computeAverage(sInputs, Tag)
+
+    % Process: Compute average
+    sProcess =  process_average('GetDescription');
+    sProcess.options.avg_func.Value = 7; % Arithmetic average + Standard error
+    sProcess.options.avgtype.Value  = 1;
+    sFiles = process_average('AverageFiles', sProcess, sInputs, 1);
+    
+    % Prepare input of add tag.
+    sInputs = sInputs(1);
+    sInputs.FileName = sFiles;
+
+    % Process: Add tag:  
+    sProcess = process_add_tag('GetDescription');
+    sProcess.options.tag.Value = Tag; 
+    sProcess.options.output.Value = 'name';
+    tmp = process_add_tag('Run', sProcess, sInputs);
+
+    
+    % Prepare output
+    AvgFile = sInputs;
+    sInputs.FileName = file_short(tmp);
+
 end
