@@ -106,6 +106,10 @@ end
 function OutputFiles = Run(sProcess, sInputs)
     OutputFiles = {};
     
+    inverse_function = @process_nst_wmne;
+    function_name    = 'MNE';
+
+
     % Load data
     sStudy = bst_get('Study', sInputs.iStudy);
     if isempty(sStudy.iHeadModel)
@@ -135,9 +139,9 @@ function OutputFiles = Run(sProcess, sInputs)
     AvgFile = computeAverage(sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f', median(SNR_selected(1))));
 
     sDataIn = in_bst_data(AvgFile.FileName);
-    OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
-    
-    bst_progress('start', 'Bootstraping', 'Reconstruction by MNE', 1, size(avg_list, 1)); 
+    OPTIONS = inverse_function('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
+
+    bst_progress('start', 'Bootstraping', sprintf('Reconstruction by %s', function_name), 1, size(avg_list, 1)); 
     Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
     for iAvg = 1:size(avg_list, 1)
         % Put the data in place
@@ -145,12 +149,12 @@ function OutputFiles = Run(sProcess, sInputs)
         sDataIn.Std = []; 
         sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
 
-        % Compute MNE
-        sResults = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn);
+        % Compute inverse solution (MNE or cMEM)
+        sResults = inverse_function('Compute', OPTIONS, ChannelMat, sDataIn);
         % Select HbO and HbR
-        sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]); 
+        sResults = inverse_function('filterResults', sResults, [0, 1, 1, 0]); 
         
-        % Store MNE resuls
+        % Store resuls
         Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
         Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
         
