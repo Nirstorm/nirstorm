@@ -106,8 +106,15 @@ end
 function OutputFiles = Run(sProcess, sInputs)
     OutputFiles = {};
     
-    inverse_function = @process_nst_wmne;
-    function_name    = 'MNE';
+    
+    % Choose appropriate inverse function
+    if isfield(sProcess.options, 'mem') && isfield(sProcess.options.mem, 'Value') && ~isempty(sProcess.options.mem.Value)
+        inverse_function = @process_nst_cmem;
+        function_name    = 'cMEM';
+    else
+        inverse_function = @process_nst_wmne;
+        function_name    = 'MNE';
+    end
 
 
     % Load data

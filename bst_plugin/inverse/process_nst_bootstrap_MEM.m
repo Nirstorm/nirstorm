@@ -27,7 +27,7 @@ end
 
 
 %% ===== GET DESCRIPTION =====
-function sProcess = GetDescription() %#ok<DEFNU>
+function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Boostrap MEM';
     sProcess.Category    = 'Custom';
@@ -85,99 +85,21 @@ function sProcess = GetDescription() %#ok<DEFNU>
 end
 
 %% ===== FORMAT COMMENT =====
-function Comment = FormatComment(sProcess) %#ok<DEFNU>
+function Comment = FormatComment(sProcess) 
     Comment = sProcess.Comment;
 end
 
 %% ===== RUN =====
-function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
+function OutputFiles = Run(sProcess, sInputs) 
 
     OutputFiles = {};
 
     % Install/load brainentropy plugin
     [isInstalled, errMessage] = bst_plugin('Install', 'brainentropy', 1);
     if ~isInstalled
+        bst_error(sprintf('Unable to install Brainentropy: %s', errMessage));
         return;
     end
 
-    % Load data
-    sStudy = bst_get('Study', sInputs.iStudy);
-    if isempty(sStudy.iHeadModel)
-        bst_error('No head model found. Consider running "NIRS -> Compute head model"');
-        return;
-    end
-
-    % Load Head model
-    HeadModelFileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-    sHead = in_bst_headmodel(HeadModelFileName, 1);
-
-
-    % Load Data
-    [ChannelMat, sChannel, dataMat, Time] = process_nst_bootstrap_MNE('LoadData', sInputs);
-
-
-    % Prepare options
-    nTrials = length(sInputs);
-    options = process_nst_bootstrap_MNE('getOptions', sProcess, Time, nTrials);
-
-
-    % Generate all permutations; and compute SNR for each permutation
-    [avg_list, SNR] = process_nst_bootstrap_MNE('generate_permutations', sChannel, dataMat,  options);
-    
-    % Select the permutation around the median SNR for all wavelenght (e.g. 101 resamples)
-    [avg_list, SNR_selected, quantiles] = process_nst_bootstrap_MNE('generate_avg_list', avg_list, SNR, options.nAverage);
-    process_nst_bootstrap_MNE('plot_trials', avg_list, SNR, SNR_selected, quantiles);
-
-    % Genrate median average
-    AvgFile = process_nst_bootstrap_MNE('computeAverage', sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f', median(SNR_selected(1))));
-
-    sDataIn = in_bst_data(AvgFile.FileName);
-    OPTIONS = process_nst_cmem('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
-    
-    bst_progress('start', 'Bootstraping', 'Reconstruction by cMEM', 1, size(avg_list, 1)); 
-    Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
-
-
-    for iAvg = 1:size(avg_list, 1)
-        % Put the data in place
-        sDataIn.F   = squeeze(mean(dataMat(avg_list(iAvg,:), : , :), 1));
-        sDataIn.Std = []; 
-        sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
-
-        % Compute MNE
-        sResults = process_nst_cmem('Compute', OPTIONS, ChannelMat, sDataIn);
-        % Select HbO and HbR
-        sResults = process_nst_cmem('filterResults', sResults, [0, 1, 1, 0]); 
-        
-        % Store MNE resuls
-        Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
-        Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
-        
-        bst_progress('inc', 1);
-    end
-
-    ResultsAvg = squeeze(mean(Results, 1));
-    ResultsSD  = squeeze(std(Results, [], 1));
-    
-    % Save results
-    bst_progress('text', 'Saving Results...');
-    for iMap = 1:length(sResults)
-        ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
-    
-        ResultsMat          = sResults(iMap);
-        ResultsMat.DataFile = file_short(AvgFile.FileName);
-        ResultsMat.Options  = OPTIONS;
-        
-        ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
-        ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
-    
-        ResultsMat.nAvg = options.nAverage;
-        ResultsMat.Leff = options.nAverage;
-    
-        bst_save(ResultFile, ResultsMat, 'v6');
-        db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
-    
-        OutputFiles{end+1} = ResultFile;
-    end
-
+    OutputFiles = process_nst_bootstrap_MNE('Run', sProcess, sInputs);
 end
