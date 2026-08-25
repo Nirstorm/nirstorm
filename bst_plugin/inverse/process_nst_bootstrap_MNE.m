@@ -184,18 +184,23 @@ end
 
 function plot_trials(avg_list, SNR, SNR_selected, quantiles)
 
-    figure
-    subplot(1,2,1);
-    histogram(avg_list,'BinMethod','integers')
-    % line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
+    p = figure;
+    u1 = uipanel(p, 'position', [0, 0, 0.5, 1]);
+    ax1 = axes('Parent', u1, 'Position', [0.15, 0.15, 0.75, 0.75]);
+
+    histogram(ax1, avg_list,'BinMethod','integers');
     xlabel('Trials');
     title('Occurance of each trial in the final result')
     
-    subplot(1,2,2);
-    scatterhist(SNR(1, :), SNR(2, :),'Location','NorthEast', 'Direction','out'); hold on;
-    scatter(SNR_selected(1, :), SNR_selected(2, :),'filled','r')
-    yline(quantiles(2, :) ); xline(quantiles(1, :))
-    sgtitle('SNR for \lambda = {690, 830}')
+
+    u2 = uipanel(p, 'position', [0.5, 0, 0.5, 1]);  
+    h = scatterhist(SNR(1, :), SNR(2, :),'Location','NorthEast', 'Direction','out', 'Parent', u2);
+
+    hold(h(1), 'on'); 
+    scatter(h(1), SNR_selected(1, :), SNR_selected(2, :), 'filled', 'r');
+    yline(h(1), quantiles(2, :) ); xline(h(1), quantiles(1, :))
+    sgtitle('SNR for \lambda')
+
 end
 
 function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, options)

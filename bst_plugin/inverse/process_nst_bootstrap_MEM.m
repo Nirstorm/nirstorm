@@ -145,7 +145,7 @@ function OutputFiles = Run(sProcess, sInputs) %#ok<DEFNU>
         sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
 
         % Compute MNE
-        sResults = process_nst_cmem('Compute',OPTIONS, ChannelMat, sDataIn);
+        sResults = process_nst_cmem('Compute', OPTIONS, ChannelMat, sDataIn);
         % Select HbO and HbR
         sResults = process_nst_cmem('filterResults', sResults, [0, 1, 1, 0]); 
         
