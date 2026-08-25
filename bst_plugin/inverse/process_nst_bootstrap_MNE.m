@@ -32,7 +32,7 @@ function sProcess = GetDescription()
     sProcess.Index       = 1505;
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data'};
-    sProcess.OutputTypes = {'data'};
+    sProcess.OutputTypes = {'results'};
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
@@ -88,8 +88,6 @@ function sProcess = GetDescription()
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
     sProcess.options.TimeSegmentNoise.Group   = 'MNE';
 
-
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -106,44 +104,42 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs)
-    % Get options values
     OutputFiles = {};
     
     % Load data
     sStudy = bst_get('Study', sInputs.iStudy);
-    HeadModelFileName = in_bst_headmodel(sStudy.HeadModel(sStudy.iHeadModel).FileName);
-    HeadModelFileName.FileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-    ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
-    
-    nTrials = length(sInputs);
-    for iFile = 1:nTrials
-        DataMat_dOD{iFile} = in_bst_data(sInputs(iFile).FileName, 'F', 'ChannelFlag', 'History', 'Time');
+    if isempty(sStudy.iHeadModel)
+        bst_error('No head model found. Consider running "NIRS -> Compute head model"');
+        return;
     end
-    ChannelFlag = DataMat_dOD{1,1}.ChannelFlag & strcmp({ChannelMat.Channel.Type},'NIRS')'; 
+
+    % Load Head model
+    HeadModelFileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
+    sHead = in_bst_headmodel(HeadModelFileName, 1);
+
+    % Load Data
+    [sChannel, dataMat, Time] = LoadData(sInputs);
+
+    % Prepare options
+    nTrials = length(sInputs);
+    options = getOptions(sProcess, Time, nTrials);
+
+    % Generate all permutations; and compute SNR for each permutation
+    [avg_list, SNR] = generate_permutations(sChannel, dataMat,  options);
     
-    timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
-    timewindow_snr      = sProcess.options.timewindow_snr.Value{1};
-    isReplacement = sProcess.options.replacement.Value;
-    nCombination  = sProcess.options.combination.Value{1};
-    nAverage      = sProcess.options.n_average.Value{1};
-    
-    
-    ibaseline = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_baseline);
-    iSNR      = panel_time('GetTimeIndices', DataMat_dOD{1,1}.Time, timewindow_snr);
-    isExact   = nTrials <= 20  &&  ~isReplacement;
-    
-    [avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR);
-    
-    %% generate the avg list of each wavelength around the median amp (e.g.101 resamples)
-    [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, nAverage);
+    % Select the permutation around the median SNR for all wavelenght (e.g. 101 resamples)
+    [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, options.nAverage);
     plot_trials(avg_list, SNR, SNR_selected, quantiles);
     
     % Genrate median average
-    sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
-        'avgtype',       5, ...  % By trial group (folder average)
-        'avg_func',      7, ...  % Arithmetic average + Standard error
-        'weighted',      0, ...
-        'keepevents',    1);
+    sProcess.options.avg_func.Value = 7; % Arithmetic average + Standard error
+    sFiles = process_average('AverageFiles', sProcess, sInputs(avg_list(1, :)), 1);
+
+    % sFiles = bst_process('CallProcess', 'process_average', sInputs(avg_list(1, :)), [], ...
+    %     'avgtype',       5, ...  % By trial group (folder average)
+    %     'avg_func',      7, ...  
+    %     'weighted',      0, ...
+    %     'keepevents',    1);
     
     % Process: Add tag:  
     AvgFile = bst_process('CallProcess', 'process_add_tag', sFiles, [], ...
@@ -151,33 +147,19 @@ function OutputFiles = Run(sProcess, sInputs)
         'output',        1);  % Add to file name
     
     
-    sStudy = bst_get('Study', sInputs.iStudy);
-    if isempty(sStudy.iHeadModel)
-        bst_error('No head model found. Consider running "NIRS -> Compute head model"');
-        return;
-    end
-    HeadModelFileName = sStudy.HeadModel(sStudy.iHeadModel).FileName;
-    sHead = in_bst_headmodel(HeadModelFileName, 1);
-    
     sDataIn = in_bst_data(AvgFile.FileName);
     ChannelMat = in_bst_channel(AvgFile.ChannelFile);
     OPTIONS = process_nst_wmne('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
     
-    
-    bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
+        
+    bst_progress('start', 'Bootstraping', 'Reconstruction by MNE', 1, size(avg_list, 1)); 
     Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
-    
-    bst_progress('start', 'Bootstraping', 'Computing all combinations', 1, size(avg_list, 1)); 
     for iAvg = 1:size(avg_list, 1)
         
-        trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
+        avg_trial = mean(dataMat(avg_list(iAvg,:), : , :), 1);
+        sDataIn.F = squeeze(avg_trial);
     
-        trials = mean(cat(3, trial{:}),3);
-        trials = trials(ChannelFlag==1,:);
-    
-        sDataIn.F = trials;
-    
-        [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn );
+        [sResults] = process_nst_wmne('Compute', OPTIONS, ChannelMat, sDataIn);
         sResults = process_nst_wmne('filterResults', sResults, [0, 1, 1, 0]);
     
         Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
@@ -201,8 +183,8 @@ function OutputFiles = Run(sProcess, sInputs)
         ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
         ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
     
-        ResultsMat.nAvg = nAverage;
-        ResultsMat.Leff = nAverage;
+        ResultsMat.nAvg = options.nAverage;
+        ResultsMat.Leff = options.nAverage;
     
         bst_save(ResultFile, ResultsMat, 'v6');
         db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
@@ -253,14 +235,16 @@ function plot_trials(avg_list, SNR, SNR_selected, quantiles)
     sgtitle('SNR for \lambda = {690, 830}')
 end
 
-function [avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination, isReplacement, DataMat_dOD, ChannelFlag, ibaseline, iSNR)
+function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, options)
 
-    if isExact
-        avg_list = nchoosek(1:nTrials, nCombination); 
-        n_perm = size(avg_list,1);
+    nTrials = size(DataMat_dOD, 1);
+
+    if options.isExact
+        avg_list    = nchoosek(1:nTrials, options.nCombination); 
+        n_perm      = size(avg_list, 1);
     else
-        n_perm = 5000;
-        avg_list = zeros(n_perm, nCombination);
+        n_perm      = 5000;
+        avg_list    = zeros(n_perm, options.nCombination);
     end
     
     bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
@@ -269,26 +253,25 @@ function [avg_list, SNR] = generate_permutations(isExact, nTrials, nCombination,
     
     for iAvg = 1:n_perm
     
-        if ~isExact
-            avg_list(iAvg,:) =  randsample(nTrials, nCombination, isReplacement); 
+        if ~options.isExact
+            avg_list(iAvg,:) =  randsample(nTrials, options.nCombination, options.isReplacement); 
         end
     
-        trial = cellfun(@(c) c.F, DataMat_dOD(avg_list(iAvg,:)), 'UniformOutput', false);
+        avg_trial = squeeze(mean(DataMat_dOD(avg_list(iAvg,:), : , :), 1));
     
-        trials = mean(cat(3,trial{:}), 3);
-        trials = trials(ChannelFlag == 1,:);
-    
-        trials_690 = trials(1:2:end,:);
-        trials_830 = trials(2:2:end,:);
+        trials_690 = avg_trial(1:2:end,:);
+        trials_830 = avg_trial(2:2:end,:);
     
         trials_std_690 = std(trials_690(:,ibaseline),[],2);
         trials_std_830 = std(trials_830(:,ibaseline),[],2);
     
         SNR(1, iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
-        SNR(2, iAvg) = max(max(abs(trials_830(:,iSNR)))./mean(trials_std_830));
+        SNR(2, iAvg) = max(max(abs(trials_830(:, iSNR)))./mean(trials_std_830));
 
         bst_progress('inc', 1);
     end
+
+    bst_progress('stop');
 end
 
 function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
@@ -314,4 +297,46 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
     avg_list = avg_list(idx_selected, :);
     SNR  = SNR(:, idx_selected);
     
+end
+
+function [sChannel, dataMat, Time] = LoadData(sInputs)
+
+    ChannelMat = in_bst_channel(sInputs(1).ChannelFile);
+    
+    nTrials = length(sInputs);
+    sData   = cell(1, nTrials);
+    for iFile = 1:nTrials
+        sData{iFile} = in_bst_data(sInputs(iFile).FileName, 'F', 'ChannelFlag', 'History', 'Time');
+    end
+    
+    iChannel    = good_channel(ChannelMat.Channel, sData{1,1}.ChannelFlag, 'NIRS'); 
+    Time        = sData{1,1}.Time;
+    
+    dataMat = zeros(nTrials, length(iChannel), length(Time));
+    sChannel = ChannelMat.Channel(iChannel);
+    
+    for iFile = 1:nTrials
+        
+        if ~all(sData{iFile}.ChannelFlag == sData{1}.ChannelFlag)
+            bst_error('All trials must have the same bad channels');
+        end
+        
+        dataMat(iFile, :, :) = sData{iFile}.F(iChannel, :);
+    end
+
+end
+
+function options = getOptions(sProcess, Time, nTrials)
+
+    timewindow_baseline = sProcess.options.TimeSegmentNoise.Value{1};
+    timewindow_snr      = sProcess.options.timewindow_snr.Value{1};
+    isReplacement = sProcess.options.replacement.Value;
+    nCombination  = sProcess.options.combination.Value{1};
+    nAverage      = sProcess.options.n_average.Value{1};
+    
+    
+    ibaseline = panel_time('GetTimeIndices', Time, timewindow_baseline);
+    iSNR      = panel_time('GetTimeIndices', Time, timewindow_snr);
+    isExact   = nTrials <= 20  &&  ~isReplacement;
+    options = struct('nCombination', nCombination, 'nAverage', nAverage, 'isReplacement', isReplacement, 'isExact', isExact, 'ibaseline', ibaseline, 'iSNR', iSNR);
 end
