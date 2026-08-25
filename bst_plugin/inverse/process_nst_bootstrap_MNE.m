@@ -165,7 +165,7 @@ function OutputFiles = Run(sProcess, sInputs)
         ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
     
         ResultsMat          = sResults(iMap);
-        ResultsMat.DataFile = AvgFile.FileName;
+        ResultsMat.DataFile = file_short(AvgFile.FileName);
         ResultsMat.Options  = OPTIONS;
         
         ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
@@ -183,40 +183,14 @@ end
 
 function plot_trials(avg_list, SNR, SNR_selected, quantiles)
 
-    % TODO: replace hist with histogram
-
     figure
-    subplot(2,2,1);
+    subplot(1,2,1);
     histogram(avg_list,'BinMethod','integers')
     % line(xlim(gca), length(avg_all_list)*(sProcess.options.combination.Value{1}/length(sInputs))*[1,1],'Color','red','LineStyle','--')
     xlabel('Trials');
     title('Occurance of each trial in the final result')
     
-    subplot(2, 2, 2);
-    hist(SNR(1, :), size(SNR, 2)./10);
-    line(median(SNR_selected(1,:))*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min(SNR_selected(1,:))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max(SNR_selected(1,:))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    xlim([0 43])
-    title('SNR for \lambda = 690');
-    
-    subplot(2,2,3);
-    hist(SNR(2, :), size(SNR,2)./10);
-    line(median(SNR_selected(2,:))*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min((SNR_selected(2,:)))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max((SNR_selected(2,:)))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    xlim([0 40])
-    title('SNR for \lambda = 830');
-    
-    subplot(2,2,4);
-    hist(mean(SNR, 1), size(SNR,2)./10);
-    line(median(mean(SNR_selected))*[1,1],ylim(gca),'Color','red','LineStyle','--')
-    line(min(mean(SNR_selected))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    line(max(mean(SNR_selected))*[1,1],ylim(gca),'Color','blue','LineStyle','--')
-    xlim([0 40])
-    title('Average SNR for \lambda = {690, 830}');
-    
-    figure;
+    subplot(1,2,2);
     scatterhist(SNR(1, :), SNR(2, :),'Location','NorthEast', 'Direction','out'); hold on;
     scatter(SNR_selected(1, :), SNR_selected(2, :),'filled','r')
     yline(quantiles(2, :) ); xline(quantiles(1, :))
@@ -226,7 +200,6 @@ end
 function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, options)
 
     nTrials = size(DataMat_dOD, 1);
-
     if options.isExact
         avg_list    = nchoosek(1:nTrials, options.nCombination); 
         n_perm      = size(avg_list, 1);
@@ -239,26 +212,25 @@ function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, option
     iSNR      = options.iSNR;
 
     bst_progress('start', 'Bootstraping', 'Computing all combinations', 0, length(avg_list)); 
-    
-    SNR = zeros(2, n_perm);
+
+    groups = unique({ChannelMat.Group});
+    SNR = zeros(length(groups), n_perm);
     
     for iAvg = 1:n_perm
-    
         if ~options.isExact
             avg_list(iAvg,:) =  randsample(nTrials, options.nCombination, options.isReplacement); 
         end
     
         avg_trial = squeeze(mean(DataMat_dOD(avg_list(iAvg,:), : , :), 1));
-    
-        trials_690 = avg_trial(1:2:end,:);
-        trials_830 = avg_trial(2:2:end,:);
-    
-        trials_std_690 = std(trials_690(:,ibaseline),[],2);
-        trials_std_830 = std(trials_830(:,ibaseline),[],2);
-    
-        SNR(1, iAvg) = max(max(abs(trials_690(:, iSNR)))./mean(trials_std_690));
-        SNR(2, iAvg) = max(max(abs(trials_830(:, iSNR)))./mean(trials_std_830));
+        for iGroup = 1:length(groups)
+            iChannels = strcmp({ChannelMat.Group}, groups{iGroup});
+            
+            avg_channel     = avg_trial(iChannels, :);
+            snr_max         = max(abs(avg_channel(:, iSNR)), [], 2); 
+            baseline_std    = std(avg_channel(:,ibaseline), [], 2);
 
+            SNR(iGroup, iAvg) = max(snr_max) ./ mean(baseline_std);
+        end
         bst_progress('inc', 1);
     end
 
