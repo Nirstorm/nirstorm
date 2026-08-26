@@ -48,8 +48,6 @@ function sProcess = GetDescription()
     sProcess.options.user_input.Type    = 'text';
     sProcess.options.user_input.Value    = '';
 
-    
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -60,31 +58,40 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) 
 
-    OutputFiles = {sInputs.FileName};
-    cap_condition = sProcess.options.user_input.Value;
-
-    sStudy = bst_get('StudyWithCondition', sprintf('%s/%s', sInputs.SubjectName, cap_condition));
-    sCap =  in_bst_channel(sStudy.Channel.FileName);
-
-    cap_position = [sCap.Channel.Loc];
-
-    sChannel = in_bst_channel(sInputs.ChannelFile);
-    for iChannel = 1:length(sChannel.Channel)
-        
-        src_loc = sChannel.Channel(iChannel).Loc(:, 1);
-        [~, idx_source] = min(nst_pdist(src_loc', cap_position'));
-        sChannel.Channel(iChannel).Loc(:, 1) = cap_position(:, idx_source);
-
-
-        det_loc = sChannel.Channel(iChannel).Loc(:, 2);
-        [~, idx_det] = min(nst_pdist(det_loc', cap_position'));
-        sChannel.Channel(iChannel).Loc(:, 2) = cap_position(:, idx_det);
-
-        sChannel.Channel(iChannel).Comment = sprintf('%s => %s', sCap.Channel(idx_source).Name, sCap.Channel(idx_det).Name);
-
-
+    OutputFiles     = {sInputs.FileName};
+    cap_condition   = sProcess.options.user_input.Value;
+    
+    if length(unique({sInputs.SubjectName})) > 1
+        bst_error('Cannot process multiple subjects in process snap to cap')
+        return
     end
     
-    sChannel = bst_history('Add', sChannel, 'Compute', sprintf('Snap position to cap: %s', cap_condition));
-    bst_save(file_fullpath(sInputs.ChannelFile), sChannel);
+    sStudy = bst_get('StudyWithCondition', sprintf('%s/%s', sInputs(1).SubjectName, cap_condition));
+    sCap =  in_bst_channel(sStudy.Channel.FileName);
+    cap_position = [sCap.Channel.Loc];
+    
+
+    unique_input_conditions = unique({sInputs.Condition});
+    for iCondition =  1:length(unique_input_conditions)
+        iFile = find(strcmp({sInputs.Condition}, unique_input_conditions{iCondition}), 1);
+
+        sChannel = in_bst_channel(sInputs(iFile).ChannelFile);
+        for iChannel = 1:length(sChannel.Channel)
+            
+            src_loc = sChannel.Channel(iChannel).Loc(:, 1);
+            [~, idx_source] = min(nst_pdist(src_loc', cap_position'));
+            sChannel.Channel(iChannel).Loc(:, 1) = cap_position(:, idx_source);
+    
+    
+            det_loc = sChannel.Channel(iChannel).Loc(:, 2);
+            [~, idx_det] = min(nst_pdist(det_loc', cap_position'));
+            sChannel.Channel(iChannel).Loc(:, 2) = cap_position(:, idx_det);
+    
+            sChannel.Channel(iChannel).Comment = sprintf('%s => %s', sCap.Channel(idx_source).Name, sCap.Channel(idx_det).Name);
+        end
+        
+        sChannel = bst_history('Add', sChannel, 'Compute', sprintf('Snap position to cap: %s', cap_condition));
+        bst_save(file_fullpath(sInputs(iFile).ChannelFile), sChannel);
+    end
+
 end
