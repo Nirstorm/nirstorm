@@ -58,6 +58,11 @@ function sProcess = GetDescription()
     sProcess.options.n_average.Type    = 'value';
     sProcess.options.n_average.Value   = {50, '', 0};
 
+
+    sProcess.options.target_quantile.Comment = {'median', '70 percentile', '80 percientile', '90 percentile', 'targeted SNR quantile:'; '0.5', '0.7', '0.8', '0.9',  ''} ;
+    sProcess.options.target_quantile.Type    = 'radio_linelabel';
+    sProcess.options.target_quantile.Value   = '0.5';
+
     sProcess.options.label1.Comment = '<b>MNE options:</b>';
     sProcess.options.label1.Type = 'label';
 
@@ -139,11 +144,11 @@ function OutputFiles = Run(sProcess, sInputs)
     [avg_list, SNR] = generate_permutations(sChannel, dataMat,  options);
     
     % Select the permutation around the median SNR for all wavelenght (e.g. 101 resamples)
-    [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, options.nAverage);
+    [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, options.nAverage, options.target_snr);
     plot_trials(avg_list, SNR, SNR_selected, quantiles);
     
     % Genrate median average
-    AvgFile = computeAverage(sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f', median(SNR_selected(1))));
+    AvgFile = computeAverage(sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f / %.2f', median(SNR_selected(1, :)) ,  median(SNR_selected(2, :))));
 
     sDataIn = in_bst_data(AvgFile.FileName);
     OPTIONS = inverse_function('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
@@ -254,7 +259,7 @@ function [avg_list, SNR] = generate_permutations(ChannelMat, DataMat_dOD, option
     bst_progress('stop');
 end
 
-function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
+function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage, targeted_snr)
 
     nAverage = min(nAverage, floor(length(avg_list)/2-1));
     
@@ -265,10 +270,9 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage)
         quantiles(iWavelenght, :) = quantile(SNR(iWavelenght,:)', quantiles_list);
     end
 
-    % This is targeting median SNR for both wavelength
-    % Todo: Add option to select which quartile to target 
-    
-    SNR_all = sqrt(sum( (SNR - repmat(quantiles(:, 1), 1, size(SNR, 2))).^2 , 1));
+    % Select sample according to the targeted SNR 
+    [~, iQuantile] = min( abs(quantiles_list - targeted_snr));
+    SNR_all = sqrt(sum( (SNR - repmat(quantiles(:, iQuantile), 1, size(SNR, 2))).^2 , 1));
 
     
     [SNR_sorted, SNR_all_list] = sort(SNR_all);
@@ -321,7 +325,9 @@ function options = getOptions(sProcess, Time, nTrials)
     ibaseline = panel_time('GetTimeIndices', Time, timewindow_baseline);
     iSNR      = panel_time('GetTimeIndices', Time, timewindow_snr);
     isExact   = nTrials <= 20  &&  ~isReplacement;
-    options = struct('nCombination', nCombination, 'nAverage', nAverage, 'isReplacement', isReplacement, 'isExact', isExact, 'ibaseline', ibaseline, 'iSNR', iSNR);
+
+    target_snr = str2double(sProcess.options.target_quantile.Value);
+    options = struct('nCombination', nCombination, 'nAverage', nAverage, 'isReplacement', isReplacement, 'isExact', isExact, 'ibaseline', ibaseline, 'iSNR', iSNR, 'target_snr', target_snr);
 end
 
 function AvgFile = computeAverage(sInputs, Tag)

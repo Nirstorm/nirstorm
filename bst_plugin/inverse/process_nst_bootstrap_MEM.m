@@ -63,6 +63,10 @@ function sProcess = GetDescription()
     sProcess.options.n_average.Type    = 'value';
     sProcess.options.n_average.Value   = {50, '', 0};
 
+    sProcess.options.target_quantile.Comment = {'median', '70 percentile', '80 percientile', '90 percentile', 'targeted SNR quantile:'; '0.5', '0.7', '0.8', '0.9',  ''} ;
+    sProcess.options.target_quantile.Type    = 'radio_linelabel';
+    sProcess.options.target_quantile.Value   = '0.5';
+
     % Time window for baseline
     sProcess.options.combination.Comment = 'Combination value #:';
     sProcess.options.combination.Type    = 'value';
