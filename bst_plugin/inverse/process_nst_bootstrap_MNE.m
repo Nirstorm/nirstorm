@@ -42,7 +42,7 @@ function sProcess = GetDescription()
 
     
     sProcess.options.timewindow_snr.Comment = 'Time window for SNR:';
-    sProcess.options.timewindow_snr.Type    = 'timewindow';
+    sProcess.options.timewindow_snr.Type    = 'poststim';
     sProcess.options.timewindow_snr.Value   =  [];
     sProcess.options.timewindow_snr.Group   = 'MNE';
 
