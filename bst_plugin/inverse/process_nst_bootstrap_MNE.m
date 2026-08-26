@@ -149,7 +149,10 @@ function OutputFiles = Run(sProcess, sInputs)
     OPTIONS = inverse_function('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
 
     bst_progress('start', 'Bootstraping', sprintf('Reconstruction by %s', function_name), 1, size(avg_list, 1)); 
-    Results = zeros(size(avg_list, 1) ,size(sHead.Gain, 2), 2, length(sDataIn.Time));
+
+    meanvar_estimator(1) = nst_math_online_stats2D(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+    meanvar_estimator(2) = nst_math_online_stats2D(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+
     for iAvg = 1:size(avg_list, 1)
         % Put the data in place
         sDataIn.F   = squeeze(mean(dataMat(avg_list(iAvg,:), : , :), 1));
@@ -162,14 +165,11 @@ function OutputFiles = Run(sProcess, sInputs)
         sResults = inverse_function('filterResults', sResults, [0, 1, 1, 0]); 
         
         % Store resuls
-        Results(iAvg,:,1,:) = bst_multiply_cellmat(sResults(1).ImageGridAmp);
-        Results(iAvg,:,2,:) = bst_multiply_cellmat(sResults(2).ImageGridAmp);
+        meanvar_estimator(1).update(bst_multiply_cellmat(sResults(1).ImageGridAmp))
+        meanvar_estimator(2).update(bst_multiply_cellmat(sResults(2).ImageGridAmp))
         
         bst_progress('inc', 1);
     end 
-    
-    ResultsAvg = squeeze(mean(Results, 1));
-    ResultsSD  = squeeze(std(Results, [], 1));
     
     % Save results
     bst_progress('text', 'Saving Results...');
@@ -180,11 +180,11 @@ function OutputFiles = Run(sProcess, sInputs)
         ResultsMat.DataFile = file_short(AvgFile.FileName);
         ResultsMat.Options  = OPTIONS;
         
-        ResultsMat.ImageGridAmp = squeeze(ResultsAvg(:,iMap,:));
-        ResultsMat.Std = squeeze(ResultsSD(:,iMap,:));
+        ResultsMat.ImageGridAmp = meanvar_estimator(iMap).Mean;
+        ResultsMat.Std = meanvar_estimator(iMap).StdDev;
     
-        ResultsMat.nAvg = options.nAverage;
-        ResultsMat.Leff = options.nAverage;
+        ResultsMat.nAvg = meanvar_estimator(iMap).N;
+        ResultsMat.Leff = meanvar_estimator(iMap).N;
     
         bst_save(ResultFile, ResultsMat, 'v6');
         db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
