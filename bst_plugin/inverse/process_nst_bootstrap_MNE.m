@@ -155,8 +155,8 @@ function OutputFiles = Run(sProcess, sInputs)
 
     bst_progress('start', 'Bootstraping', sprintf('Reconstruction by %s', function_name), 1, size(avg_list, 1)); 
 
-    meanvar_estimator(1) = nst_math_online_stats2D(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
-    meanvar_estimator(2) = nst_math_online_stats2D(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+    meanvar_estimator(1) = nst_math_WelfordVariance(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+    meanvar_estimator(2) = nst_math_WelfordVariance(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
 
     for iAvg = 1:size(avg_list, 1)
         % Put the data in place

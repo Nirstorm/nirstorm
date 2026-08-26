@@ -1,4 +1,4 @@
-classdef nst_math_online_stats2D < handle
+classdef nst_math_WelfordVariance < handle
     properties (SetAccess = private)
         Count = 0      % Total number of matrix samples processed
         N     = 0      % Expected total number of sample
@@ -17,7 +17,7 @@ classdef nst_math_online_stats2D < handle
     methods
 
         % Constructor: initialize matrix
-        function obj = nst_math_online_stats2D(N, matrixSize)
+        function obj = nst_math_WelfordVariance(N, matrixSize)
 
             obj.N = N;
             
