@@ -151,12 +151,16 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jListHead = java_create('javax.swing.JList');
     jListHead.setLayoutOrientation(jListHead.HORIZONTAL_WRAP);
     jListHead.setVisibleRowCount(-1);
+
+    selectionModel = jListHead.getSelectionModel();
+    set(selectionModel, 'ValueChangedCallback', @(e,v)UpdateOutputName());
+    
     % Title
     gui_component('label', jPanelScoutsHead, [], ' Select scouts:', [], [], [], []);
     % Horizontal glue
     gui_component('label', jPanelScoutsHead, 'hfill', ' ', [], [], [], []);
     % Atlas selection box
-    jComboHead = gui_component('combobox', jPanelScoutsHead, 'right', [], [], [], []);
+    jComboHead = gui_component('combobox', jPanelScoutsHead, 'right', [], [], []);
     % Create scroll panel
     jPanelScoutsHead.add(jListHead);
     jScroll = javax.swing.JScrollPane(jListHead);
@@ -212,6 +216,8 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     jWeightFolder = gui_component('text', jPanelMontage, 'hfill', OPTIONS.outputdir, [], [], @(h, ev)checkFolder(), []);
     ctrl.jWeightFolder   = jWeightFolder;
 
+    gui_component('button', jPanelMontage, [], 'Select Folder', [], [], @(~,~) SelectOutputFolder(jWeightFolder), []);
+
     jPanelRight.add('br hfill', jPanelMontage);
     
     % === PANEL: Montage information ====
@@ -254,6 +260,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
     gui_component('label', jPanelFluence, 'br', 'Fluence data source (URL or path):', [], [], [], []);
     jFluenceSource = gui_component('text', jPanelFluence, 'hfill', OPTIONS.data_source, [], [], @(h, ev)checkFluences(), []);
     ctrl.jFluenceSource = jFluenceSource;
+    gui_component('button', jPanelFluence, [], 'Select Folder', [], [], @(~,~) SelectOutputFolder(jFluenceSource), []);
 
     gui_component('label', jPanelFluence, 'br', 'Wavelength (nm)', [], [], [], []);
     jWavelengths = gui_component('text', jPanelFluence, 'hfill', num2str(OPTIONS.wavelengths), [], [], @(h,ev)checkWavelength(), []);
@@ -620,7 +627,7 @@ function options = getDefaultOptions()
     
     % Objective function
     options.include_coverage = 0;
-    options.lambda_coverage  = [0, 1, 1];
+    options.lambda_coverage  = [0, 1, 10];
     options.outputdir        = '';
     
     % Montage
@@ -734,5 +741,13 @@ function AtlasSelection_Callback(AtlasList, jCombo, jList, ev)
     java_setcb(jList, 'ValueChangedCallback', jListCallback_bak);
 end
 
+function SelectOutputFolder(jControl)
+    
+    selpath = strtrim(char(jControl.getText));
+    selpath = uigetdir(selpath, 'Select folder');
 
+    if ischar(selpath)
+        jControl.setText(selpath);
+    end
 
+end
