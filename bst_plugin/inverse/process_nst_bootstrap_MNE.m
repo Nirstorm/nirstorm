@@ -167,7 +167,6 @@ function OutputFiles = Run(sProcess, sInputs)
         % Put the data in place
         sDataIn.F   = squeeze(mean(dataMat(avg_list(iAvg,:), : , :), 1));
         sDataIn.Std = []; 
-        sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
 
         % Compute inverse solution (MNE or cMEM)
         sResults = inverse_function('Compute', OPTIONS, ChannelMat, sDataIn);
@@ -321,11 +320,12 @@ function [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs)
     end
     
     iChannel    = good_channel(ChannelMat.Channel, sData{1,1}.ChannelFlag, 'NIRS'); 
+    nChannel    = length(sData{1,1}.ChannelFlag);
     Time        = sData{1,1}.Time;
     
-    dataMat = zeros(nTrials, length(iChannel), length(Time));
-    sChannel = ChannelMat.Channel(iChannel);
-    ChannelMat.Channel = sChannel;
+
+    dataMat = zeros(nTrials, nChannel, length(Time));
+    sChannel = ChannelMat.Channel;
 
     for iFile = 1:nTrials
         
@@ -333,7 +333,10 @@ function [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs)
             bst_error('All trials must have the same bad channels');
         end
         
-        dataMat(iFile, :, :) = sData{iFile}.F(iChannel, :);
+        data_trial = nan(nChannel, length(Time));
+        data_trial(iChannel, :) = sData{iFile}.F(iChannel, :);
+
+        dataMat(iFile, :, :) = data_trial;
     end
 
 end
