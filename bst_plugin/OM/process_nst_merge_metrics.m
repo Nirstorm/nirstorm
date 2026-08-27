@@ -40,7 +40,7 @@ function sProcess = GetDescription()
     sProcess.OutputTypes = {'matrix'}; 
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 2;
-    sProcess.isSeparator = 0;
+    sProcess.isSeparator = 1;
     
     sProcess.options.output_name.Comment = 'Output table name:';
     sProcess.options.output_name.Type    = 'text';
