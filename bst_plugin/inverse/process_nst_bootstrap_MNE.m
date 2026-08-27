@@ -93,6 +93,11 @@ function sProcess = GetDescription()
     sProcess.options.TimeSegmentNoise.Class = 'noise_cov';
     sProcess.options.TimeSegmentNoise.Group   = 'MNE';
 
+    sProcess.options.output_all.Comment = 'Save all bootstrap samples (warning: requires a lot of memory)';
+    sProcess.options.output_all.Type    = 'checkbox';
+    sProcess.options.output_all.Value   = 1;
+    sProcess.options.output_all.Group   = 'output';
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -173,6 +178,26 @@ function OutputFiles = Run(sProcess, sInputs)
         meanvar_estimator(1).update(bst_multiply_cellmat(sResults(1).ImageGridAmp))
         meanvar_estimator(2).update(bst_multiply_cellmat(sResults(2).ImageGridAmp))
         
+        if options.output_all
+            tmp = computeAverage(sInputs(avg_list(iAvg, :)), sprintf('bootstrap (#%d)', iAvg));
+            for iMap = 1:length(sResults)
+
+                ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
+            
+                ResultsMat          = sResults(iMap);
+                ResultsMat.DataFile = file_short(tmp.FileName);
+                ResultsMat.Options  = OPTIONS;
+                
+                ResultsMat.nAvg = options.nCombination;
+                ResultsMat.Leff = options.nCombination;
+            
+                bst_save(ResultFile, ResultsMat, 'v6');
+                db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
+            
+                OutputFiles{end+1} = ResultFile;
+            end
+        end
+    
         bst_progress('inc', 1);
     end 
     
@@ -325,9 +350,15 @@ function options = getOptions(sProcess, Time, nTrials)
     ibaseline = panel_time('GetTimeIndices', Time, timewindow_baseline);
     iSNR      = panel_time('GetTimeIndices', Time, timewindow_snr);
     isExact   = nTrials <= 20  &&  ~isReplacement;
+    
+    output_all = sProcess.options.output_all.Value;
 
     target_snr = str2double(sProcess.options.target_quantile.Value);
-    options = struct('nCombination', nCombination, 'nAverage', nAverage, 'isReplacement', isReplacement, 'isExact', isExact, 'ibaseline', ibaseline, 'iSNR', iSNR, 'target_snr', target_snr);
+    options = struct('nCombination', nCombination, 'nAverage', nAverage, ...
+                      'isReplacement', isReplacement, 'isExact', isExact, ...
+                      'ibaseline', ibaseline, 'iSNR', iSNR, ...
+                      'target_snr', target_snr, ...
+                      'output_all', output_all);
 end
 
 function AvgFile = computeAverage(sInputs, Tag)
@@ -343,6 +374,14 @@ function AvgFile = computeAverage(sInputs, Tag)
     % Prepare input of add tag.
     sInputs = sInputs(1);
     sInputs.FileName = sFiles;
+    
+    if isempty(Tag)
+        % If there is not tag to add. 
+        AvgFile = sInputs;
+        AvgFile.FileName = file_short(sFiles);
+
+        return;
+    end
 
     % Process: Add tag:  
     sProcess = process_add_tag('GetDescription');

@@ -86,6 +86,11 @@ function sProcess = GetDescription()
     sProcess.options.mem.Type    = 'editpref';
     sProcess.options.mem.Value   = be_main();
 
+    sProcess.options.output_all.Comment = 'Save all bootstrap samples (warning: requires a lot of memory)';
+    sProcess.options.output_all.Type    = 'checkbox';
+    sProcess.options.output_all.Value   = 1;
+    sProcess.options.output_all.Group   = 'output';
+
 end
 
 %% ===== FORMAT COMMENT =====
