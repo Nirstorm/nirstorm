@@ -81,7 +81,8 @@ function sProcess = GetDescription()
         'ExportImage', ...                    % LastUsedDir
         'single', ...                         % Selection mode
         'files', ...                          % Selection mode
-        {{'.pdf'}, {'PDF document (*.pdf)'}, 'PDF'}, ...
+        {{'.pdf'}, {'PDF document (*.pdf)'}, 'PDF'; ...
+         {'.html'}, {'Html document (*.html)'}, 'HTML'}, ...
         ''};
     
     sProcess.options.user_input.Type    = 'filename';
@@ -99,10 +100,11 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) 
     OutputFiles     = {sInputs.FileName};
-    pdf_filename    = sProcess.options.user_input.Value{1};
+    output_filename    = sProcess.options.user_input.Value{1};
+    output_type        = sProcess.options.user_input.Value{2};
     isSaveToFile    = sProcess.options.save_to_file.Value;
     
-    if isSaveToFile && isempty(pdf_filename)
+    if isSaveToFile && isempty(output_filename)
         bst_error('Please enter a valid output file.');
         return;
     end
@@ -266,36 +268,43 @@ function OutputFiles = Run(sProcess, sInputs)
         report_string = [ report_string, sprintf('</body>\n</html>')];
         
         if isSaveToFile
-            temp_html = [tempname, '.html'];
-            fid_temp = fopen(temp_html, 'w', 'native', 'UTF-8');
-            if fid_temp == -1
-                bst_error(['Impossible to create temporary file: ', temp_html]);
-                return;
-            end
-            fprintf(fid_temp, '%s', report_string);
-            fclose(fid_temp);
-            
-            a4_width = 1123;
-            a4_height = 794;
-            
-            fig = uifigure('Position', [-5000, -5000, a4_width, a4_height], 'Visible', 'on');
-            
-            drawnow;
-            
-            hHtml = uihtml(fig, 'HTMLSource', temp_html, 'Position', [1, 1, a4_width, a4_height]);
-            
-            drawnow;
-            pause(2.0);
 
-            exportapp(fig, pdf_filename);
-            
-            close(fig);
-            if exist(temp_html, 'file')
-                delete(temp_html);
-            end
-            
-            if exist(pdf_filename, 'file')
-                open(pdf_filename);
+            if strcmpi(output_type, 'HTML')
+
+                fid_temp = fopen(output_filename, 'w', 'native', 'UTF-8');
+                if fid_temp == -1
+                    bst_error(['Impossible to create temporary file: ', temp_html]);
+                    return;
+                end
+
+                fprintf(fid_temp, '%s', report_string);
+                fclose(fid_temp);
+
+                if exist(output_filename, 'file')
+                    web(output_filename);
+                end
+            elseif strcmpi(output_type, 'PDF')
+
+                a4_width = 1123;
+                a4_height = 794;
+                
+                fig = uifigure('Position', [-5000, -5000, a4_width, a4_height], 'Visible', 'on');
+                drawnow;
+                uihtml(fig, 'HTMLSource', temp_html, 'Position', [1, 1, a4_width, a4_height]);
+                
+                drawnow;
+                pause(2.0);
+    
+                exportapp(fig, output_filename);
+                close(fig);
+
+                if exist(output_filename, 'file')
+                    open(output_filename);
+                end
+
+            else
+                bst_error(sprintf('Unknown output type: %s', output_type));
+
             end
         else
             web(sprintf('text://%s', report_string));
