@@ -285,7 +285,7 @@ end
 
 function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage, targeted_snr)
 
-    nAverage = min(nAverage, floor(length(avg_list)/2-1));
+    nAverage = min(nAverage, length(avg_list));
     
     quantiles_list = [0.5 0.6 0.7 0.8 0.9];
     quantiles = zeros(size(SNR, 1), length(quantiles_list));
@@ -301,7 +301,7 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage,
     
     [SNR_sorted, SNR_all_list] = sort(SNR_all);
     [~, idx_start]  = min(abs(SNR_sorted - min(SNR_sorted)));
-    idx_end         = min(length(SNR_all), idx_start + nAverage);
+    idx_end         = min(length(SNR_all), idx_start + nAverage - 1);
     idx_selected    = SNR_all_list(idx_start:idx_end);
 
     avg_list = avg_list(idx_selected, :);
