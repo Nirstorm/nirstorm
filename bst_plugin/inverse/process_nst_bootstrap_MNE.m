@@ -152,22 +152,20 @@ function OutputFiles = Run(sProcess, sInputs)
     [avg_list, SNR_selected, quantiles] = generate_avg_list(avg_list, SNR, options.nAverage, options.target_snr);
     plot_trials(avg_list, SNR, SNR_selected, quantiles);
     
-    % Genrate median average
-    AvgFile = computeAverage(sInputs(avg_list(1, :)), sprintf( 'median SNR = %.2f / %.2f', median(SNR_selected(1, :)) ,  median(SNR_selected(2, :))));
-
-    sDataIn = in_bst_data(AvgFile.FileName);
-    OPTIONS = inverse_function('getOptions', sProcess, HeadModelFileName, AvgFile.FileName);
+    % Load data for template
+    sDataIn = in_bst_data(sInputs(1).FileName);
+    OPTIONS = inverse_function('getOptions', sProcess, HeadModelFileName, sInputs(1).FileName);
 
     bst_progress('start', 'Bootstraping', sprintf('Reconstruction by %s', function_name), 1, size(avg_list, 1)); 
 
-    meanvar_estimator(1) = nst_math_WelfordVariance(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+    meanvar_estimator(1) = nst_math_WelfordVariance(size(avg_list, 1), [size(dataMat, 2), length(sDataIn.Time)]);
     meanvar_estimator(2) = nst_math_WelfordVariance(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
+    meanvar_estimator(3) = nst_math_WelfordVariance(size(avg_list, 1), [size(sHead.Gain, 2), length(sDataIn.Time)]);
 
     for iAvg = 1:size(avg_list, 1)
         % Put the data in place
         sDataIn.F   = squeeze(mean(dataMat(avg_list(iAvg,:), : , :), 1));
         sDataIn.Std = []; 
-        sDataIn.ChannelFlag = ones(size(sDataIn.F,1), 1);
 
         % Compute inverse solution (MNE or cMEM)
         sResults = inverse_function('Compute', OPTIONS, ChannelMat, sDataIn);
@@ -175,8 +173,9 @@ function OutputFiles = Run(sProcess, sInputs)
         sResults = inverse_function('filterResults', sResults, [0, 1, 1, 0]); 
         
         % Store resuls
-        meanvar_estimator(1).update(bst_multiply_cellmat(sResults(1).ImageGridAmp))
-        meanvar_estimator(2).update(bst_multiply_cellmat(sResults(2).ImageGridAmp))
+        meanvar_estimator(1).update(sDataIn.F);
+        meanvar_estimator(2).update(bst_multiply_cellmat(sResults(1).ImageGridAmp))
+        meanvar_estimator(3).update(bst_multiply_cellmat(sResults(2).ImageGridAmp))
         
         if options.output_all
             tmp = computeAverage(sInputs(avg_list(iAvg, :)), sprintf('bootstrap (#%d)', iAvg));
@@ -203,18 +202,32 @@ function OutputFiles = Run(sProcess, sInputs)
     
     % Save results
     bst_progress('text', 'Saving Results...');
+
+    sDataOut = sDataIn;
+    sDataOut.F   =  meanvar_estimator(1).Mean;
+    sDataOut.Std = meanvar_estimator(1).StdDev;
+    sDataOut.Comment      = ['AvgStd: ', str_remove_parenth(sDataIn.Comment), sprintf(' | bootstrap (%d)', meanvar_estimator(1).N)];
+    sDataOut.nAvg         = meanvar_estimator(1).N;
+    sDataOut              = bst_history('add', sDataOut, 'process', sprintf( 'Bootstrap (%d) - median SNR = %.2f / %.2f', meanvar_estimator(1).N,  median(SNR_selected(1, :)) ,  median(SNR_selected(2, :))));
+    OutputFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName), 'data_bootstrap_avg');
+    sDataOut.FileName = file_short(OutputFile);
+    bst_save(OutputFile, sDataOut, 'v7');
+     % Register in database
+    db_add_data(sInputs(1).iStudy, OutputFile, sDataOut);
+
+
     for iMap = 1:length(sResults)
         ResultFile = bst_process('GetNewFilename', bst_fileparts(sStudy.FileName),  ['results_NIRS_' nst_protect_fn_str(sResults(iMap).Comment)]);
     
         ResultsMat          = sResults(iMap);
-        ResultsMat.DataFile = file_short(AvgFile.FileName);
+        ResultsMat.DataFile = sDataOut.FileName;
         ResultsMat.Options  = OPTIONS;
         
-        ResultsMat.ImageGridAmp = meanvar_estimator(iMap).Mean;
-        ResultsMat.Std = meanvar_estimator(iMap).StdDev;
+        ResultsMat.ImageGridAmp = meanvar_estimator(iMap+1).Mean;
+        ResultsMat.Std = meanvar_estimator(iMap+1).StdDev;
     
-        ResultsMat.nAvg = meanvar_estimator(iMap).N;
-        ResultsMat.Leff = meanvar_estimator(iMap).N;
+        ResultsMat.nAvg = meanvar_estimator(iMap+1).N;
+        ResultsMat.Leff = meanvar_estimator(iMap+1).N;
     
         bst_save(ResultFile, ResultsMat, 'v6');
         db_add_data(sInputs(1).iStudy, ResultFile, ResultsMat);
@@ -286,7 +299,7 @@ end
 
 function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage, targeted_snr)
 
-    nAverage = min(nAverage, floor(length(avg_list)/2-1));
+    nAverage = min(nAverage, length(avg_list));
     
     quantiles_list = [0.5 0.6 0.7 0.8 0.9];
     quantiles = zeros(size(SNR, 1), length(quantiles_list));
@@ -302,7 +315,7 @@ function [avg_list, SNR, quantiles] = generate_avg_list(avg_list, SNR, nAverage,
     
     [SNR_sorted, SNR_all_list] = sort(SNR_all);
     [~, idx_start]  = min(abs(SNR_sorted - min(SNR_sorted)));
-    idx_end         = min(length(SNR_all), idx_start + nAverage);
+    idx_end         = min(length(SNR_all), idx_start + nAverage - 1);
     idx_selected    = SNR_all_list(idx_start:idx_end);
 
     avg_list = avg_list(idx_selected, :);
@@ -321,11 +334,12 @@ function [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs)
     end
     
     iChannel    = good_channel(ChannelMat.Channel, sData{1,1}.ChannelFlag, 'NIRS'); 
+    nChannel    = length(sData{1,1}.ChannelFlag);
     Time        = sData{1,1}.Time;
     
-    dataMat = zeros(nTrials, length(iChannel), length(Time));
-    sChannel = ChannelMat.Channel(iChannel);
-    ChannelMat.Channel = sChannel;
+
+    dataMat = zeros(nTrials, nChannel, length(Time));
+    sChannel = ChannelMat.Channel;
 
     for iFile = 1:nTrials
         
@@ -333,7 +347,10 @@ function [ChannelMat, sChannel, dataMat, Time] = LoadData(sInputs)
             bst_error('All trials must have the same bad channels');
         end
         
-        dataMat(iFile, :, :) = sData{iFile}.F(iChannel, :);
+        data_trial = nan(nChannel, length(Time));
+        data_trial(iChannel, :) = sData{iFile}.F(iChannel, :);
+
+        dataMat(iFile, :, :) = data_trial;
     end
 
 end
