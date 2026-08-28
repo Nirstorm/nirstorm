@@ -38,40 +38,40 @@ function sProcess = GetDescription()
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
 
-   % Definition of the options
+    % Definition of the options
     sProcess.options.include_images.Comment       = 'Include image(s) to the report';
     sProcess.options.include_images.Type          = 'checkbox';
     sProcess.options.include_images.Controller    = 'include_image';
     sProcess.options.include_images.Value         = 1;
-
+    
     % JSON sidecar file
     SelectOptions = {...
         '', ...                               % Filename
         '', ...                               % FileFormat
         'open', ...                           % Dialog type: {open,save}
-        'Import image...', ...           % Window title
+        'Import image...', ...                % Window title
         'ExportImage', ...                    % LastUsedDir
         'single', ...                         % Selection mode
         'files', ...                          % Selection mode
         {{'.png'}, {'PNG document (*.png)'}, 'PNG'}, ...
         ''};
-
+    
     sProcess.options.image1.Type    = 'filename';
     sProcess.options.image1.Comment = 'Image 1:';
     sProcess.options.image1.Value   = SelectOptions;
     sProcess.options.image1.Class   = 'include_image';
-
+    
     sProcess.options.image2.Type    = 'filename';
     sProcess.options.image2.Comment = 'Image 2:';
     sProcess.options.image2.Value   = SelectOptions;
     sProcess.options.image2.Class   = 'include_image';
-
-
+    
     sProcess.options.save_to_file.Comment       = 'Save report to file';
     sProcess.options.save_to_file.Type          = 'checkbox';
     sProcess.options.save_to_file.Controller    = 'is_save';
     sProcess.options.save_to_file.Value         = 1;
     sProcess.options.save_to_file.Group         = 'output';
+    
     % JSON sidecar file
     SelectOptions = {...
         '', ...                               % Filename
@@ -83,6 +83,7 @@ function sProcess = GetDescription()
         'files', ...                          % Selection mode
         {{'.pdf'}, {'PDF document (*.pdf)'}, 'PDF'}, ...
         ''};
+    
     sProcess.options.user_input.Type    = 'filename';
     sProcess.options.user_input.Comment = 'Report file';
     sProcess.options.user_input.Value   = SelectOptions;
@@ -100,16 +101,16 @@ function OutputFiles = Run(sProcess, sInputs)
     OutputFiles     = {sInputs.FileName};
     pdf_filename    = sProcess.options.user_input.Value{1};
     isSaveToFile    = sProcess.options.save_to_file.Value;
-
+    
     if isSaveToFile && isempty(pdf_filename)
         bst_error('Please enter a valid output file.');
         return;
     end
-
+    
     image_path_1 = sProcess.options.image1.Value{1}; 
     image_path_2 = sProcess.options.image2.Value{1}; 
     isIncludeImage = sProcess.options.include_images.Value;
-
+    
     if isIncludeImage && ((~isempty(image_path_1) && ~file_exist(image_path_1)) || (~isempty(image_path_2) && ~file_exist(image_path_2)))
         bst_error('Please enter a valid image file.');
         return;
@@ -151,7 +152,6 @@ function OutputFiles = Run(sProcess, sInputs)
                 end
                 
                 PairExists(s_idx, d_idx) = true;
-
                 if ~isempty(chComment) && contains(chComment, '=>')
                     tmp = strsplit(chComment, '=>');
                     SourceEEGName{s_idx} = [' - ', strrep(tmp{1}, ' ', '')];
@@ -164,6 +164,7 @@ function OutputFiles = Run(sProcess, sInputs)
             disp(['No channels with format SxDyWz found for condition : ', unique_input_conditions{iCondition}]);
             continue;
         end
+        
         title_montage = strrep(regexprep(unique_input_conditions{iCondition}, '[^a-zA-Z0-9_]', '_'), '_', ' ');    
         max_s = max(all_S);
         max_d = max(all_D);
@@ -178,6 +179,7 @@ function OutputFiles = Run(sProcess, sInputs)
         for d = 1:max_d
             grid_text{1, d+1} = sprintf('D%d%s', d, DetectorEEGName{d});
         end
+        
         for s = 1:max_s
             grid_text{s+1, 1} = sprintf('S%d%s', s, SourceEEGName{s});
         end
@@ -197,23 +199,20 @@ function OutputFiles = Run(sProcess, sInputs)
             end
         end
         
-        % Construction du code HTML
         report_string = '';
         report_string = [ report_string, sprintf('<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>\n')];
         report_string = [ report_string, sprintf('@page { size: A4 landscape; margin: 8mm; }\n')];
         report_string = [ report_string, sprintf('* { box-sizing: border-box; }\n')];
-        report_string = [ report_string, sprintf('body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 0; width: 100%%; }\n')];
+        report_string = [ report_string, sprintf('body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 10px; width: 100%%; }\n')];
         report_string = [ report_string, sprintf('.header { margin-bottom: 8px; }\n')];
         report_string = [ report_string, sprintf('h3 { margin: 0 0 3px 0; font-size: 14px; }\n')];
         report_string = [ report_string, sprintf('h4 { margin: 0; font-size: 12px; color: #333; }\n')];
         
-        % Images : hauteur fixée au maximum disponible, ratio préservé sans bordure
         if isIncludeImage
             report_string = [ report_string, sprintf('.image-container { display: flex; justify-content: center; align-items: center; gap: 30px; margin: 8px 0 12px 0; height: 285px; }\n')];
             report_string = [ report_string, sprintf('.image-card { height: 285px; width: auto; max-width: 45%%; object-fit: contain; border: none; background: transparent; }\n')];
         end
         
-        % Style du tableau avec padding généreux et contour propre
         report_string = [ report_string, sprintf('.table-wrapper { width: 100%%; padding: 1px 2px; overflow: visible; box-sizing: border-box; }\n')];
         report_string = [ report_string, sprintf('table { border-collapse: collapse; width: calc(100%% - 4px); margin: 5px auto 0 auto; font-size: 10px; table-layout: auto; }\n')];
         report_string = [ report_string, sprintf('th, td { border: 1.2px solid #111; padding: 6px 8px; text-align: center; }\n')];
@@ -222,12 +221,10 @@ function OutputFiles = Run(sProcess, sInputs)
         report_string = [ report_string, sprintf('.active { background-color: #90EE90 !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n')];
         report_string = [ report_string, sprintf('</style>\n</head>\n<body>\n')];
         
-        % Titre
         report_string = [ report_string, sprintf('<div class="header">\n')];
         report_string = [ report_string, sprintf('<h3>%s - %s</h3>\n', sInputs(iFile).SubjectName, title_montage)];
         report_string = [ report_string, sprintf('</div>\n')];
         
-        % Section des 2 images
         if isIncludeImage
             report_string = [ report_string, sprintf('<div class="image-container">\n')];
             if ~isempty(image_path_1)
@@ -241,7 +238,6 @@ function OutputFiles = Run(sProcess, sInputs)
             report_string = [ report_string, sprintf('</div>\n')];
         end
         
-        % Tableau
         report_string = [ report_string, sprintf('<h3>Source-detector matrix (Get channels info process NIRSTORM) : </h3>\n')];
         report_string = [ report_string, sprintf('<div class="table-wrapper">\n')];
         report_string = [ report_string, sprintf('<table>\n')];
@@ -263,12 +259,11 @@ function OutputFiles = Run(sProcess, sInputs)
             end
             report_string = [ report_string, sprintf('</tr>\n')];
         end
+        
         report_string = [ report_string, sprintf('</table>\n')];
         report_string = [ report_string, sprintf('<br /></div>')];
         report_string = [ report_string, sprintf('<h3>Notes: </h3>\n')];
         report_string = [ report_string, sprintf('</body>\n</html>')];
-
-        
         
         if isSaveToFile
             temp_html = [tempname, '.html'];
@@ -280,9 +275,21 @@ function OutputFiles = Run(sProcess, sInputs)
             fprintf(fid_temp, '%s', report_string);
             fclose(fid_temp);
             
-            % Génération PDF
-            html2pdf(temp_html, pdf_filename);
+            a4_width = 1123;
+            a4_height = 794;
             
+            fig = uifigure('Position', [-5000, -5000, a4_width, a4_height], 'Visible', 'on');
+            
+            drawnow;
+            
+            hHtml = uihtml(fig, 'HTMLSource', temp_html, 'Position', [1, 1, a4_width, a4_height]);
+            
+            drawnow;
+            pause(2.0);
+
+            exportapp(fig, pdf_filename);
+            
+            close(fig);
             if exist(temp_html, 'file')
                 delete(temp_html);
             end
@@ -295,54 +302,6 @@ function OutputFiles = Run(sProcess, sInputs)
         end
     end
 end
-
-%% ===== HELPER : CONVERT HTML TO PDF =====
-function html2pdf(htmlFile, pdfFile)
-    [p, n, e] = fileparts(htmlFile);
-    if isempty(p), htmlFile = fullfile(pwd, [n e]); end
-    [p, n, e] = fileparts(pdfFile);
-    if isempty(p), pdfFile = fullfile(pwd, [n e]); end
-
-    browserExecutable = '';
-    if ispc
-        paths = {...
-            'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', ...
-            'C:\Program Files\Microsoft\Edge\Application\msedge.exe', ...
-            'C:\Program Files\Google\Chrome\Application\chrome.exe', ...
-            'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'};
-        for k = 1:length(paths)
-            if exist(paths{k}, 'file')
-                browserExecutable = ['"', paths{k}, '"'];
-                break;
-            end
-        end
-    elseif ismac
-        paths = {...
-            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ...
-            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'};
-        for k = 1:length(paths)
-            if exist(paths{k}, 'file')
-                browserExecutable = ['"', paths{k}, '"'];
-                break;
-            end
-        end
-    else
-        browserExecutable = 'google-chrome';
-    end
-
-    if isempty(browserExecutable)
-        error('No compatible browser (Edge/Chrome) found to export PDF.');
-    end
-
-    cmd = sprintf('%s --headless --disable-gpu --no-pdf-header-footer --print-to-pdf="%s" --paper-size=A4 --landscape "%s"', ...
-        browserExecutable, pdfFile, htmlFile);
-
-    [status, cmdout] = system(cmd);
-    if status ~= 0
-        warning(['PDF creation failed: ', cmdout]);
-    end
-end
-
 %% ===== HELPER : IMAGE TO BASE64 DATA URI =====
 function b64Uri = image_to_base64(imgPath)
     b64Uri = '';
