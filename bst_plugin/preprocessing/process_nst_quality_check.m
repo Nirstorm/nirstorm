@@ -318,8 +318,8 @@ function [Time, sci, xpower, xpower_f] = compute_SCI(Time, signals, wlen, Channe
         % Sliding window, with an overlap of 50%
         for i = 1:wlen/2:n_sample
     
-            windows_start =  max( 1, i - wlen/2);
-            windows_end   =  min( n_sample, i + wlen/2);
+            windows_start =  max( 1, round(i - wlen/2));
+            windows_end   =  min( n_sample, round(i + wlen/2));
     
             nirs_windows  = signals(windows_start:windows_end, chan_indexes);
 
