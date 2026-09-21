@@ -70,14 +70,14 @@ function OutputFile = Run(sProcess, sInput)
         return 
     end
 
-    if bst_iscompiled()
-        bst_error('Optimum montage is not available in the compiled version of brainstorm');
-        return;
-    end        
-    cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    if ~check_cplex(cplex_url)
-        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    end
+    % if bst_iscompiled()
+    %     bst_error('Optimum montage is not available in the compiled version of brainstorm');
+    %     return;
+    % end        
+    % cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+    % if ~check_cplex(cplex_url)
+    %     bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    % end
 
     SubjectName = options.SubjectName;
     sProcess.options.subjectname.Value = SubjectName;
@@ -540,7 +540,9 @@ function [ChannelMat, montageSufix, infos] = compute_optimal_montage(sSubject, o
     
     % Progress bar
     bst_progress('start', 'Optimization','Running optimization with Cplex. May take several minutes (see matlab console) ...');
-  
+    
+
+
     results = cplex.solve();
     if ~isfield(results, 'x')
         bst_error(['OM computation failed  at Cplex step:', results.statusstring]);
@@ -748,21 +750,41 @@ function [cplex, options] = define_prob(weight_table, head_vertices_coords, opti
     ctype   = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
     
     %Cplex optimisation
-    prob        = cplexcreateprob('cplexmilp');
-    prob.f      = f;
-    prob.lb     = lb;       prob.ub = ub;
-    prob.ctype  = ctype;
-    prob.Aineq  = Aineq;    prob.bineq = I;
-    prob.Aeq    = Aeq;      prob.beq = E;
-    prob.x0         = [];
-    prob.options    = [];
+    % cplex        = struct();
+    % cplex        = cplexcreateprob('cplexmilp');
+    % cplex.f      = f;
+    % cplex.lb     = lb;       cplex.ub = ub;
+    % cplex.ctype  = ctype;
+    % cplex.Aineq  = Aineq;    cplex.bineq = I;
+    % cplex.Aeq    = Aeq;      cplex.beq = E;
+    % cplex.x0         = [];
 
-    cplex=Cplex(prob);
-    cplex.Model.sense = 'maximize';
-    cplex.Param.timelimit.Cur=300;
+    % Combine inequality and equality constraints into a single constraint matrix
+    % Aineq*x <= bineq  -->  L <= A*x <= U  where L = -inf, U = bineq
+    % Aeq*x = beq       -->  L <= A*x <= U  where L = beq, U = beq
+    
+    m_ineq = size(Aineq, 1);
+    m_eq = size(Aeq, 1);
+    m_total = m_ineq + m_eq;
+    
+    % Combine constraint matrices
+    A = [Aineq; Aeq];
+    
+    % Create bounds for combined constraints
+    L = [-inf(m_ineq, 1); E];           % L: -inf for inequality, E for equality
+    U = [I; E];                         % U: I for inequality, E for equality
+    
+    % Solve with HiGHS
+    opts = highsoptset(struct('solver', 'choose', 'log_to_console', 0, 'time_limit', 500));
+    [soln, info, opts, basis] = callhighs(f, A, L, U, lb, ub, [], [], opts, "max", [], []);
+    
+    % soln.x contains the optimal solution (equivalent to cplex.x)
+    % info contains solution status and other information
 
-    % Delete clone[number].log files created by Cplex
-    cplex.Param.output.clonelog.Cur = 0;
+    %cplex=Cplex(prob);
+    %cplex.Model.sense = 'maximize';
+    %cplex.Param.timelimit.Cur=300;
+    %cplex.Param.output.clonelog.Cur = 0; % Delete clone[number].log files created by Cplex
 
     options.holder_distances = holder_distances;
     options.thresh_sep_optode_optode = thresh_sep_optode_optode; 
