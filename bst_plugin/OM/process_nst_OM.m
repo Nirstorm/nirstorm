@@ -74,10 +74,10 @@ function OutputFile = Run(sProcess, sInput)
         bst_error('Optimum montage is not available in the compiled version of brainstorm');
         return;
     end        
-    cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
-    if ~check_cplex(cplex_url)
-        bst_error(['CPLEX >12.3 required. See ' cplex_url]);
-    end
+    % cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
+    % if ~check_cplex(cplex_url)
+    %     bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+    % end
 
     SubjectName = options.SubjectName;
     sProcess.options.subjectname.Value = SubjectName;
@@ -748,21 +748,24 @@ function [cplex, options] = define_prob(weight_table, head_vertices_coords, opti
     ctype   = [repmat('B', 1, 2*nH) repmat('S', 1, nH)];
     
     %Cplex optimisation
-    prob        = cplexcreateprob('cplexmilp');
-    prob.f      = f;
-    prob.lb     = lb;       prob.ub = ub;
-    prob.ctype  = ctype;
-    prob.Aineq  = Aineq;    prob.bineq = I;
-    prob.Aeq    = Aeq;      prob.beq = E;
-    prob.x0         = [];
-    prob.options    = [];
 
-    cplex=Cplex(prob);
-    cplex.Model.sense = 'maximize';
-    cplex.Param.timelimit.Cur=300;
+    results = cplex_solve_python(f, lb, ub, ctype, full(Aineq), full(I), full(Aeq), full(E), ...
+                             'sense', 'maximize', ...
+                             'timelimit', 300);
 
-    % Delete clone[number].log files created by Cplex
-    cplex.Param.output.clonelog.Cur = 0;
+    cplex = py.cplex.Cplex();
+    cplex.set_problem_name("prob1");
+
+    cplex.variables.add( ...
+        pyargs( ...
+            'obj', py.list((f)), ...
+            'lb',  py.list((lb)), ...
+            'ub',  py.list((ub)), ...
+            'types', py.str(ctype)));
+
+    cplex.linear_constraints.add(pyargs('lin_expr', py.numpy.array(full(Aineq))))
+
+
 
     options.holder_distances = holder_distances;
     options.thresh_sep_optode_optode = thresh_sep_optode_optode; 
@@ -1321,3 +1324,4 @@ function [ROI_cortex, ROI_head] = get_regions_of_interest(sSubject, options)
     
     ROI_head = struct('head_vertex_ids',head_vertex_ids, 'head_vertices_coords', head_vertices_coords);
 end
+
