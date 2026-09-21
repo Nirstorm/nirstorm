@@ -150,9 +150,10 @@ end
 bst_progress('start', ['Reconstruction by ' pipeline], sprintf('Launching %s...', pipeline));
 sResults = Compute(OPTIONS,ChannelMat, sDataIn );
 sResults = filterResults(sResults, OPTIONS.selected_outputs);
+bst_progress('stop');
 
 %% Save results
-bst_progress('text', 'Saving Results...');
+bst_progress('start', 'Saving Results...', 'Saving Results...', 0 , length(sResults));
 
 for iMap = 1:length(sResults)
 
@@ -161,14 +162,14 @@ for iMap = 1:length(sResults)
     ResultsMat = sResults(iMap);
     ResultsMat.DataFile   = sInputs.FileName;
 
-    bst_save(ResultFile, ResultsMat, 'v6');
+    bst_save(ResultFile, ResultsMat);
     db_add_data( sInputs.iStudy, ResultFile, ResultsMat);
 
     OutputFiles{end+1} = ResultFile;
-
+    bst_progress('inc', 1);
 end
 
-bst_progress('stop', 'Reconstruction by MNE', 'Finishing...');
+bst_progress('stop');
 end
 
 function sResults = Compute(OPTIONS, ChannelMat, sDataIn )

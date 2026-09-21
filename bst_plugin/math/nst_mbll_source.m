@@ -32,9 +32,15 @@ function sResults_hb = nst_mbll_source(sResults, wavelentghts)
 
             dataA = sResults(1).ImageGridAmp{2};
             dataB = sResults(2).ImageGridAmp{2};
-        
-            assert( size(dataA, 2) == size(dataB, 2), 'Uncompatible time definition');
+            
+            if  isfield(sResults(1), 'Options') && isfield(sResults(1).Options, 'automatic')  && isfield(sResults(1).Options.automatic, 'selected_samples')
+                new_selected_sample = [sResults(1).Options.automatic.selected_samples, sResults(2).Options.automatic.selected_samples];
+                
+                sResults(1).Options.automatic.selected_samples = new_selected_sample;
+                sResults(2).Options.automatic.selected_samples = new_selected_sample;
+            end
 
+            assert( size(dataA, 2) == size(dataB, 2), 'Uncompatible time definition');
 
             sResults(1).ImageGridAmp{2} = [dataA ;  dataB];
             sResults(2).ImageGridAmp{2} = [dataA ;  dataB];
