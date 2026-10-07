@@ -77,6 +77,7 @@ function OutputFile = Run(sProcess, sInput)
     cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
     if ~check_cplex(cplex_url)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+        return;
     end
 
     SubjectName = options.SubjectName;
@@ -180,9 +181,11 @@ function succeeded = check_cplex(cplex_url)
         catch e
     
             selpath = uigetdir([], sprintf('%s. Please select the cplex directory', e.message));
-            if selpath
-                addpath(genpath(selpath))
+            if ~ischar(selpath)
+                return;
             end
+
+            addpath(genpath(selpath))
         end
     end
 end
