@@ -105,20 +105,12 @@ function OutputFile = Run(sProcess, sInput)
     if ~isempty(warn)
         bst_report('Warning', sProcess, sInput, warn);
     end
+
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
 
-
-    
-    % Denoise of the weight table
-    [options, voxels_changed, msg] = denoise_weight_table(options);
-    
-    if ~isempty(voxels_changed)
-        bst_report('Warning', sProcess, sInput, msg);
-    end
-    
     % Compute Optimal Montage
     [ChannelMats, montageSufix, infos] = compute_optimal_montage(sSubject, options);
     OutputFile = cell(1, length(ChannelMats));
@@ -427,6 +419,13 @@ function [options, warn] = get_weight_tables(sSubject, options, montage_simple)
     options.coverage_mat    = coverage_mat;
     options.listVertexSeen  = listVertexSeen;
     options.maxVertexSeen   = maxVertexSeen;
+
+    % Denoise of the weight table
+    [options, voxels_changed, msg] = denoise_weight_table(options);
+    if ~isempty(voxels_changed)
+        warn = msg;
+    end
+    
 end
 
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options, overlap)
