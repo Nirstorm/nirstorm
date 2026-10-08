@@ -34,7 +34,7 @@ sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
 sProcess.Index       = 1102;
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRS_Optimal_montage';
 sProcess.InputTypes  = {'import'};
-sProcess.OutputTypes = {'import'};
+sProcess.OutputTypes = {'data'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
