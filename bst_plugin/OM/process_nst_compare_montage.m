@@ -26,15 +26,15 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription()
     % Description the process
-    sProcess.Comment     = 'Compare montages';
+    sProcess.Comment     = 'Evaluate montage';
     sProcess.FileTag     = '';
     sProcess.Category    = 'File';
     sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
     sProcess.Index       = 1108;
     % Definition of the input accepted by this process
-    sProcess.InputTypes  = {'data', 'raw'};
+    sProcess.InputTypes  = {'data'};
     % Definition of the outputs of this process
-    sProcess.OutputTypes = {'data', 'raw'}; 
+    sProcess.OutputTypes = {'matrix'}; 
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     sProcess.isSeparator = 0;

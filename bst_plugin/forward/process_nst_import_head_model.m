@@ -59,11 +59,11 @@ function sProcess = GetDescription()
                                        '<B> Geodesic</B> <FONT color="#777777">(recommended)</FONT>'; ...
                                        'surfstat_before_2023', 'geodesic_dist'};
     sProcess.options.method.Type    = 'radio_label';
-    sProcess.options.method.Value   = 'surfstat_before_2023';
+    sProcess.options.method.Value   = 'geodesic_dist';
 
     sProcess.options.smoothing_fwhm.Comment = 'Spatial smoothing FWHM: ';
     sProcess.options.smoothing_fwhm.Type    = 'value';
-    sProcess.options.smoothing_fwhm.Value   = {0, 'mm', 2};
+    sProcess.options.smoothing_fwhm.Value   = {10, 'mm', 2};
   
 end
 

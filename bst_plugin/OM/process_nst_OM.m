@@ -34,7 +34,7 @@ sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
 sProcess.Index       = 1102;
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRS_Optimal_montage';
 sProcess.InputTypes  = {'import'};
-sProcess.OutputTypes = {'import'};
+sProcess.OutputTypes = {'data'};
 sProcess.nInputs     = 1;
 sProcess.nMinFiles   = 0;
 
@@ -77,6 +77,7 @@ function OutputFile = Run(sProcess, sInput)
     cplex_url = 'https://www.ibm.com/us-en/marketplace/ibm-ilog-cplex/resources';
     if ~check_cplex(cplex_url)
         bst_error(['CPLEX >12.3 required. See ' cplex_url]);
+        return;
     end
 
     SubjectName = options.SubjectName;
@@ -105,20 +106,12 @@ function OutputFile = Run(sProcess, sInput)
     if ~isempty(warn)
         bst_report('Warning', sProcess, sInput, warn);
     end
+
     if isempty(options.sensitivity_mat) || nnz(options.sensitivity_mat) == 0
         bst_error(sprintf('Weight table is null for ROI: %s', ROI_cortex.Label));
         return
     end
 
-
-    
-    % Denoise of the weight table
-    [options, voxels_changed, msg] = denoise_weight_table(options);
-    
-    if ~isempty(voxels_changed)
-        bst_report('Warning', sProcess, sInput, msg);
-    end
-    
     % Compute Optimal Montage
     [ChannelMats, montageSufix, infos] = compute_optimal_montage(sSubject, options);
     OutputFile = cell(1, length(ChannelMats));
@@ -188,9 +181,11 @@ function succeeded = check_cplex(cplex_url)
         catch e
     
             selpath = uigetdir([], sprintf('%s. Please select the cplex directory', e.message));
-            if selpath
-                addpath(genpath(selpath))
+            if ~ischar(selpath)
+                return;
             end
+
+            addpath(genpath(selpath))
         end
     end
 end
@@ -427,6 +422,13 @@ function [options, warn] = get_weight_tables(sSubject, options, montage_simple)
     options.coverage_mat    = coverage_mat;
     options.listVertexSeen  = listVertexSeen;
     options.maxVertexSeen   = maxVertexSeen;
+
+    % Denoise of the weight table
+    [options, voxels_changed, msg] = denoise_weight_table(options);
+    if ~isempty(voxels_changed)
+        warn = msg;
+    end
+    
 end
 
 function [sensitivity_mat, coverage_mat, listVertexSeen, maxVertexSeen] = compute_weights(fluence_volumes, head_vertices_coords, reference, options, overlap)
