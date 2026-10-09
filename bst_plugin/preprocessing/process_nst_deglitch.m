@@ -28,10 +28,10 @@ end
 function sProcess = GetDescription() 
 
     % Description the process
-    sProcess.Comment     = 'Remove glitches';
+    sProcess.Comment     = '(advanced) Remove glitches';
     sProcess.Category    = 'Filter';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-    sProcess.Index       = 1302;
+    sProcess.Index       = 1310;
     sProcess.isSeparator = 0;
     sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Remove-glitches';
     

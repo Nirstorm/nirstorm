@@ -31,7 +31,7 @@ sProcess.Comment     = 'Motion correction';
 sProcess.FileTag     = '_motioncorr';
 sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1305; 
+sProcess.Index       = 1302; 
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Motion_correction';
 sProcess.isSeparator = 0; 
 % Definition of the input accepted by this process

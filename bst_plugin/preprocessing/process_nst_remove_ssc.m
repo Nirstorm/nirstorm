@@ -31,8 +31,8 @@ sProcess.Comment     = 'Remove superficial noise';
 sProcess.Category    = 'Filter';
 sProcess.FileTag     = @GetFileTag;
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1308;
-sProcess.isSeparator = 0;
+sProcess.Index       = 1303;
+sProcess.isSeparator = 1;
 sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/NIRSTORM#Regressing_out_superficial_noise';
 
 % Definition of the input accepted by this process

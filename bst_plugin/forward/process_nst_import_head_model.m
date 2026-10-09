@@ -192,7 +192,6 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
 % -- error_message: Description of the error
 % -- warning_message: Description of the warning
 
-    Gain            = nan;
     error_message   = '';
     warning_message = {};
 
@@ -206,6 +205,8 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     
     iNIRS         = channel_find(sChannels, 'NIRS');
     sChannelsNIRS = sChannels(iNIRS);
+
+    Gain            = nan(length(iNIRS), size(sCortex.Vertices, 1) * 3);
 
     % find used wavelentgh 
     wavelengths = unique({sChannelsNIRS.Group});

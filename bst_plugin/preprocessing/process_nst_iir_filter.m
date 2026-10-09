@@ -27,11 +27,11 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() 
     % Description the process
-    sProcess.Comment     = 'Band-pass filter (IIR)';
+    sProcess.Comment     = '(advanced) Band-pass filter (IIR)';
     sProcess.FileTag     = @GetFileTag; 
     sProcess.Category    = 'Filter';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-    sProcess.Index       = 1306; %0: not shown, >0: defines place in the list of processes
+    sProcess.Index       = 1312; %0: not shown, >0: defines place in the list of processes
     sProcess.isSeparator = 0;
     sProcess.Description = '';
     % Definition of the input accepted by this process

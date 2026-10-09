@@ -27,10 +27,10 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() 
 % Description the process
-sProcess.Comment     = 'Split short separation channels';
+sProcess.Comment     = '(advanced) Split short separation channels';
 sProcess.Category    = 'Custom';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1307;
+sProcess.Index       = 1313;
 sProcess.isSeparator = 0;
 sProcess.Description = '';
 

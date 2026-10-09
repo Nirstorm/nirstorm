@@ -27,11 +27,11 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() 
 % Description the process
-sProcess.Comment     = 'Remove slow fluctuations';
+sProcess.Comment     = '(advanced) Remove slow fluctuations';
 sProcess.FileTag     = '_detrend'; 
 sProcess.Category    = 'Filter';
 sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1309;
+sProcess.Index       = 1311;
 sProcess.isSeparator = 0;
 sProcess.Description = '';
 
