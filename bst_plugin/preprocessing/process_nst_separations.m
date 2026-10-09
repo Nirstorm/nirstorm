@@ -28,10 +28,10 @@ end
 %% ===== GET DESCRIPTION =====
 function sProcess = GetDescription() 
 % Description the process
-sProcess.Comment     = 'Compute separations';
+sProcess.Comment     = 'Compute source-detector separations';
 sProcess.Category    = 'File';
-sProcess.SubGroup    = {'NIRS', 'Pre-process'};
-sProcess.Index       = 1203;
+sProcess.SubGroup    = {'NIRS', 'Optimal Montage'};
+sProcess.Index       = 1109.5;
 sProcess.isSeparator = 1;
 sProcess.Description = 'https://github.com/Nirstorm/nirstorm/wiki/Optode-separations';
 
