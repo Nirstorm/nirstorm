@@ -265,10 +265,17 @@ flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
 
 cfg.gpuid       = options.mcxlab_gpuid;
 cfg.autopilot   = 1;
-cfg.respin      = 1;
+cfg.respin      = options.mcxlab_nphoton;
 % set seed to make the simulation repeatible
 cfg.seed        = hex2dec('623F9A9E'); 
-cfg.nphoton     = options.mcxlab_nphoton*1e6;
+if strcmp(bst_get('OsType'),'mac64arm') 
+    % slower but avoid having issue with macos timeout
+    cfg.nphoton     = 1e6;
+    cfg.respin      = options.mcxlab_nphoton;
+else
+    cfg.nphoton     = options.mcxlab_nphoton * 1e6;
+    cfg.respin      = 1;  
+end
 cfg.vol         = uint8(sSegmentation.Cube); % segmentation
 cfg.unitinmm    = sSegmentation.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect   = 1; % reflection at exterior boundary
@@ -305,7 +312,7 @@ if ~isempty(invalid_id)
 end
     
 tic
-bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 1, nb_vertex * nb_wavelengths);
+bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
 for ivertx = 1:nb_vertex
 
     cfg.srcpos = vertex_pos(ivertx,:);    
