@@ -33,6 +33,7 @@ function sProcess = GetDescription()
     sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Pre-process'};
     sProcess.Index       = 1202;
+    sProcess.isSeparator = 1;
     sProcess.Description = 'https://neuroimage.usc.edu/brainstorm/Tutorials/ChannelClusters';
     % Definition of the input accepted by this process
     sProcess.InputTypes  = {'data', 'raw'};
