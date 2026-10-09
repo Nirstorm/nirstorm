@@ -134,6 +134,9 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
 
     function ButtonOk_Callback(varargin)
         bst_mutex('release', panelName);
+        if bst_plugin('CompareVersions',  bst_get('Version').Version , '3.261008') >= 0 
+            gui_release_dialog(panelName);
+        end
     end
 
     function UpdateScoutList(Atlas, iAtlas, iScout)
