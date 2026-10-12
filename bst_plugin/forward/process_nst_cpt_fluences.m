@@ -237,7 +237,7 @@ end
 
 % Convert coordinate from SCS to MRI; and compute normals
 head_vertices_mri   = cs_convert(sMri, 'scs', 'voxel', sHead.Vertices);
-head_normals        = tess_normals(head_vertices_mri,sHead.Faces); 
+head_normals        = tess_normals(head_vertices_mri, sHead.Faces); 
 head_normals        = -head_normals;
 
 %load wavelength info 
