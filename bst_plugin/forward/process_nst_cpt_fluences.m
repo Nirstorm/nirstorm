@@ -282,16 +282,18 @@ cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
-for ivertx = 1:nb_vertex
+for iwl = 1:nb_wavelengths
 
-    cfg.srcpos = head_vertices_mri(valid_vertices(ivertx), :);
-    cfg.srcdir = head_normals(valid_vertices(ivertx), :);
+    [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wavelengths(iwl), FilesTissuesProperty);
+    if ~isempty(errors)
+        bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  errors], [newline, '---- ']))
+        return;
+    end
 
-    for iwl = 1:nb_wavelengths
+    for ivertx =  1:nb_vertex
 
-        wl = wavelengths(iwl);
-        fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
         output_dir = options.outputdir;
+        fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wavelengths(iwl));
 
         if exist(fullfile(output_dir, fluence_fn), 'file') == 2 && flag_overwrite_fluences == 0
             fprintf('Fluence for head vertex %g exists in the target folder\n', valid_vertices(ivertx));
@@ -300,20 +302,16 @@ for ivertx = 1:nb_vertex
             continue;
         end
 
-        [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl, FilesTissuesProperty);
-        if ~isempty(errors)
-            bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  errors], [newline, '---- ']))
-            return;
-        end
+        fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n', valid_vertices(ivertx));
+        cfg.srcpos = head_vertices_mri(valid_vertices(ivertx), :);
+        cfg.srcdir = head_normals(valid_vertices(ivertx), :);
 
-        fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
-        
         if strcmp(options.software, 'mcxlab-cuda')
             fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
         else
             fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
         end
-        fluenceRate.data=fluenceRate.data.*cfg.tstep; 
+        fluenceRate.data = fluenceRate.data .* cfg.tstep; 
         
         if isempty(fluenceRate.data) 
             bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
