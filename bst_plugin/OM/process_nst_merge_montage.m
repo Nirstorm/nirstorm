@@ -55,27 +55,31 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) 
+    OutputFiles = {};
 
-   OutputFiles = {};
+    n_source     = 1;
+    n_det        = 1;
+    new_channels = []; 
    
-   n_source     = 1;
-   n_det        = 1;
-   new_channels = []; 
-   
-   sources_pos  = [];
-   det_pos      = [];
-   
-   for iFile = 1:length(sInputs)
+    sources_pos  = [];
+    det_pos      = [];
+  
+    unique_input_conditions = unique({sInputs.Condition});
+    if length(unique_input_conditions) <= 1
+        OutputFiles = {sInputs.FileName};
+        return;
+    end
+
+    for iCondition = 1:length(unique_input_conditions)
+       
+        iFile = find(strcmp({sInputs.Condition}, unique_input_conditions{iCondition}), 1);
 
         % Load channel file
         mapSources = containers.Map();
         mapDet     = containers.Map();
 
-        
         ChannelMat = in_bst_channel(sInputs(iFile).ChannelFile);
         channels = ChannelMat.Channel;
-
-
 
         for i_chan = 1:length(channels)
             
@@ -96,14 +100,13 @@ function OutputFiles = Run(sProcess, sInputs)
                 channels(i_chan).Name = tmp;
             end
 
-
             if isempty(new_channels)
                 new_channels = channels(i_chan);
             else
                 new_channels = [new_channels ; channels(i_chan)];
             end    
         end
-   end
+    end
    
     msg_s_s = detect_conflict(sources_pos, sources_pos, 1, {'Source', 'Source'});
    
@@ -163,7 +166,7 @@ function OutputFiles = Run(sProcess, sInputs)
     % Register in database
     db_add_data(iStudy, OutputFile, sDataOut);
     OutputFiles{1} = OutputFile;
-    
+
 end
 
 function d = euc_dist(p1, p2)
