@@ -302,14 +302,12 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
             end
             fluenceRate.data = fluenceRate.data .* cfg.tstep; 
             
-            if isempty(fluenceRate.data) 
-                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
-                return;
-            elseif isinf(fluenceRate.stat.normalizer) && strcmp(bst_get('OsType'),'mac64arm')
-                bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
-                return;
-            elseif isinf(fluenceRate.stat.normalizer)
-                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+            if isempty(fluenceRate.data) || isinf(fluenceRate.stat.normalizer)
+                if strcmp(bst_get('OsType'), 'mac64arm')
+                    bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
+                else
+                    bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)', valid_vertices(ivertx)));
+                end
                 return;
             end
             
