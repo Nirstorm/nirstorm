@@ -59,7 +59,7 @@ end
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInputs) 
 
-    [isOk,] = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
+    isOk = bst_plugin('Load', sProcess.options.fluencesCond.Value.software);
     if ~isOk 
         OutputFiles = {};
         bst_error(['Unable to load ' sProcess.options.fluencesCond.Value.software ]);
@@ -73,7 +73,7 @@ function OutputFiles = Run(sProcess, sInputs)
         SubjectName = sProcess.options.subjectname.Value;
     end    
     
-    sSubject = bst_get('Subject',SubjectName);
+    sSubject = bst_get('Subject', SubjectName);
     if isempty(sSubject.iCortex) || isempty(sSubject.iScalp)
         bst_error('No available Cortex and Head surface for this subject.');
         return;
@@ -82,11 +82,11 @@ function OutputFiles = Run(sProcess, sInputs)
     sHead   = in_tess_bst(sSubject.Surface(sSubject.iScalp).FileName);
     sCortex = in_tess_bst(sSubject.Surface(sSubject.iCortex).FileName);
     
-    if strcmp(sProcess.options.fluencesCond.Value.surface,'cortex')
+    if strcmp(sProcess.options.fluencesCond.Value.surface, 'cortex')
         i_atlas = strcmp({sCortex.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
         cortex_to_scalp_extent = sProcess.options.fluencesCond.Value.Extent;
     
-        rois = strsplit(sProcess.options.fluencesCond.Value.ROI,',');
+        rois = strsplit(sProcess.options.fluencesCond.Value.ROI, ',');
         head_vertices = [];
         
         for i_roi = 1:length(rois)
@@ -99,10 +99,10 @@ function OutputFiles = Run(sProcess, sInputs)
             head_vertices = union(head_vertices,  ...
                             bst_getoutvar(1, @proj_cortex_scout_to_scalp, cortex_scout, cortex_to_scalp_extent.*0.01, 1));
         end
-    elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
+    elseif strcmp(sProcess.options.fluencesCond.Value.surface, 'head')
         i_atlas = strcmp({sHead.Atlas.Name},sProcess.options.fluencesCond.Value.Atlas);
           
-        rois = strsplit(sProcess.options.fluencesCond.Value.ROI,',');
+        rois = strsplit(sProcess.options.fluencesCond.Value.ROI, ',');
         head_vertices = [];
         
         for i_roi = 1:length(rois)
@@ -111,7 +111,7 @@ function OutputFiles = Run(sProcess, sInputs)
         end  
         
         iHeadAtlas      = find(strcmp({sHead.Atlas.Name}, 'User scouts'));
-        iScoutExclude   = find(strcmp({sHead.Atlas(iHeadAtlas).Scouts.Label},'FluenceExclude'));
+        iScoutExclude   = find(strcmp({sHead.Atlas(iHeadAtlas).Scouts.Label}, 'FluenceExclude'));
         exclude_scout   = sHead.Atlas(iHeadAtlas).Scouts(iScoutExclude);
     
         if ~isempty(exclude_scout)
@@ -300,7 +300,6 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
             else
                 fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
             end
-            fluenceRate.data = fluenceRate.data .* cfg.tstep; 
             
             if isempty(fluenceRate.data) || isinf(fluenceRate.stat.normalizer)
                 if strcmp(bst_get('OsType'), 'mac64arm')
@@ -311,8 +310,7 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
                 return;
             end
             
-            fluence_vol = fluenceRate.data;
-    
+            fluence_vol = fluenceRate.data .* cfg.tstep;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
             reference_voxel_index   = cfg.srcpos;
     
