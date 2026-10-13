@@ -18,7 +18,7 @@ function varargout = process_nst_merge_montage( varargin )
 % For more information type "brainstorm license" at command prompt.
 % =============================================================================@
 %
-% Authors: Edouard Delaire, 2020; Thomas Vincent, 2015-2019
+% Authors: Edouard Delaire, 2026
 
 
 eval(macro_method);
@@ -42,10 +42,11 @@ function sProcess = GetDescription()
     sProcess.nInputs     = 1;
     sProcess.nMinFiles   = 1;
     
-%     % Definition of the options
-
+    % Option: Condition
+    sProcess.options.condition.Comment = 'Condition name:';
+    sProcess.options.condition.Type    = 'text';
+    sProcess.options.condition.Value   = 'OM_merge';
     
-
 end
 
 %% ===== FORMAT COMMENT =====
@@ -127,7 +128,7 @@ function OutputFiles = Run(sProcess, sInputs)
     end
 
     [sSubjStudies, ~] = bst_get('StudyWithSubject', sInputs(1).SubjectFile,'intra_subject', 'default_study');
-    newCondition = file_unique([sInputs(1).Condition, '_merge'], {sSubjStudies.Name}, 1);
+    newCondition = file_unique(sProcess.options.condition.Value, {sSubjStudies.Name}, 1);
     iStudy = db_add_condition(sInputs(1).SubjectName, newCondition);
 
     sStudy = bst_get('Study', iStudy);
