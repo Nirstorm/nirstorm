@@ -86,9 +86,11 @@ function OutputFile = Run(sProcess, sInput)
     sGroundTruth(ROI_select.Vertices) = 1;
 
     % Get only vertex close to the surface in the ROI
-    distance = process_nst_cpt_cortex_to_head_distance('Compute', sCortex, sHead)*1000;
+
+    sCortexSelect = struct('Vertices', sCortex.Vertices(ROI_select.Vertices, :));
+    distance = process_nst_cpt_cortex_to_head_distance('Compute', sCortexSelect, sHead)*1000;
     threshold_distance = 20;
-    idx_exclude = find(distance > threshold_distance);
+    idx_exclude = ROI_select.Vertices(distance > threshold_distance);
 
     sGroundTruth(idx_exclude) = 0;
     fprintf('Removing %d vertex from the ground truth (too deep) \n', length(idx_exclude));
