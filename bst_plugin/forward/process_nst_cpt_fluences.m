@@ -309,10 +309,15 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
                 end
                 return;
             end
-            
+
+            % Normalize fluences and store as sparse matrix
             fluence_vol = fluenceRate.data .* cfg.tstep;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
-            reference_voxel_index   = cfg.srcpos;
+
+            % Compute entry point
+            [~, I] = max(fluenceRate.data, [], 'all');
+            [i, j, k] = ind2sub(size(fluenceRate.data), I);
+            reference_voxel_index   = [i, j, k];
     
             save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
             bst_progress('inc', 1);
