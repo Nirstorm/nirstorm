@@ -313,13 +313,12 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
             % Normalize fluences and store as sparse matrix
             fluence_vol = fluenceRate.data .* cfg.tstep;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
+            
+            % Find reference voxel: 
+            % Project optodes on non background tissue following the normal 
+            reference_voxel_index   =  projectPositionInVolume(cfg.vol, cfg.srcpos, cfg.srcdir);
 
-            % Project optodes position on cfg.vol
-            options.proj.stepAlongNorm      = 1;
-            options.meshes.skin.vertices    = head_vertices_mri;
-            options.meshes.skin.faces       = sHead.Faces;
-
-            reference_voxel_index   =  mfip_projectPosInVolume(cfg.vol, cfg.srcpos, cfg.srcdir, options, 'Display', 0, 'Text', 0);
+            % Save the fluences and reference_voxel_index
             save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
             bst_progress('inc', 1);
         end
@@ -328,226 +327,56 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
     fprintf('\n%d fluence volumes computed in %.2f seconds\n', nb_vertex * nb_wavelengths, toc);
 end
 
-function [pos, invalid_id] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
-
+function position = projectPositionInVolume(segmentation, position, normals)
 %==========================================================================
-% parse optional parameters
-%==========================================================================
-p = inputParser; 
-
-% add Optional
-p.addOptional ('options',struct,@(x)1)
-
-% param/value
-p.addParamValue ('Display',0,@(x)1)
-p.addParamValue ('Text',0,@(x)1)
-
-% parse
-p.parse(options,varargin{:})
-
-opt=p.Results.options;
-
-flag_display=p.Results.Display;
-flag_text=p.Results.Text;
-
-
-% parse optional parameters
-% skin
-if isempty(opt.meshes.skin)
-flag_display=0;
-end
-% stepAlongNorm
-stepAlongNorm=opt.proj.stepAlongNorm;
-FV=opt.meshes.skin;
-
-invalid_id = [];
-%==========================================================================
-% display 
-%==========================================================================
-if flag_display
-    %FV=opt.meshes.skin
-    
-
-    hFig1=figure('name','before projection');
-    hPatches = patch(FV,'Parent',gca);
-    set(hPatches,...
-        'facecolor', [.5 .5 .5], ...
-        'EdgeColor', 'none',...
-        'FaceAlpha', 0.3);
-    axis equal;
-    mfip_setAxesOrientation(gca,'RAS')
-    hold on
-    plot3(pos(:,1),pos(:,2),pos(:,3),'.r','MarkerSize',25)
-    quiver3(pos(:,1),pos(:,2),pos(:,3),...
-    10*normals(:,1),10*normals(:,2),10*normals(:,3))
-    if  flag_text
-        for ii=1:size(pos,1)
-            symbol = sprintf('P%g',ii);
-            text(pos(ii,1),pos(ii,2),pos(ii,3),symbol,'FontSize',14);
-        end
-    end
-end
-
-%==========================================================================
-% project optodes on non background tissue :
+% Project optodes on non background tissue :
 % if the specified optode position is outside the domain, move the optode
 % along the initial vector until it hits the domain
 %==========================================================================
-[dim1, dim2, dim3]=size(vol);
 
+    [dim1, dim2, dim3] = size(segmentation);
+    step_size = 1;
 
-pos=round(pos); % if the voxel coordinates are not integers change them for the nearest integer
-pos_orig=pos;
-idx = pos<1; pos(idx)=1; clear idx
-idx = pos(:,1)>dim1; pos(idx,1)=dim1; clear idx
-idx = pos(:,2)>dim2; pos(idx,2)=dim2; clear idx
-idx = pos(:,3)>dim3; pos(idx,3)=dim3; clear idx
+    % if the voxel coordinates are not integers change them for the nearest integer
+    position = round(position);
 
-%==========================================================================
-% searching non-zero voxel failed along the incident vector
-%==========================================================================
-
-% find linear index in the volume matrix
-hFig1 = [];
-
-for iOpt=1:size(pos,1)
-    if vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0 % 0 is for background in fuzzy vol
-        fprintf('opt %g (%f %f %f) is located outside the domain\n',iOpt,pos(iOpt,:));
-       ite=0;
-        while vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0 & ite<400;
-            ite=ite+1;
-            pos(iOpt,:)=pos(iOpt,:)+stepAlongNorm*normals(iOpt,:);
-            pos=round(pos); 
-            idx = pos<1; pos(idx)=1; clear idx
-            idx = pos(:,1)>dim1; pos(idx,1)=dim1; clear idx
-            idx = pos(:,2)>dim2; pos(idx,2)=dim2; clear idx
-            idx = pos(:,3)>dim3; pos(idx,3)=dim3; clear idx
-            vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3));
-        end
-        
-        % =================================================================
-        % Controlling bad optodes
-        % =================================================================
-        
-        if  vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0
-            fprintf('opt %g (%f %f %f) cannot be fixed ; stopping\n',iOpt,pos(iOpt,:));
-%             [hFig1, iFig, iDS] = bst_figures('GetFigure', hFig1);
-%             if isempty(hFig1)
-%                 hFig1=figure('name','bad optode');
-%                 
-%             subplot(1,1,1)
-%             hPatches = patch(FV,'Parent',gca);
-%             set(hPatches,...
-%                 'facecolor', [.5 .5 .5], ...
-%                 'EdgeColor', 'none',...
-%                 'FaceAlpha', 0.3);
-%             axis equal;
-%             mfip_setAxesOrientation(gca,'RAS')
-%             end
-%             hold on
-%             plot3(pos_orig(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.b','MarkerSize',25)
-%             plot3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.r','MarkerSize',25)
-%             quiver3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),10*normals(iOpt,1),10*normals(iOpt,2),10*normals(iOpt,3))
-%             
-%           
-%              x=1:dim1; y=1:dim2; z=1:dim3;
-%              [a b c]=ndgrid(1:dim1,1:dim2,1:dim3);
-%              volVoxCoord=[a(:) b(:) c(:)]; clear a b c
-%              
-%              viewMode='sagital';
-%              switch viewMode
-%                  case 'axial'
-%              [mx,my] = meshgrid(x,y);
-%              coeff(1)=0;
-%              coeff(2)=0;
-%              coeff(3)=1;
-%              coeff(4)=-pos_orig(iOpt,3);
-%              imData=squeeze(vol(:,:,pos_orig(iOpt,3)))';
-%              mz = (coeff(1)*mx+ coeff(2)*my + coeff(4)) / -coeff(3);
-%              mz=round(mz);  % the slice will be defined with the nearest voxel of mz
-%               case 'sagital'
-%              [my,mz] = meshgrid(y,z);
-%              coeff(1)=1;
-%              coeff(2)=0;
-%              coeff(3)=0;
-%              coeff(4)=-pos_orig(iOpt,1);
-%              imData=squeeze(vol(pos_orig(iOpt,1),:,:))';
-%              mx = (coeff(3)*mz+ coeff(2)*my + coeff(4)) / -coeff(1);
-%              mx=round(mx);  % the slice will be defined with the nearest voxel of mz
-%              case 'coronal'
-%              [mx,mz] = meshgrid(x,z);
-%              coeff(1)=0;
-%              coeff(2)=1;
-%              coeff(3)=0;
-%              coeff(4)=-pos_orig(iOpt,2);
-%              imData=squeeze(vol(:,:,pos_orig(iOpt,2)))';  
-%              my = (coeff(3)*mz+ coeff(1)*mx + coeff(4)) / -coeff(2);
-%              my=round(my);  % the slice will be defined with the nearest voxel of mz
-%              end
-%              hold on
-%              hsp =surf(mx,my,mz,double(imData),'edgecolor','none');     
-%              clear x y z
-             if nargout < 2 
-                error('Stopped because the algorithm cannot project one optode')
-             else
-                 invalid_id(end+1) = iOpt;
-             end    
-        else
-        fprintf('fixing position to (%f %f %f)\n\n',pos(iOpt,:));
-        end
+    % Put the position inside the volume domain (should do nothing)
+    if (any(position < 1) || position(1) > dim1 || position(2) > dim2 || position(3) > dim3)
+        error('One optodes is outside the volume. Aborting');
     end
-end
 
-%==========================================================================
-% display 
-%==========================================================================
-if flag_display
-    hFig1=figure('name','after projection');
-    hPatches = patch(FV,'Parent',gca);
-    set(hPatches,...
-        'facecolor', [.5 .5 .5], ...
-        'EdgeColor', 'none',...
-        'FaceAlpha', 0.3);
-    axis equal;
-    mfip_setAxesOrientation(gca,'RAS')
-    hold on
-    plot3(pos(:,1),pos(:,2),pos(:,3),'.r','MarkerSize',25)
-    
-    if  flag_text
-        for ii=1:size(pos,1)
-            symbol = sprintf('P%g',ii);
-            text(pos(ii,1),pos(ii,2),pos(ii,3),symbol,'FontSize',14);
-        end
+    %==========================================================================
+    % searching non-zero voxel failed along the incident vector
+    %==========================================================================
+    if segmentation(position(1), position(2), position(3)) > 0  
+        % Nothing to do
+        return
     end
-end
-end
 
+    iter = 0;
+    fprintf('Optode at position (%f %f %f) is located outside the domain. ', position);
+    while segmentation(position(1),position(2),position(3)) == 0 && iter < 400
+        
+        % Compute the new position
+        new_position = round(position + step_size * normals);
+        
+        % Ensure the results is still inside the volume
+        new_position(1) = clip(new_position(1), 1, dim1);
+        new_position(2) = clip(new_position(2), 1, dim2);
+        new_position(3) = clip(new_position(3), 1, dim3);
 
+        % Update the position
+        position  = new_position;
+        iter = iter+1;
+    end
 
-function mfip_setAxesOrientation (hAxes, orientation)
-
-for iA=1:length(hAxes)
-    switch orientation 
-            case 'RAS'
-        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-        set(get(hAxes(iA),'YLabel'),'String','y:P-->A')
-        set(get(hAxes(iA),'ZLabel'),'String','z:I-->S') 
-        set(hAxes(iA),'Xdir','reverse')
-        set(hAxes(iA),'Ydir','reverse')
-        set(hAxes(iA),'Zdir','normal')
-
-            case 'RPI'
-        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-        set(get(hAxes(iA),'YLabel'),'String','y:A-->P')
-        set(get(hAxes(iA),'ZLabel'),'String','z:S-->I') 
-        set(hAxes(iA),'Xdir','reverse')
-        set(hAxes(iA),'Ydir','normal')
-        set(hAxes(iA),'Zdir','reverse')
-    end 
-
+    fprintf('fixing position to (%f %f %f)\n\n', position);
 end
 
-% non stretch to fill behavior when rotating http://www.mathworks.com/matlabcentral/newsreader/view_thread/9714
-axis(hAxes,'vis3d')
-axis(hAxes, 'equal')
+function value = clip(value, min_value, max_value)
+% Clip value between min_value and max_value
+
+    value = max(value, min_value);
+    value = min(value, max_value);
+
 end
