@@ -284,29 +284,20 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
         idet    = find( det_ids ==  det_id);
         iwl     = find( wavelengths == measure_id);
 
-        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                              det_reference_voxels_index{idet}{iwl}(2),...
-                                              det_reference_voxels_index{idet}{iwl}(3));
+        reference_voxel = det_reference_voxels_index{idet}{iwl};
+        normalization_factor = src_fluences{isrc}{iwl}(reference_voxel(1), reference_voxel(2), reference_voxel(3));
 
-        separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-        if ref_fluence == 0 && separations(iChannel) > separation_threshold
-            sensitivity_vol = nan(size(sMri.Cube));
+        if normalization_factor == 0 
+            sensitivity_surf(:, iNIRS(iChannel)) = nan;
             warning_message{end+1} = sprintf('Fluence for channel cannot be computed S%02dD%02d (wavelength=%dnm, separation=%1.2fcm).\n', ...
                                                                source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
-            
-        else 
-            if ref_fluence==0
-                normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
 
-                warning_message{end+1} = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                                                                                source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
-            else
-                normalization_factor = ref_fluence;
-            end
-    
-            sensitivity_vol = src_fluences{isrc}{iwl} .* ...
-                              det_fluences{idet}{iwl} ./ normalization_factor ;
+            continue;
         end
+    
+        sensitivity_vol = src_fluences{isrc}{iwl} .* ...
+                          det_fluences{idet}{iwl} ./ normalization_factor ;
+    
         if strcmp(OPTIONS.HeadModelType, 'surface')
             sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1], @mean); 
             sens_tmp(end)=[]; % trash last column
