@@ -291,6 +291,7 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
     
     tic
     bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
+    
     for iwl = 1:nb_wavelengths
     
         [cfg.prop, errors] = nst_get_tissues_optical_properties(sSegmentation.Labels, wavelengths(iwl), FilesTissuesProperty);
@@ -316,8 +317,15 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
             cfg.srcdir = head_normals(valid_vertices(ivertx),:);
             
             % Project source position in the volume -- to investigate
+
+            % Original code
             cfg.srcpos = projectPositionInVolume(cfg.vol, cfg.srcpos + 1, cfg.srcdir);
-    
+            % Propisition 1: remove this line: keep the original position of the optodes
+            % proposition 2: project, but remove the +1; need to add projection on line 346           
+            % cfg.srcpos = projectPositionInVolume(cfg.vol, cfg.srcpos + 1, cfg.srcdir);
+            % proposition 3: project, move the position following the normal
+            % cfg.srcpos = projectPositionInVolume(cfg.vol, cfg.srcpos + cfg.srcdir, cfg.srcdir);
+
             if strcmp(options.software, 'mcxlab-cuda')
                 fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
             else
@@ -335,7 +343,14 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
             
             fluence_vol             = fluenceRate.data .* cfg.tstep;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
+
+            % Original code
             reference_voxel_index   = cfg.srcpos;
+            % If doing proposition 2, we need either:
+            % Proposition 2a. Project inside the volume to get the corresponding voxel
+            % reference_voxel_index   = projectPositionInVolume(cfg.vol, cfg.srcpos, cfg.srcdir);
+            % Or, we do as 3. and we already move along the normal
+            % reference_voxel_index   = projectPositionInVolume(cfg.vol, cfg.srcpos + cfg.srcdir , cfg.srcdir);
     
             save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
             bst_progress('inc', 1);
