@@ -241,15 +241,12 @@ if ~isfield(sSegmentation,'Labels') || isempty(sSegmentation.Labels)
     bst_report('Error', sProcess, [], ['BST> Invalid atlas "' segmentation_name '": does not contain any labels.']);
     return;
 end
-tissues         = sSegmentation.Labels;
 
 % Load tissue property
+FilesTissuesProperty = '';
 if isfield(options, 'FilesTissuesProperty')
     FilesTissuesProperty = options.FilesTissuesProperty;
-else
-    FilesTissuesProperty = '';
 end
-
 
 % Find closest head vertices (for which we have fluence data)
 % Put everything in mri referential
@@ -270,19 +267,15 @@ wavelengths     = double(scan_res{1}');
 nb_wavelengths  = length(wavelengths);
 nb_vertex       = length(valid_vertices);
 
-%% Compute fluences from mcxlab
-%=========================================================================
-% mcxlab setup
-%=========================================================================
 
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
 
-
+% Mcxlab configuration
+cfg = struct();
 cfg.gpuid       = options.mcxlab_gpuid;
 cfg.autopilot   = 1;
-cfg.respin      = options.mcxlab_nphoton;
-% set seed to make the simulation repeatible
-cfg.seed        = hex2dec('623F9A9E'); 
+cfg.seed        = hex2dec('623F9A9E'); % set seed to make the simulation repeatible
+
 if strcmp(bst_get('OsType'),'mac64arm') 
     % slower but avoid having issue with macos timeout
     cfg.nphoton     = 1e6;
@@ -295,11 +288,9 @@ cfg.vol         = uint8(sSegmentation.Cube); % segmentation
 cfg.unitinmm    = sSegmentation.Voxsize(1);   % defines the length unit for a grid ( voxel) edge length [1.0]
 cfg.isreflect   = 1; % reflection at exterior boundary
 cfg.isrefint    = 1; % 1-index mismatch at inner boundaries, [0]-matched index
-% time-domain simulation parameters
 cfg.tstart      = 0;
 cfg.tend        = 5e-9;
 cfg.tstep       = 5e-9;
-% nornalisation
 cfg.isnormalized = 1; % [1]-normalize the output flux to unitary source
 cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 
@@ -328,50 +319,50 @@ end
     
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
-for ivertx = 1:nb_vertex
+for iwl = 1:nb_wavelengths
 
-    cfg.srcpos = vertex_pos(ivertx,:);    
-    cfg.srcdir = head_normals(valid_vertices(ivertx),:);
+    [cfg.prop, errors] = nst_get_tissues_optical_properties(sSegmentation.Labels, wavelengths(iwl), FilesTissuesProperty);
+    if ~isempty(errors)
+        bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  errors], [newline, '---- ']))
+        return;
+    end
 
-    for iwl=1:nb_wavelengths
-        wl = wavelengths(iwl);
-        fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wl);
+    for ivertx =  1:nb_vertex
+
         output_dir = options.outputdir;
+        fluence_fn = process_nst_import_head_model('get_fluence_fn', valid_vertices(ivertx), wavelengths(iwl));
+
         if exist(fullfile(output_dir, fluence_fn), 'file') == 2 && flag_overwrite_fluences == 0
-            fprintf('Fluence for head vertex %g exists in the target folder\n',valid_vertices(ivertx));
+            fprintf('Fluence for head vertex %g exists in the target folder\n', valid_vertices(ivertx));
             bst_progress('inc', 1);
-        else
 
-            [cfg.prop, errors] = nst_get_tissues_optical_properties(tissues, wl, FilesTissuesProperty);
-            if ~isempty(errors)
-                bst_error(strjoin([ 'Some error occured when extracting the optical properties of the tissues:',  errors], [newline, '---- ']))
-                return;
-            end
-    
-            fprintf('Running Monte Carlo simulation by MCXlab for head vertex %g ... \n',valid_vertices(ivertx));
-            
-            if strcmp(options.software, 'mcxlab-cuda')
-                fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
-            else
-                fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
-            end
-            
-            if isempty(fluenceRate.data) || isinf(fluenceRate.stat.normalizer)
-                if strcmp(bst_get('OsType'), 'mac64arm')
-                    bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
-                else
-                    bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)', valid_vertices(ivertx)));
-                end
-                return;
-            end
-            
-            fluence_vol             = fluenceRate.data .* cfg.tstep;
-            fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
-            reference_voxel_index   = cfg.srcpos;
-
-            save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
-            bst_progress('inc', 1);
+            continue;
         end
+
+        cfg.srcpos = vertex_pos(ivertx,:);    
+        cfg.srcdir = head_normals(valid_vertices(ivertx),:);
+
+        if strcmp(options.software, 'mcxlab-cuda')
+            fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
+        else
+            fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
+        end
+        
+        if isempty(fluenceRate.data) || isinf(fluenceRate.stat.normalizer)
+            if strcmp(bst_get('OsType'), 'mac64arm')
+                bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
+            else
+                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)', valid_vertices(ivertx)));
+            end
+            return;
+        end
+        
+        fluence_vol             = fluenceRate.data .* cfg.tstep;
+        fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
+        reference_voxel_index   = cfg.srcpos;
+
+        save(fullfile(output_dir, fluence_fn), 'fluence_flat_sparse_vol','reference_voxel_index');
+        bst_progress('inc', 1);
     end
 end
 
