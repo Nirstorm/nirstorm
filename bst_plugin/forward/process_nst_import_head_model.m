@@ -218,6 +218,16 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     nb_sources      = size(src_locs, 1);
     nb_dets         = size(det_locs, 1);
     
+
+    % Ensure that all the nirs sensors are on the head
+    allLoc = [src_locs ; det_locs];
+    ChanLocPrj = channel_project_scalp(sHead.Vertices, allLoc);
+    if any(sqrt(sum( (ChanLocPrj - allLoc).^2, 2)) > 0.001)
+        error_message =  ['One or more nirs sensors are not placed on the scalp.' 10 ...
+                          'Project the sensors to the scalp surface before computing the head model.'];
+        return;
+    end
+
     % Find closest head vertices (for which we have fluence data)    
     [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
     
@@ -261,7 +271,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     [all_fluences, all_reference_voxels_index] = load_fluences(fluence_fns, size(sMri.Cube));
 
     if isempty(all_fluences)
-        error_message = ' Some fluence could not be loaded';
+        error_message = 'Some fluence could not be loaded';
         return;
     end
 
