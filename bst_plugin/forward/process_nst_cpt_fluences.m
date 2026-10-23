@@ -267,7 +267,6 @@ wavelengths     = double(scan_res{1}');
 nb_wavelengths  = length(wavelengths);
 nb_vertex       = length(valid_vertices);
 
-
 flag_overwrite_fluences = options.mcxlab_overwrite_fluences;
 
 % Mcxlab configuration
@@ -294,29 +293,6 @@ cfg.tstep       = 5e-9;
 cfg.isnormalized = 1; % [1]-normalize the output flux to unitary source
 cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
 
-% Project optodes position on cfg.vol
-options.proj.stepAlongNorm      = 1;
-options.meshes.skin.vertices    = head_vertices_mri;
-options.meshes.skin.faces       = sHead.Faces;
-[vertex_pos,invalid_id]         = mfip_projectPosInVolume(cfg.vol,head_vertices_mri(valid_vertices,:)+1,head_normals(valid_vertices,:),options,'Display',0,'Text',0);
-
-if ~isempty(invalid_id)
-    bst_report('Warning', sProcess, [], 'Some vertices could not be project into the volume and were discarded (check scout Wrong vertex)');
-
-    scout_idx = size(sHead.Atlas(iHeadAtlas).Scouts,2) + 1;
-    sHead.Atlas(iHeadAtlas).Scouts(scout_idx) = db_template('Scout');
-    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Vertices = valid_vertices(invalid_id)';
-    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Seed = sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Vertices(1);
-    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Color = [0,0,0];
-    sHead.Atlas(iHeadAtlas).Scouts(scout_idx).Label = sprintf('Wrong vertex for ROI %s', options.ROI);
-
-    bst_save(file_fullpath(sSubject.Surface(sSubject.iScalp).FileName), sHead, 'v7');
-    db_save();
-
-    % remove vertices from fluence
-    valid_vertices = setdiff(valid_vertices, valid_vertices(invalid_id));
-end
-    
 tic
 bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
 for iwl = 1:nb_wavelengths
@@ -338,9 +314,13 @@ for iwl = 1:nb_wavelengths
 
             continue;
         end
-
-        cfg.srcpos = vertex_pos(ivertx,:);    
+        
+        % Initialize position and source direction
+        cfg.srcpos = head_vertices_mri(valid_vertices(ivertx), :);    
         cfg.srcdir = head_normals(valid_vertices(ivertx),:);
+        
+        % Project source position in the volume -- to investigate
+        cfg.srcpos = projectPositionInVolume(cfg.vol, cfg.srcpos + 1, cfg.srcdir);
 
         if strcmp(options.software, 'mcxlab-cuda')
             fluenceRate = mcxlab(cfg); % fluence rate [1/mm2 s]
@@ -370,226 +350,50 @@ fprintf('\n%d fluence volumes computed in %.2f seconds\n', nb_vertex * nb_wavele
 
 end
 
-function [pos, invalid_id] = mfip_projectPosInVolume(vol,pos,normals,options,varargin)
-
+function position = projectPositionInVolume(segmentation, position, normals)
 %==========================================================================
-% parse optional parameters
-%==========================================================================
-p = inputParser; 
-
-% add Optional
-p.addOptional ('options',struct,@(x)1)
-
-% param/value
-p.addParamValue ('Display',0,@(x)1)
-p.addParamValue ('Text',0,@(x)1)
-
-% parse
-p.parse(options,varargin{:})
-
-opt=p.Results.options;
-
-flag_display=p.Results.Display;
-flag_text=p.Results.Text;
-
-
-% parse optional parameters
-% skin
-if isempty(opt.meshes.skin)
-flag_display=0;
-end
-% stepAlongNorm
-stepAlongNorm=opt.proj.stepAlongNorm;
-FV=opt.meshes.skin;
-
-invalid_id = [];
-%==========================================================================
-% display 
-%==========================================================================
-if flag_display
-    %FV=opt.meshes.skin
-    
-
-    hFig1=figure('name','before projection');
-    hPatches = patch(FV,'Parent',gca);
-    set(hPatches,...
-        'facecolor', [.5 .5 .5], ...
-        'EdgeColor', 'none',...
-        'FaceAlpha', 0.3);
-    axis equal;
-    mfip_setAxesOrientation(gca,'RAS')
-    hold on
-    plot3(pos(:,1),pos(:,2),pos(:,3),'.r','MarkerSize',25)
-    quiver3(pos(:,1),pos(:,2),pos(:,3),...
-    10*normals(:,1),10*normals(:,2),10*normals(:,3))
-    if  flag_text
-        for ii=1:size(pos,1)
-            symbol = sprintf('P%g',ii);
-            text(pos(ii,1),pos(ii,2),pos(ii,3),symbol,'FontSize',14);
-        end
-    end
-end
-
-%==========================================================================
-% project optodes on non background tissue :
+% Project optodes on non background tissue :
 % if the specified optode position is outside the domain, move the optode
 % along the initial vector until it hits the domain
 %==========================================================================
-[dim1, dim2, dim3]=size(vol);
 
-
-pos=round(pos); % if the voxel coordinates are not integers change them for the nearest integer
-pos_orig=pos;
-idx = pos<1; pos(idx)=1; clear idx
-idx = pos(:,1)>dim1; pos(idx,1)=dim1; clear idx
-idx = pos(:,2)>dim2; pos(idx,2)=dim2; clear idx
-idx = pos(:,3)>dim3; pos(idx,3)=dim3; clear idx
-
-%==========================================================================
-% searching non-zero voxel failed along the incident vector
-%==========================================================================
-
-% find linear index in the volume matrix
-hFig1 = [];
-
-for iOpt=1:size(pos,1)
-    if vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0 % 0 is for background in fuzzy vol
-        fprintf('opt %g (%f %f %f) is located outside the domain\n',iOpt,pos(iOpt,:));
-       ite=0;
-        while vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0 & ite<400;
-            ite=ite+1;
-            pos(iOpt,:)=pos(iOpt,:)+stepAlongNorm*normals(iOpt,:);
-            pos=round(pos); 
-            idx = pos<1; pos(idx)=1; clear idx
-            idx = pos(:,1)>dim1; pos(idx,1)=dim1; clear idx
-            idx = pos(:,2)>dim2; pos(idx,2)=dim2; clear idx
-            idx = pos(:,3)>dim3; pos(idx,3)=dim3; clear idx
-            vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3));
-        end
-        
-        % =================================================================
-        % Controlling bad optodes
-        % =================================================================
-        
-        if  vol(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3))==0
-            fprintf('opt %g (%f %f %f) cannot be fixed ; stopping\n',iOpt,pos(iOpt,:));
-%             [hFig1, iFig, iDS] = bst_figures('GetFigure', hFig1);
-%             if isempty(hFig1)
-%                 hFig1=figure('name','bad optode');
-%                 
-%             subplot(1,1,1)
-%             hPatches = patch(FV,'Parent',gca);
-%             set(hPatches,...
-%                 'facecolor', [.5 .5 .5], ...
-%                 'EdgeColor', 'none',...
-%                 'FaceAlpha', 0.3);
-%             axis equal;
-%             mfip_setAxesOrientation(gca,'RAS')
-%             end
-%             hold on
-%             plot3(pos_orig(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.b','MarkerSize',25)
-%             plot3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),'.r','MarkerSize',25)
-%             quiver3(pos(iOpt,1),pos(iOpt,2),pos(iOpt,3),10*normals(iOpt,1),10*normals(iOpt,2),10*normals(iOpt,3))
-%             
-%           
-%              x=1:dim1; y=1:dim2; z=1:dim3;
-%              [a b c]=ndgrid(1:dim1,1:dim2,1:dim3);
-%              volVoxCoord=[a(:) b(:) c(:)]; clear a b c
-%              
-%              viewMode='sagital';
-%              switch viewMode
-%                  case 'axial'
-%              [mx,my] = meshgrid(x,y);
-%              coeff(1)=0;
-%              coeff(2)=0;
-%              coeff(3)=1;
-%              coeff(4)=-pos_orig(iOpt,3);
-%              imData=squeeze(vol(:,:,pos_orig(iOpt,3)))';
-%              mz = (coeff(1)*mx+ coeff(2)*my + coeff(4)) / -coeff(3);
-%              mz=round(mz);  % the slice will be defined with the nearest voxel of mz
-%               case 'sagital'
-%              [my,mz] = meshgrid(y,z);
-%              coeff(1)=1;
-%              coeff(2)=0;
-%              coeff(3)=0;
-%              coeff(4)=-pos_orig(iOpt,1);
-%              imData=squeeze(vol(pos_orig(iOpt,1),:,:))';
-%              mx = (coeff(3)*mz+ coeff(2)*my + coeff(4)) / -coeff(1);
-%              mx=round(mx);  % the slice will be defined with the nearest voxel of mz
-%              case 'coronal'
-%              [mx,mz] = meshgrid(x,z);
-%              coeff(1)=0;
-%              coeff(2)=1;
-%              coeff(3)=0;
-%              coeff(4)=-pos_orig(iOpt,2);
-%              imData=squeeze(vol(:,:,pos_orig(iOpt,2)))';  
-%              my = (coeff(3)*mz+ coeff(1)*mx + coeff(4)) / -coeff(2);
-%              my=round(my);  % the slice will be defined with the nearest voxel of mz
-%              end
-%              hold on
-%              hsp =surf(mx,my,mz,double(imData),'edgecolor','none');     
-%              clear x y z
-             if nargout < 2 
-                error('Stopped because the algorithm cannot project one optode')
-             else
-                 invalid_id(end+1) = iOpt;
-             end    
-        else
-        fprintf('fixing position to (%f %f %f)\n\n',pos(iOpt,:));
-        end
+    % Put the position inside the volume domain (should do nothing)
+    if (any(position < 1) || position(1) > size(segmentation, 1) || position(2) > size(segmentation, 2) || position(3) > size(segmentation, 3))
+        error('One optodes is outside the volume. Aborting');
     end
-end
-
-%==========================================================================
-% display 
-%==========================================================================
-if flag_display
-    hFig1=figure('name','after projection');
-    hPatches = patch(FV,'Parent',gca);
-    set(hPatches,...
-        'facecolor', [.5 .5 .5], ...
-        'EdgeColor', 'none',...
-        'FaceAlpha', 0.3);
-    axis equal;
-    mfip_setAxesOrientation(gca,'RAS')
-    hold on
-    plot3(pos(:,1),pos(:,2),pos(:,3),'.r','MarkerSize',25)
     
-    if  flag_text
-        for ii=1:size(pos,1)
-            symbol = sprintf('P%g',ii);
-            text(pos(ii,1),pos(ii,2),pos(ii,3),symbol,'FontSize',14);
-        end
+    % if the voxel coordinates are not integers change them for the nearest integer
+    position  = round(position);
+    step_size = 1;
+    
+    %==========================================================================
+    % searching non-zero voxel failed along the incident vector
+    %==========================================================================
+    if segmentation(position(1), position(2), position(3)) > 0  
+        % Nothing to do
+        return
     end
-end
-end
-
-
-
-function mfip_setAxesOrientation (hAxes, orientation)
-
-for iA=1:length(hAxes)
-    switch orientation 
-            case 'RAS'
-        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-        set(get(hAxes(iA),'YLabel'),'String','y:P-->A')
-        set(get(hAxes(iA),'ZLabel'),'String','z:I-->S') 
-        set(hAxes(iA),'Xdir','reverse')
-        set(hAxes(iA),'Ydir','reverse')
-        set(hAxes(iA),'Zdir','normal')
-
-            case 'RPI'
-        set(get(hAxes(iA),'XLabel'),'String','x:L-->R')
-        set(get(hAxes(iA),'YLabel'),'String','y:A-->P')
-        set(get(hAxes(iA),'ZLabel'),'String','z:S-->I') 
-        set(hAxes(iA),'Xdir','reverse')
-        set(hAxes(iA),'Ydir','normal')
-        set(hAxes(iA),'Zdir','reverse')
-    end 
-
+    
+    iter = 0;
+    fprintf('Optode at position (%f %f %f) is located outside the domain. ', position);
+    
+    while segmentation(position(1),position(2),position(3)) == 0 && iter < 400
+    
+        % Compute the new position and clip
+        position = round(position + step_size * normals);
+        position = clip(position, [1, 1, 1], size(segmentation));
+    
+        % Update the position
+        iter = iter+1;
+    end
+    
+    fprintf('fixing position to (%f %f %f)\n\n', position);
 end
 
-% non stretch to fill behavior when rotating http://www.mathworks.com/matlabcentral/newsreader/view_thread/9714
-axis(hAxes,'vis3d')
-axis(hAxes, 'equal')
+function value = clip(value, min_value, max_value)
+% Clip value between min_value and max_value
+    for iValue = 1:length(value)
+        value(iValue) = max(value(iValue), min_value(iValue));
+        value(iValue) = min(value(iValue), max_value(iValue));
+    end
 end
