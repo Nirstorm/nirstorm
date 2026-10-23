@@ -128,23 +128,27 @@ elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
     if ~isempty(exclude_scout)
         head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
     end
-
 else
-    
-    ChannelFile = sProcess.options.fluencesCond.Value.ChannelFile;
-    ChannelMat = in_bst_channel(ChannelFile);
-    
-    if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-        bst_error(['Fluence can only be computed on raw or dOD data ' ...
-            ' (eg do not use MBLL prior to this process)']);
-        return;
-    end
     sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-    [head_vertices] = proj_montage_to_scalp(ChannelMat, sHead, sMri);
-    
+    ChannelFile = unique({sInputs.ChannelFile});
+    head_vertices = [];
+
+    for iChannel = 1:length(ChannelFile)
+
+        ChannelMat = in_bst_channel(ChannelFile{iChannel});
+
+        if ~isfield(ChannelMat.Nirs, 'Wavelengths')
+            bst_error(['Fluence can only be computed on raw or dOD data ' ...
+                ' (eg do not use MBLL prior to this process)']);
+            return;
+        end
+
+        head_vertices = union(head_vertices,  ...
+                              bst_getoutvar(1, @proj_montage_to_scalp, ChannelMat, sHead, sMri));
+
+    end
 end
 
-    
 OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices);
 end
 
@@ -340,21 +344,17 @@ for ivertx = 1:nb_vertex
             else
                 fluenceRate = mcxlabcl(cfg); % fluence rate [1/mm2 s]
             end
-            fluenceRate.data=fluenceRate.data.*cfg.tstep; 
             
-            if isempty(fluenceRate.data) 
-                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
-                return;
-            elseif isinf(fluenceRate.stat.normalizer) && strcmp(bst_get('OsType'),'mac64arm')
-                bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
-                return;
-            elseif isinf(fluenceRate.stat.normalizer)
-                bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)',valid_vertices(ivertx)));
+            if isempty(fluenceRate.data) || isinf(fluenceRate.stat.normalizer)
+                if strcmp(bst_get('OsType'), 'mac64arm')
+                    bst_error('ERROR: MCXlabCL reach time limit (Try again with less photons)');
+                else
+                    bst_error(sprintf('ERROR:Fluence %d cannot be computed (see command windows)', valid_vertices(ivertx)));
+                end
                 return;
             end
             
-            fluence_vol = fluenceRate.data;
-
+            fluence_vol             = fluenceRate.data .* cfg.tstep;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
             reference_voxel_index   = cfg.srcpos;
 

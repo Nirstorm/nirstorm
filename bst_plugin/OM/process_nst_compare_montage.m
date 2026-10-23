@@ -307,7 +307,9 @@ function [data_simul, groundTruth, valid_nodes, ChannelFlag, event, PSF] = simul
     data_head = gain * data_cortex;
 
     % Final simulated data (Noise + Scaled Signal)
-    data_simul =  data_head;
+    data_simul = zeros(length(ChannelMat.Channel), length(Time));
+    data_simul(selected_chans, :) = data_head;
+
 
     groundTruth = zeros(size(sCortex.Vertices, 1), length(Time));
     groundTruth(valid_nodes, :) = data_cortex; 

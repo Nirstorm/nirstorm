@@ -42,7 +42,7 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
         OPTIONS = sProcess;
     % PROCESS CALL:  panel_nst_fluences('CreatePanel', sProcess, sFiles)
     else
-        if isempty(sFiles.ChannelFile)
+        if length(sFiles) == 1 && isempty(sFiles.ChannelFile)
             sSubject = bst_get('Subject', sProcess.options.subjectname.Value);
             
             OPTIONS.fromMontage = 0;
@@ -52,11 +52,22 @@ function [bstPanelNew, panelName] = CreatePanel(sProcess, sFiles)
             OPTIONS.HeadFile = file_fullpath(sSubject.Surface(sSubject.iScalp).FileName);
             OPTIONS.CortexFile = file_fullpath(sSubject.Surface(sSubject.iCortex).FileName);
         else
+            subjectNames = unique({sFiles.SubjectName});
+            if length(subjectNames) > 1
+                error('All channels must be from the same subject')
+            end
+
             OPTIONS.fromMontage = 1;
-            OPTIONS.ChannelFile = sFiles.ChannelFile;
-            OPTIONS.SubjectName = sFiles.SubjectName;
-            ChanneMat = in_bst_channel(sFiles.ChannelFile);
-            OPTIONS.wavelengths = ChanneMat.Nirs.Wavelengths;
+            OPTIONS.SubjectName = subjectNames{1};
+
+            ChannelFiles = unique({sFiles.ChannelFile});
+            OPTIONS.ChannelFile = ChannelFiles;
+            wavelengths = [];
+            for iChannel = 1:length(ChannelFiles)
+                ChanneMat = in_bst_channel(sFiles(iChannel).ChannelFile);
+                wavelengths = union(wavelengths, ChanneMat.Nirs.Wavelengths);
+            end
+            OPTIONS.wavelengths = wavelengths;
         end
     end
    
@@ -519,7 +530,6 @@ function s = GetPanelContents()
         s.Atlas   = ctrl.HeadAtlasName(ctrl.jCombo.getSelectedIndex()+1);
     elseif ctrl.jRadioLayerMontage.isSelected()
         s.surface = 'montage';
-        s.ChannelFile = ctrl.ChannelFile;
         s.SubjectName =  ctrl.SubjectName;
     end
     
