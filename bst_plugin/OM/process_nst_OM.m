@@ -1004,11 +1004,9 @@ function options = display_weight_table(options, montage_pairs)
     isDefinedLambda = 0;
     
     if isfield(options, 'lambda1')
-        sensitivity_mat = options.lambda1 * sensitivity_mat;
         isDefinedLambda = isDefinedLambda + 1;
     end
     if isfield(options, 'lambda2') && options.lambda2 > 0
-        coverage_mat = options.lambda2 * coverage_mat;
         isDefinedLambda = isDefinedLambda + 1;
     end
     
