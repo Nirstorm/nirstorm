@@ -128,23 +128,27 @@ elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
     if ~isempty(exclude_scout)
         head_vertices = setdiff(head_vertices, exclude_scout.Vertices);
     end
-
 else
-    
-    ChannelFile = sProcess.options.fluencesCond.Value.ChannelFile;
-    ChannelMat = in_bst_channel(ChannelFile);
-    
-    if ~isfield(ChannelMat.Nirs, 'Wavelengths')
-        bst_error(['Fluence can only be computed on raw or dOD data ' ...
-            ' (eg do not use MBLL prior to this process)']);
-        return;
-    end
     sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
-    [head_vertices] = proj_montage_to_scalp(ChannelMat, sHead, sMri);
-    
+    ChannelFile = unique({sInputs.ChannelFile});
+    head_vertices = [];
+
+    for iChannel = 1:length(ChannelFile)
+
+        ChannelMat = in_bst_channel(ChannelFile{iChannel});
+
+        if ~isfield(ChannelMat.Nirs, 'Wavelengths')
+            bst_error(['Fluence can only be computed on raw or dOD data ' ...
+                ' (eg do not use MBLL prior to this process)']);
+            return;
+        end
+
+        head_vertices = union(head_vertices,  ...
+                              bst_getoutvar(1, @proj_montage_to_scalp, ChannelMat, sHead, sMri));
+
+    end
 end
 
-    
 OutputFiles = Compute(sProcess, sSubject, sHead, head_vertices);
 end
 
