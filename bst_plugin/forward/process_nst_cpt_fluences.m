@@ -334,16 +334,17 @@ function position = projectPositionInVolume(segmentation, position, normals)
 % along the initial vector until it hits the domain
 %==========================================================================
 
-    [dim1, dim2, dim3] = size(segmentation);
-    step_size = 1;
-
-    % if the voxel coordinates are not integers change them for the nearest integer
-    position = round(position);
 
     % Put the position inside the volume domain (should do nothing)
-    if (any(position < 1) || position(1) > dim1 || position(2) > dim2 || position(3) > dim3)
+    if (any(position < 1) || position(1) > size(segmentation, 1) || position(2) > size(segmentation, 2) || position(3) > size(segmentation, 3))
         error('One optodes is outside the volume. Aborting');
     end
+
+    step_size = 1;
+
+    % Always take one step inside the volume
+    position = round(position + step_size * normals);
+    position = clip(position, [1, 1, 1], size(segmentation));
 
     %==========================================================================
     % searching non-zero voxel failed along the incident vector
@@ -355,18 +356,14 @@ function position = projectPositionInVolume(segmentation, position, normals)
 
     iter = 0;
     fprintf('Optode at position (%f %f %f) is located outside the domain. ', position);
+    
     while segmentation(position(1),position(2),position(3)) == 0 && iter < 400
         
-        % Compute the new position
-        new_position = round(position + step_size * normals);
-        
-        % Ensure the results is still inside the volume
-        new_position(1) = clip(new_position(1), 1, dim1);
-        new_position(2) = clip(new_position(2), 1, dim2);
-        new_position(3) = clip(new_position(3), 1, dim3);
+        % Compute the new position and clip
+        position = round(position + step_size * normals);
+        position = clip(position, [1, 1, 1], size(segmentation));
 
         % Update the position
-        position  = new_position;
         iter = iter+1;
     end
 
@@ -375,8 +372,9 @@ end
 
 function value = clip(value, min_value, max_value)
 % Clip value between min_value and max_value
-
-    value = max(value, min_value);
-    value = min(value, max_value);
-
+    
+    for iValue = 1:length(value)
+        value(iValue) = max(value(iValue), min_value(iValue));
+        value(iValue) = min(value(iValue), max_value(iValue));
+    end
 end
