@@ -130,6 +130,7 @@ elseif strcmp(sProcess.options.fluencesCond.Value.surface,'head')
     end
 else
     sMri = in_mri_bst(sSubject.Anatomy(sSubject.iAnatomy).FileName);
+    
     ChannelFile = unique({sInputs.ChannelFile});
     head_vertices = [];
 
@@ -141,6 +142,16 @@ else
             bst_error(['Fluence can only be computed on raw or dOD data ' ...
                 ' (eg do not use MBLL prior to this process)']);
             return;
+        end
+        
+        % Ensure that all the nirs sensors are on the head
+        iNirs = good_channel(ChannelMat.Channel, [], 'nirs');
+        allLoc = [ChannelMat.Channel(iNirs).Loc]';
+        ChanLocPrj = channel_project_scalp(sHead.Vertices, allLoc);
+        if any(sqrt(sum( (ChanLocPrj - allLoc).^2, 2)) > 0.001)
+            bst_error(['One or more nirs sensors are not placed on the scalp.' 10 ...
+                'Project the sensors to the scalp surface before computing the head model.']);
+            return
         end
 
         head_vertices = union(head_vertices,  ...

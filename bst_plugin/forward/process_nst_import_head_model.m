@@ -106,6 +106,7 @@ function OutputFiles = Run(sProcess, sInput)
     OPTIONS.MriFile             = sSubject.Anatomy(sSubject.iAnatomy).FileName;
     OPTIONS.VoronoiFile         = voronoi_fn;
     OPTIONS.HeadFile            = sSubject.Surface(sSubject.iScalp  ).FileName;
+    OPTIONS.HeadModelType       = 'surface';
     OPTIONS.CortexFile          = sSubject.Surface(sSubject.iCortex ).FileName;
     OPTIONS.Channel             = ChannelMat.Channel;
 
@@ -133,7 +134,7 @@ function OutputFiles = Run(sProcess, sInput)
     HeadModelMat                = db_template('headmodelmat');
     HeadModelMat.NIRSMethod     = 'MCXlab';
     HeadModelMat.Gain           = Gain;
-    HeadModelMat.HeadModelType  = 'surface';
+    HeadModelMat.HeadModelType  = OPTIONS.HeadModelType;
     HeadModelMat.SurfaceFile    = OPTIONS.CortexFile;
     HeadModelMat.GridOrient     = sCortex.VertNormals;
     HeadModelMat.Comment        = 'NIRS head model';
@@ -195,27 +196,18 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     error_message   = '';
     warning_message = {};
 
-    % Retrieve optode coordinates
-    % Load channel file
+    % MRI and surfaces
     sMri    = in_mri_bst (OPTIONS.MriFile);
     sHead   = in_tess_bst(OPTIONS.HeadFile);
-    sCortex = in_tess_bst(OPTIONS.CortexFile);
 
+    % Load channels
     sChannels   = OPTIONS.Channel;
-    
     iNIRS         = channel_find(sChannels, 'NIRS');
     sChannelsNIRS = sChannels(iNIRS);
-
-    Gain            = nan(length(iNIRS), size(sCortex.Vertices, 1) * 3);
 
     % find used wavelentgh 
     wavelengths = unique({sChannelsNIRS.Group});
     wavelengths = cellfun( @(x) str2double(x(3:end)), wavelengths) ;
-
-    % Get Voronoi
-    voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
-    voronoi     = voronoi_bst.Cube;
-    voronoi_mask = (voronoi > 0) & ~isnan(voronoi);
 
     % Load montage informations
     montage_info    = nst_montage_info_from_bst_channels(sChannelsNIRS);
@@ -226,18 +218,48 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     nb_sources      = size(src_locs, 1);
     nb_dets         = size(det_locs, 1);
     
-    
+
+    % Ensure that all the nirs sensors are on the head
+    allLoc = [src_locs ; det_locs];
+    ChanLocPrj = channel_project_scalp(sHead.Vertices, allLoc);
+    if any(sqrt(sum( (ChanLocPrj - allLoc).^2, 2)) > 0.001)
+        error_message =  ['One or more nirs sensors are not placed on the scalp.' 10 ...
+                          'Project the sensors to the scalp surface before computing the head model.'];
+        return;
+    end
+
     % Find closest head vertices (for which we have fluence data)    
     [src_hvidx, det_hvidx] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs);
     
+    if strcmp(OPTIONS.HeadModelType, 'surface')
+        % Get Voronoi
+        voronoi_bst = in_mri_bst(OPTIONS.VoronoiFile);
+        voronoi     = voronoi_bst.Cube;
+        voronoi_mask = (voronoi > 0) & ~isnan(voronoi);
+
+        sCortex = in_tess_bst(OPTIONS.CortexFile);
+        nb_nodes             = size(sCortex.Vertices, 1);
+    else
+
+        % Convert the grid to MRI coordinates
+        GridLoc = OPTIONS.GridLoc;
+        grid2mri_interp = grid_interp_mri_seeg(GridLoc, sMri);
+        
+        % compute volume equivalent of voronoi
+        [voronoi_mask, voronoi] = find(grid2mri_interp);
+        nb_nodes             = size(GridLoc, 1);
+    end
+
+    Gain            = nan(length(iNIRS), nb_nodes * 3);
+
     % Load fluence data from local .brainstorm folder (download if not available)
     local_cache_dir = bst_fullfile(nst_get_local_user_dir(),  'fluence', nst_protect_fn_str(sMri.Comment));
 
     % Request Fluences files 
-    [fluence_fns, missing_fluences] = request_fluences(     OPTIONS.FluenceFolder  , ...
-                                        [src_hvidx ; det_hvidx] , ...
-                                        wavelengths, ...
-                                        local_cache_dir);
+    [fluence_fns, missing_fluences] = request_fluences( OPTIONS.FluenceFolder  , ...
+                                                        [src_hvidx ; det_hvidx] , ...
+                                                        wavelengths, ...
+                                                        local_cache_dir);
 
     % If missing fluences, list them, and return.
     if ~isempty(missing_fluences)
@@ -249,7 +271,7 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     [all_fluences, all_reference_voxels_index] = load_fluences(fluence_fns, size(sMri.Cube));
 
     if isempty(all_fluences)
-        error_message = ' Some fluence could not be loaded';
+        error_message = 'Some fluence could not be loaded';
         return;
     end
 
@@ -263,60 +285,58 @@ function [Gain, error_message, warning_message] = Compute(OPTIONS)
     % Compute sensitivity matrix (volume) and interpolate on cortical surface
     % using Voronoi partitionning
     bst_progress('start', 'Sensitivity computation','Interpolate sensitivities on cortex...', 1, length(sChannelsNIRS));
-    nb_nodes             = size(sCortex.Vertices, 1);
+    
     sensitivity_surf = zeros(nb_nodes, length(sChannels));
-
     for iChannel = 1:length(sChannelsNIRS)
-
         [source_id, det_id, measure_id] = nst_unformat_channel(sChannelsNIRS(iChannel).Name);
         
         isrc    = find( src_ids ==  source_id);
         idet    = find( det_ids ==  det_id);
         iwl     = find( wavelengths == measure_id);
 
-        ref_fluence = src_fluences{isrc}{iwl}(det_reference_voxels_index{idet}{iwl}(1),...
-                                              det_reference_voxels_index{idet}{iwl}(2),...
-                                              det_reference_voxels_index{idet}{iwl}(3));
+        reference_voxel = det_reference_voxels_index{idet}{iwl};
+        normalization_factor = src_fluences{isrc}{iwl}(reference_voxel(1), reference_voxel(2), reference_voxel(3));
 
-        separation_threshold = 0.055; % Below which fluence normalization fixing is allowed
-        if ref_fluence == 0 && separations(iChannel) > separation_threshold
-            sensitivity_vol = nan(size(sMri.Cube));
+        if normalization_factor == 0 
+            sensitivity_surf(:, iNIRS(iChannel)) = nan;
             warning_message{end+1} = sprintf('Fluence for channel cannot be computed S%02dD%02d (wavelength=%dnm, separation=%1.2fcm).\n', ...
                                                                source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
-            
-        else 
-            if ref_fluence==0
-                normalization_factor = min(src_fluences{isrc}{iwl}(src_fluences{isrc}{iwl}>0));  
 
-                warning_message{end+1} = sprintf('Fluence of S%02d is null at position of D%02d (wavelength=%dnm, separation=%1.2fcm).\n Using default normalization.', ...
-                                                                                source_id, det_id, ChannelMat.Nirs.Wavelengths(iwl), separations(iChannel)*100);
-            else
-                normalization_factor = ref_fluence;
-            end
-    
-            sensitivity_vol = src_fluences{isrc}{iwl} .* ...
-                              det_fluences{idet}{iwl} ./ normalization_factor ;
+            continue;
         end
-        
-        sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1],@(x)sum(x)/numel(x)); 
-        sens_tmp(end)=[]; % trash last column
     
+        sensitivity_vol = src_fluences{isrc}{iwl} .* ...
+                          det_fluences{idet}{iwl} ./ normalization_factor ;
+    
+        if strcmp(OPTIONS.HeadModelType, 'surface')
+            sens_tmp = accumarray(voronoi(voronoi_mask), sensitivity_vol(voronoi_mask), [nb_nodes+1 1], @mean); 
+            sens_tmp(end)=[]; % trash last column
+        else
+            sens_tmp = accumarray(voronoi, sensitivity_vol(voronoi_mask), [nb_nodes+1 1], @mean);
+            sens_tmp(end)=[]; % trash last column
+        end
+
         sensitivity_surf(:, iNIRS(iChannel)) = sens_tmp;
-        
         bst_progress('inc',1);
     end
-        
-    [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
-    if ~isempty(warmInfo)
-        warning_message{end+1} =  warmInfo;
+
+    if strcmp(OPTIONS.HeadModelType, 'surface')
+        [sensitivity_surf, warmInfo] = smooth_sensitivity_map(OPTIONS.CortexFile, sensitivity_surf, OPTIONS.smoothing_method, OPTIONS.smoothing_fwhm);
+        if ~isempty(warmInfo)
+            warning_message{end+1} =  warmInfo;
+        end
     end
-    
+
     % sensitivity_surf is now nChannel x nNodes
     sensitivity_surf = sensitivity_surf';
 
     % We convert to 3 orientation for saving in brainstorm database  
-    Gain = normal_to_xyz(sensitivity_surf, sCortex.VertNormals);
-  
+    if strcmp(OPTIONS.HeadModelType, 'surface')
+        Gain = normal_to_xyz(sensitivity_surf, sCortex.VertNormals);
+    else
+        Gain = zeros(size(sensitivity_surf,1), 3*size(sensitivity_surf,2));
+        Gain(:, 1:3:end) = sensitivity_surf;
+    end
 end
 
 function [src_head_vertex_ids, det_head_vertex_ids] = get_head_vertices_closest_to_optodes(sMri, sHead, src_locs, det_locs)
