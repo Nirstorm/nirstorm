@@ -40,5 +40,5 @@ end
 
 %% ===== RUN =====
 function OutputFiles = Run(sProcess, sInput) 
-    OutputFiles = process_nst_compute_voronoi_OM('Run', sProcess, sInput);
+    OutputFiles = process_nst_compute_voronoi('Run', sProcess, sInput);
 end

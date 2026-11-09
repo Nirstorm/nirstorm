@@ -28,7 +28,7 @@ end
 function sProcess = GetDescription() 
     % Description the process
     sProcess.Comment     = 'Compute fluences';
-    sProcess.Category    = 'File';
+    sProcess.Category    = 'Custom';
     sProcess.SubGroup    = {'NIRS', 'Forward model'};
     sProcess.Index       = 1402;
     sProcess.Description = '';
@@ -238,6 +238,21 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
         return;
     end
     
+    % Replace background tissues inside the head by Air 
+    % (same tissue property -- but different label to differentiate 
+    % from the background tissues)
+    mrimask = bst_memory('GetSurfaceMask', sSubject.Surface(sSubject.iScalp).FileName);
+    if any(sSegmentation.Cube == 0 & mrimask == 1, 'all')
+        
+        idx_air = find(strcmp(sSegmentation.Labels(:, 2), 'Air'));
+        if isempty(idx_air)
+            sSegmentation.Labels(end+1, :) = {max([sSegmentation.Labels{:, 1}]) + 1, 'Air', [0 0 0]};
+            idx_air = size(sSegmentation.Labels, 1);
+        end
+
+        sSegmentation.Cube(sSegmentation.Cube == 0 & mrimask == 1) = sSegmentation.Labels{idx_air, 1};
+    end
+
     % Load tissue property
     FilesTissuesProperty = '';
     if isfield(options, 'FilesTissuesProperty')
