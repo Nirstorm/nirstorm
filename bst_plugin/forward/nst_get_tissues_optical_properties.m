@@ -21,9 +21,14 @@ function  [prop, error_list] = nst_get_tissues_optical_properties(tissues, wavel
         tissues_name    = tissues{iTissue,2};
         tissue_idx      = tissues{iTissue,1};
     
-        if ~isfield(data,tissues_name)
-            error_list{end+1} = sprintf('Unknown tissue type %s.', tissues_name);
-            continue;
+        if ~isfield(data, tissues_name) 
+            if strcmpi(tissues_name, 'air')
+                prop(1+tissue_idx, :)  = [0, 0 , 1, 1];
+                continue;
+            else
+                error_list{end+1} = sprintf('Unknown tissue type %s.', tissues_name);
+                continue;
+            end
         end
     
         data_tissue     = data.(tissues_name);
