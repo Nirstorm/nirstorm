@@ -57,7 +57,7 @@ classdef nst_math_WelfordVariance < handle
                 % This might be improved
                 for iObservation = 1:size(X, 1)
                     sz = size(X);
-                    obs = squeeze(reshape(A(1,:), [1, sz(2:end)]));
+                    obs = squeeze(reshape(X(1,:), [1, sz(2:end)]));
                     obj.updateSingle(obs);
                 end
             elseif ndims(X) == ndims(obj.Mean)
