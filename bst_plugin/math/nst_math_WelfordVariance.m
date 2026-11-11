@@ -29,7 +29,7 @@ classdef nst_math_WelfordVariance < handle
 
 
         % Update the estimator with exactly ONE new 2D matrix sample
-        function update(obj, X)
+        function updateSingle(obj, X)
             % Ensure input is a valid 2D sample
             if isempty(X) || ~ismatrix(X)
                 error('Input must be a single non-empty 2D matrix.');
@@ -46,6 +46,27 @@ classdef nst_math_WelfordVariance < handle
             obj.M2 = obj.M2 + delta .* delta2;
         end
         
+        % Update the estimator with exactly ONE new 2D matrix sample
+        function update(obj, X)
+            % Ensure input is a valid 2D sample
+            if isempty(X) || ~ismatrix(X)
+                error('Input must be a single non-empty N-D matrix.');
+            end
+            
+            if ndims(X) == (1 + ndims(obj.Mean))
+                % This might be improved
+                for iObservation = 1:size(X, 1)
+                    sz = size(X);
+                    obs = squeeze(reshape(A(1,:), [1, sz(2:end)]));
+                    obj.updateSingle(obs);
+                end
+            elseif ndims(X) == ndims(obj.Mean)
+                obj.updateSingle(X);
+            else
+                error('X must have size %s or %s.', mat2str(size(obj.Mean)), strrep(mat2str([nan, size(obj.Mean)]), 'NaN', 'Nobs'));
+            end
+        end
+
         % Getter for Variance matrix
         function varVal = get.Variance(obj)
             if obj.Count > 1
