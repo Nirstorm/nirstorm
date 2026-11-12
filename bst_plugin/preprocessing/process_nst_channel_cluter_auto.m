@@ -131,7 +131,7 @@ function OutputFiles = Run(sProcess, sInputs)
 
             sClusters(k).Color = sScout(iScout).Color;
             sClusters(k).Function = sScout(iScout).Function;
-            sClusters(k).Sensors = {sChannel(idx_roi == iScout).Name};
+            sClusters(k).Sensors = {sChannel(idx_roi == iScout & strcmp({sChannel.Group}, channels_groups{iGroup})').Name};
             k = k +1;
         end
     end
