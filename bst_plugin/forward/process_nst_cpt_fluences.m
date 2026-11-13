@@ -304,6 +304,9 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
     cfg.isnormalized = 1; % [1]-normalize the output flux to unitary source
     cfg.issrcfrom0   = 0; % [0]- first voxel is [1 1 1] ; 1-first voxel is [0 0 0],
     
+    % Estimate unit Volume dV
+    dV = prod(sSegmentation.Voxsize);
+    
     tic
     bst_progress('start', 'Compute fluences', sprintf('Computing fluences for %d vertices and %d wavelengths', nb_vertex, nb_wavelengths), 0, nb_vertex * nb_wavelengths);
     for iwl = 1:nb_wavelengths
@@ -348,7 +351,8 @@ function OutputFiles = Compute(sProcess, sSubject, sHead, valid_vertices)
                 return;
             end
             
-            fluence_vol             = fluenceRate.data .* cfg.tstep;
+            % Fluence_vol is in mm.
+            fluence_vol             = fluenceRate.data * cfg.tstep * dV;
             fluence_flat_sparse_vol = sparse(double(fluence_vol(:)));
             reference_voxel_index   = cfg.srcpos;
     
