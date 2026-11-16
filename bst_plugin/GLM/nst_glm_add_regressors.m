@@ -287,7 +287,7 @@ function [model,code,message]=nst_glm_add_channel_regressors(model,sFile,criteri
 end
 function model=nst_glm_add_DCT_regressors(model,frequences,names)
 
-    [cmat,band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences,0);
+    [cmat, band_indexes] = nst_math_build_basis_dct(model.ntime , model.fs, frequences,0);
     
     % Add the regressor at the end of the design matrix
     model.X= [model.X cmat]; 
