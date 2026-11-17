@@ -29,7 +29,11 @@ end
 function [B, covB, dfe, residuals, mse_residuals] = OLS_precoloring_fit(model,y)
     
     % Low pass filter, applied to input data
-    lpf = full(process_nst_glm_fit('lpf_hrf',model.hrf, size(y, 1)));
+    if size(model.hrf, 2) > 1
+        lpf = full(process_nst_glm_fit('lpf_hrf',  sum(model.hrf, 2), size(y, 1)));
+    else
+        lpf = full(process_nst_glm_fit('lpf_hrf',model.hrf, size(y, 1)));
+    end
     % Convert to full mat since operation on sparse matrices are
     % single-threaded only but full 
     y_filtered = lpf * y;
