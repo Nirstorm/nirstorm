@@ -50,20 +50,21 @@ function [Kernel, M, J] = nst_mne_lcurve(HM,OPTIONS)
     baseline    = baseline./MSD;
     G           = HM.Gain./MSD;
     
-    % Compute inverse of noise covariance matrices
+    % Compute the noise covariance matrices
     if OPTIONS.NoiseCov_recompute 
-        Sigma_d    =   diag(diag(real(cov(baseline'))));
+        NoiseCov = real(cov(baseline'));
+    elseif isfield(OPTIONS, 'NoiseCov') && ~isempty('NoiseCov')
+        NoiseCov   = OPTIONS.NoiseCov ./ (MSD^2);
     else
-        Sigma_d    =   eye(size(M,1));  
+        NoiseCov   = eye(size(M, 1));
     end
 
-    p = OPTIONS.depth_weigth_MNE;
-    if OPTIONS.NoiseCov_recompute
-        Sigma_s = diag(power(diag(G'*inv(Sigma_d)*G),-p)); 
-    else
-        Sigma_s = diag(power(diag(G'*G),-p)); 
-    end
+    % We keep only the diagoonal element of the covariance matrix
+    Sigma_d = diag(diag(NoiseCov));
     
+    % Compute source covariance
+    p = OPTIONS.depth_weigth_MNE;
+    Sigma_s = diag(power(diag(G'*inv(Sigma_d)*G),-p)); 
 
     % Pre-compute matrix
     GSG = G * Sigma_s * G';
