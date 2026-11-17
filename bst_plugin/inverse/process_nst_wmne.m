@@ -120,6 +120,9 @@ if isempty(sStudy.iHeadModel)
 end
 HeadModelFile = sStudy.HeadModel(sStudy.iHeadModel).FileName;
 
+% Load options 
+OPTIONS  = getOptions(sProcess, HeadModelFile, sInput.FileName);
+
 % Load channels
 ChannelMat = in_bst_channel(sInput.ChannelFile);
 if ~isfield(ChannelMat.Nirs, 'Wavelengths')
@@ -130,12 +133,24 @@ end
 % Load recordings 
 sDataIn = in_bst_data(sInput.FileName);
 
-% Load options 
-OPTIONS  = getOptions(sProcess, HeadModelFile, sInput.FileName);
+% Load covariance matrix
+NoiseCovMat = [];
+if ~OPTIONS.NoiseCov_recompute 
+    if isempty(sStudy.NoiseCov)
+        bst_error('No covariance matrix available');
+        return;
+    end
+    
+    [NoiseCovMat, errMessage] = LoadNoiseCov(sStudy.NoiseCov(1).FileName, find(sDataIn.ChannelFlag == 1));
+    if ~isempty(errMessage)
+        bst_error(sprintf('Unable to load covariance matrix %s', errMessage));
+        return;
+    end
+end
 
 % Run MNE
 bst_progress('start', 'Reconstruction by MNE', 'Launching MNE...');
-sResults = Compute(OPTIONS, ChannelMat, sDataIn );
+sResults = Compute(OPTIONS, ChannelMat, sDataIn, NoiseCovMat);
 sResults = filterResults(sResults, OPTIONS.selected_outputs);
 
 % Save results
@@ -191,7 +206,11 @@ function OPTIONS = getOptions(sProcess, HeadModelFileName, DataFile)
     OPTIONS.selected_outputs = selected_outputs;
 end
 
-function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
+function sResults = Compute(OPTIONS, ChannelMat, sDataIn, NoiseCovMats)
+
+    if nargin < 4
+        NoiseCovMats = [];
+    end
 
     nirs_head_model = in_bst_headmodel(OPTIONS.HeadModelFile, 1);
     if ndims(nirs_head_model.Gain) == 3
@@ -223,7 +242,9 @@ function sResults = Compute(OPTIONS, ChannelMat, sDataIn )
         OPTIONS.ChannelFlag = ones(sum(selected_chans), 1);
         OPTIONS.Channel     = ChannelMat.Channel(selected_chans);
         OPTIONS.Data        = sDataIn.F(selected_chans,:);
-
+        if ~isempty(NoiseCovMats)
+            OPTIONS.NoiseCov    = NoiseCovMats.NoiseCov(selected_chans, selected_chans);
+        end
         HM.Gain = nirs_head_model.Gain(selected_chans, valid_nodes); 
         HM.Gain(HM.Gain==0) = min(HM.Gain(HM.Gain>0));
 
@@ -306,3 +327,23 @@ function sResults = filterResults(sResults, selected_outputs)
     % Filter results
     sResults = sResults(isSelected);
 end
+
+
+function [NoiseCovMat, errMessage] = LoadNoiseCov(FileName, GoodChannel)
+    errMessage = '';
+
+    NoiseCovMat = load(file_fullpath(FileName));
+    % Check for NaN values in the noise covariance
+    if ~isempty(NoiseCovMat.NoiseCov) && (nnz(isnan(NoiseCovMat.NoiseCov(GoodChannel, GoodChannel))) > 0)
+        errMessage = [ 'The noise covariance contains NaN values. Please re-calculate it after tagging correctly the bad channels in the recordings.' 10];
+        return
+    end
+
+    % Check that bad channels in noise covariance are the same as bad channels in recordings
+    badChNoiseCov_goodChRecs = intersect(find(and(~any(NoiseCovMat.NoiseCov,1), ~any(NoiseCovMat.NoiseCov,2)')), GoodChannel);
+    if ~isempty(badChNoiseCov_goodChRecs)
+        errMessage = [ 'Bad channels in noise covariance are different from bad channels in recordings.' 10 'Please re-calculate it after tagging correctly the bad channels in the recordings.' 10];
+        return;
+    end
+end
+
